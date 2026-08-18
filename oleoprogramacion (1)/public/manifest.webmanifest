@@ -1,0 +1,9 @@
+{
+  "name": "Programación Agronómica Oleoflores",
+  "short_name": "Oleoflores",
+  "description": "Sistema de programación diaria de labores agronómicas.",
+  "theme_color": "#123C2E",
+  "background_color": "#F8F9F3",
+  "display": "standalone",
+  "start_url": "/"
+}
