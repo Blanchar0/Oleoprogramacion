@@ -6,7 +6,7 @@ import {
   Menu, X, Home, CalendarPlus, CheckSquare, 
   Clock, UserX, Tractor, Users, Settings, LogOut, Activity
 } from 'lucide-react';
-import { cn } from './ui';
+import { cn } from '@/src/components/ui';
 
 export default function MainLayout() {
   const { user, logout } = useAuth();
