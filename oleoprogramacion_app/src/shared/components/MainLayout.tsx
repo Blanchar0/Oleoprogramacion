@@ -1,5 +1,5 @@
 import SyncIndicator from './SyncIndicator';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { Navigate, Outlet, Link, useLocation } from 'react-router-dom';
 import { 
@@ -16,6 +16,36 @@ export default function MainLayout() {
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
+
+  useEffect(() => {
+    let lastActivityTime = Date.now();
+    let intervalId: ReturnType<typeof setInterval>;
+
+    const updateActivityTime = () => {
+      lastActivityTime = Date.now();
+    };
+
+    // Verifica cada 30 segundos si pasaron 15 minutos (15 * 60 * 1000 ms)
+    intervalId = setInterval(() => {
+      if (Date.now() - lastActivityTime >= 15 * 60 * 1000) {
+        logout();
+      }
+    }, 30000);
+
+    // Lista de eventos que demuestran actividad
+    const events = ['mousemove', 'mousedown', 'keypress', 'touchmove', 'scroll'];
+    
+    events.forEach(event => {
+      window.addEventListener(event, updateActivityTime, { passive: true });
+    });
+
+    return () => {
+      clearInterval(intervalId);
+      events.forEach(event => {
+        window.removeEventListener(event, updateActivityTime);
+      });
+    };
+  }, [logout]);
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: Home, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
