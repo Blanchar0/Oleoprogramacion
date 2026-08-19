@@ -267,19 +267,38 @@ export default function NewProgramming() {
     setVoiceState('ENVIANDO_AUDIO');
     setVoiceError('');
 
-    const formData = new FormData();
-    formData.append('audio', audioBlobRef.current);
-
     try {
+      // Convert Blob to Base64
+      const base64Audio = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]); // remove data:audio/webm;base64,
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlobRef.current!);
+      });
+
       setVoiceState('TRANSCRIBIENDO');
       const response = await fetch('/api/voice/programming-draft', {
         method: 'POST',
-        body: formData
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audioBase64: base64Audio,
+          mimeType: audioBlobRef.current.type
+        })
       });
 
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Error en el servidor');
+        let errMessage = 'Error en el servidor';
+        try {
+          const err = await response.json();
+          if (err.error) errMessage = err.error;
+        } catch {
+          // If the server returns HTML (e.g. Vercel 500 error page)
+          errMessage = `Error HTTP ${response.status}: Vercel/Servidor no pudo procesar la solicitud.`;
+        }
+        throw new Error(errMessage);
       }
 
       setVoiceState('INTERPRETANDO');
@@ -399,7 +418,7 @@ export default function NewProgramming() {
 
                 {(voiceState === 'SOLICITANDO_PERMISO' || voiceState === 'GRABANDO') && (
                   <>
-                    <Button variant="danger" onClick={stopRecording} size="lg" className="rounded-full w-16 h-16 mb-4 animate-pulse">
+                    <Button variant="destructive" onClick={stopRecording} size="lg" className="rounded-full w-16 h-16 mb-4 animate-pulse">
                       <Square size={24} className="fill-current" />
                     </Button>
                     <p className="text-negative font-medium animate-pulse">

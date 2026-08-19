@@ -1,10 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import multer from 'multer';
 import { GoogleGenAI } from '@google/genai';
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 const ai = new GoogleGenAI(); // Will use process.env.GEMINI_API_KEY
 
 async function startServer() {
@@ -18,10 +16,11 @@ async function startServer() {
   });
 
   // Voice programming draft endpoint
-  app.post('/api/voice/programming-draft', upload.single('audio'), async (req, res) => {
+  app.post('/api/voice/programming-draft', async (req, res) => {
     try {
-      if (!req.file) {
-        return res.status(400).json({ error: 'No audio file provided' });
+      const { audioBase64, mimeType } = req.body;
+      if (!audioBase64) {
+        return res.status(400).json({ error: 'No audio data provided' });
       }
 
       // Generate content with Gemini
@@ -36,8 +35,8 @@ async function startServer() {
               },
               {
                 inlineData: {
-                  mimeType: req.file.mimetype,
-                  data: req.file.buffer.toString('base64')
+                  mimeType: mimeType || 'audio/webm',
+                  data: audioBase64
                 }
               }
             ]
