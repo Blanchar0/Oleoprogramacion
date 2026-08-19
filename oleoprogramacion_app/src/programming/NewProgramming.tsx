@@ -405,7 +405,7 @@ export default function NewProgramming() {
                 {voiceState === 'LISTO' && (
                   <>
                     <Button onClick={startRecording} size="lg" className="rounded-full w-16 h-16 mb-4">
-                      <Mic size={24} color="white" />
+                      <Mic size={24} color="white" stroke="white" />
                     </Button>
                     <p className="text-gray-600 text-center max-w-sm text-sm">
                       Toca para hablar. Menciona fecha, zona, lote, labor, actividad y personal.
@@ -419,7 +419,7 @@ export default function NewProgramming() {
                 {(voiceState === 'SOLICITANDO_PERMISO' || voiceState === 'GRABANDO') && (
                   <>
                     <Button variant="destructive" onClick={stopRecording} size="lg" className="rounded-full w-16 h-16 mb-4 animate-pulse bg-negative hover:bg-negative/90 text-white">
-                      <Square size={24} color="white" fill="white" />
+                      <Square size={24} color="white" fill="white" stroke="white" />
                     </Button>
                     <p className="text-negative font-medium animate-pulse">
                       {voiceState === 'SOLICITANDO_PERMISO' ? 'Solicitando permiso...' : 'Grabando...'}
