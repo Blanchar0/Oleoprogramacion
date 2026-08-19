@@ -1,6 +1,11 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import multer from 'multer';
+import { GoogleGenAI } from '@google/genai';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const ai = new GoogleGenAI(); // Will use process.env.GEMINI_API_KEY
 
 async function startServer() {
   const app = express();
@@ -10,6 +15,63 @@ async function startServer() {
   // Health check endpoint
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, timestamp: new Date().toISOString(), db: 'supabase' });
+  });
+
+  // Voice programming draft endpoint
+  app.post('/api/voice/programming-draft', upload.single('audio'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No audio file provided' });
+      }
+
+      // Generate content with Gemini
+      const response = await ai.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: 'Escucha este audio de un supervisor agrícola. Extrae en formato JSON exacto con las siguientes llaves: dateText (texto o null), zoneText (texto o null), lotText (texto o null), laborText (texto o null), activityText (texto o null), personnelTexts (array de strings vacio si no hay) y observations (texto o null). Devuelve estrictamente el objeto JSON sin markdown.'
+              },
+              {
+                inlineData: {
+                  mimeType: req.file.mimetype,
+                  data: req.file.buffer.toString('base64')
+                }
+              }
+            ]
+          }
+        ],
+        config: {
+          responseMimeType: 'application/json'
+        }
+      });
+
+      const jsonResponse = response.text || '{}';
+      
+      // Parse to ensure it's valid JSON before sending
+      const data = JSON.parse(jsonResponse);
+      
+      // We wrap the response in the format expected by voiceResolver (VoiceExtraction)
+      const extraction = {
+        transcript: "Transcripción procesada por Gemini",
+        dateText: data.dateText || null,
+        zoneText: data.zoneText || null,
+        lotText: data.lotText || null,
+        laborText: data.laborText || null,
+        activityText: data.activityText || null,
+        personnelTexts: data.personnelTexts || [],
+        observations: data.observations || null,
+        generalConfidence: 0.95
+      };
+
+      res.json(extraction);
+
+    } catch (error: any) {
+      console.error('Error procesando audio:', error);
+      res.status(500).json({ error: error.message || 'Error procesando audio con Gemini' });
+    }
   });
 
   if (process.env.NODE_ENV !== 'production') {

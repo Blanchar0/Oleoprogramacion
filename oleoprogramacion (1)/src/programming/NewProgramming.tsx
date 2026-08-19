@@ -13,7 +13,6 @@ type VoiceState =
   | 'LISTO' 
   | 'SOLICITANDO_PERMISO' 
   | 'GRABANDO' 
-  | 'AUDIO_LISTO' 
   | 'ENVIANDO_AUDIO' 
   | 'TRANSCRIBIENDO' 
   | 'INTERPRETANDO' 
@@ -205,10 +204,12 @@ export default function NewProgramming() {
         audioUrlRef.current = URL.createObjectURL(audioBlob);
         audioElementRef.current = new Audio(audioUrlRef.current);
         audioElementRef.current.onended = () => setIsPlaying(false);
-        setVoiceState('AUDIO_LISTO');
         
         // Stop all tracks to turn off the microphone light
         stream.getTracks().forEach(track => track.stop());
+
+        // Send automatically
+        submitAudio();
       };
 
       mediaRecorder.start();
@@ -217,9 +218,9 @@ export default function NewProgramming() {
 
       timerRef.current = window.setInterval(() => {
         setRecordingTime(prev => {
-          if (prev >= 119) {
+          if (prev >= 59) {
             stopRecording();
-            return 120;
+            return 60;
           }
           return prev + 1;
         });
@@ -410,21 +411,7 @@ export default function NewProgramming() {
                   </>
                 )}
 
-                {voiceState === 'AUDIO_LISTO' && (
-                  <div className="w-full max-w-sm flex flex-col items-center">
-                    <div className="flex items-center gap-4 mb-6 w-full justify-center">
-                      <Button variant="outline" size="icon" onClick={cancelRecording}>
-                        <RefreshCcw size={20} />
-                      </Button>
-                      <Button variant="outline" size="icon" onClick={togglePlayback} className={isPlaying ? "text-primary border-primary" : ""}>
-                        {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                      </Button>
-                      <Button variant="primary" onClick={submitAudio} className="flex-1">
-                        Procesar Audio
-                      </Button>
-                    </div>
-                  </div>
-                )}
+
 
                 {(voiceState === 'ENVIANDO_AUDIO' || voiceState === 'TRANSCRIBIENDO' || voiceState === 'INTERPRETANDO' || voiceState === 'RESOLVIENDO_CATALOGOS') && (
                   <div className="flex flex-col items-center">
