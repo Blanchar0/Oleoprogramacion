@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 
-const ai = new GoogleGenAI(); // Will use process.env.GEMINI_API_KEY
+const ai = new GoogleGenAI({}); // Will use process.env.GEMINI_API_KEY
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
