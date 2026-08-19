@@ -28,9 +28,9 @@ class SupabaseRepository implements AgronomicRepository {
 
   // Helper to fetch and subscribe to tables
   private subscribeTable(
-    table: string, 
-    filterField: string | null, 
-    filterValue: any, 
+    table: string,
+    filterField: string | null,
+    filterValue: any,
     callback: (data: any[]) => void
   ): Unsubscribe {
     const fetchData = async () => {
@@ -49,8 +49,9 @@ class SupabaseRepository implements AgronomicRepository {
     fetchData();
 
     // Supabase Realtime channel
+    const channelId = `public:${table}:${crypto.randomUUID()}`;
     const channel = supabase
-      .channel(`public:${table}`)
+      .channel(channelId)
       .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
         fetchData();
       })
@@ -93,8 +94,9 @@ class SupabaseRepository implements AgronomicRepository {
 
     fetchData();
 
+    const channelId = `public:programming:${crypto.randomUUID()}`;
     const channel = supabase
-      .channel('public:programming')
+      .channel(channelId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'programming' }, () => {
         fetchData();
       })
@@ -142,7 +144,7 @@ class SupabaseRepository implements AgronomicRepository {
         .select('version')
         .eq('id', id)
         .single();
-      
+
       if (fetchErr) throw fetchErr;
       if (current.version !== expectedVersion) {
         throw new Error("CONFLICT");
@@ -195,8 +197,9 @@ class SupabaseRepository implements AgronomicRepository {
 
     fetchData();
 
+    const channelId = `public:absences:${crypto.randomUUID()}`;
     const channel = supabase
-      .channel('public:absences')
+      .channel(channelId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'absences' }, () => {
         fetchData();
       })
@@ -239,7 +242,7 @@ class SupabaseRepository implements AgronomicRepository {
         .select('version')
         .eq('id', id)
         .single();
-      
+
       if (fetchErr) throw fetchErr;
       if (current.version !== expectedVersion) {
         throw new Error("CONFLICT");
@@ -290,8 +293,9 @@ class SupabaseRepository implements AgronomicRepository {
 
     fetchData();
 
+    const channelId = `public:machinery_operations:${crypto.randomUUID()}`;
     const channel = supabase
-      .channel('public:machinery_operations')
+      .channel(channelId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'machinery_operations' }, () => {
         fetchData();
       })
@@ -313,8 +317,8 @@ class SupabaseRepository implements AgronomicRepository {
         operator_name: input.operatorName,
         activity_id: input.activityId,
         location_id: input.locationId,
-        initial_hour_meter: input.initialHourMeter,
-        final_hour_meter: input.finalHourMeter,
+        initial_hour_meter: input.initial_hour_meter,
+        final_hour_meter: input.final_hour_meter,
         effective_hours: input.effectiveHours,
         observations: input.observations || '',
         status: input.status || 'CONFIRMADA',
@@ -336,7 +340,7 @@ class SupabaseRepository implements AgronomicRepository {
         .select('version')
         .eq('id', id)
         .single();
-      
+
       if (fetchErr) throw fetchErr;
       if (current.version !== expectedVersion) {
         throw new Error("CONFLICT");
@@ -428,8 +432,9 @@ class SupabaseRepository implements AgronomicRepository {
     fetchAllCatalogs();
 
     // Re-fetch when catalogs change
+    const channelId = `public:catalogs:${crypto.randomUUID()}`;
     const channel = supabase
-      .channel('public:catalogs')
+      .channel(channelId)
       .on('postgres_changes', { event: '*', schema: 'public' }, () => {
         fetchAllCatalogs();
       })
