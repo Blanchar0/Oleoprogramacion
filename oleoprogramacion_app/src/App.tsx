@@ -186,9 +186,9 @@ function AppContent() {
                   <PendingProgramming />
                 </RoleGuard>
               } />
-              {/* Admin/Directivo Routes */}
+              {/* General Programming Route (All roles) */}
               <Route path="/programming/all" element={
-                <RoleGuard roles={['ADMIN', 'DIRECTIVO']}>
+                <RoleGuard roles={['ADMIN', 'DIRECTIVO', 'SUPERVISOR']}>
                   <GeneralProgramming />
                 </RoleGuard>
               } />

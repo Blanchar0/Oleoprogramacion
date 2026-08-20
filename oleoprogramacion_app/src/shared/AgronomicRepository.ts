@@ -89,6 +89,8 @@ class SupabaseRepository implements AgronomicRepository {
         personnelIds: item.personnel_ids || [],
         creationMethod: item.creation_method || 'MANUAL',
         needsReview: item.needs_review ?? false,
+        performancePerPerson: item.performance_per_person,
+        expectedTotalQuantity: item.expected_total_quantity,
       }));
       callback(mapped);
     };
@@ -126,6 +128,8 @@ class SupabaseRepository implements AgronomicRepository {
         status: input.status || 'PENDIENTE',
         creation_method: input.creationMethod || 'MANUAL',
         needs_review: input.needsReview || false,
+        performance_per_person: input.performancePerPerson,
+        expected_total_quantity: input.expectedTotalQuantity,
         version: 1,
       };
 

@@ -106,6 +106,8 @@ export interface Programming {
   createdAt: string;
   needsReview?: boolean;
   creationMethod?: 'MANUAL' | 'VOZ';
+  performancePerPerson?: number;
+  expectedTotalQuantity?: number;
 }
 
 export type AbsenceStatus = 'REGISTRADA' | 'CANCELADA';

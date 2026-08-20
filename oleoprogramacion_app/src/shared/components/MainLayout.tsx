@@ -51,7 +51,7 @@ export default function MainLayout() {
     { name: 'Dashboard', href: '/', icon: Home, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
     { name: 'Nueva Programación', href: '/programming/new', icon: CalendarPlus, roles: ['SUPERVISOR'] },
     { name: 'Pendientes', href: '/programming/pending', icon: CheckSquare, roles: ['SUPERVISOR'] },
-    { name: 'Programación General', href: '/programming/all', icon: Clock, roles: ['ADMIN', 'DIRECTIVO'] },
+    { name: 'Programación General', href: '/programming/all', icon: Clock, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
     { name: 'Inasistencias', href: '/absences', icon: UserX, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
     { name: 'Maquinaria', href: '/machinery', icon: Tractor, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
     { name: 'Registros Recientes', href: '/records', icon: Activity, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },

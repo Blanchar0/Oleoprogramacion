@@ -365,6 +365,8 @@ export default function NewProgramming() {
       personnelIds: selectedPersonnel,
       status: 'PENDIENTE',
       observations,
+      performancePerPerson: performance.performancePerPersonDay,
+      expectedTotalQuantity: performance.plannedQuantity,
       origin: method
     };
     repository.createProgramming(payload).then(res => {

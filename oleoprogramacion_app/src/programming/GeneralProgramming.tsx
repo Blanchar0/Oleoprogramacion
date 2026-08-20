@@ -58,11 +58,13 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
         const personnelNames = (p.personnelIds||[]).map((id:string) => catalogs.personnel?.find((per:any) => per.id === id)?.name).filter(Boolean).join(', ');
         const numPeople = p.personnelIds?.length || 0;
         
-        const unit = ref?.unit || '-';
-        const perf = ref?.performancePerPersonDay || 0;
+        const unit = activity?.unit || '-';
+        const perf = p.performancePerPerson !== undefined ? p.performancePerPerson : (ref?.performancePerPersonDay || 0);
+        const total = p.expectedTotalQuantity !== undefined ? p.expectedTotalQuantity : (perf * numPeople);
+        
         // Format decimal display if needed
-        const perfDisplay = perf ? parseFloat(perf).toLocaleString('es-CO') : '-';
-        const totalDisplay = perf ? (perf * numPeople).toLocaleString('es-CO') : '-';
+        const perfDisplay = perf ? parseFloat(perf.toString()).toLocaleString('es-CO') : '-';
+        const totalDisplay = total ? parseFloat(total.toString()).toLocaleString('es-CO') : '-';
 
         return {
           ...p,
