@@ -16,6 +16,7 @@ export interface AgronomicRepository {
   subscribeAbsences(filters: any, callback: (data: any[]) => void): Unsubscribe;
   createAbsence(input: any): Promise<Result>;
   updateAbsence(id: string, input: any, expectedVersion: number): Promise<Result>;
+  deleteAbsence(id: string): Promise<Result>;
 
   subscribeMachinery(filters: any, callback: (data: any[]) => void): Unsubscribe;
   createMachineryOperation(input: any): Promise<Result>;
@@ -256,6 +257,16 @@ class SupabaseRepository implements AgronomicRepository {
       if (input.observations !== undefined) payload.observations = input.observations;
 
       const { error } = await supabase.from('absences').update(payload).eq('id', id);
+      if (error) throw error;
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async deleteAbsence(id: string): Promise<Result> {
+    try {
+      const { error } = await supabase.from('absences').delete().eq('id', id);
       if (error) throw error;
       return { ok: true };
     } catch (e: any) {

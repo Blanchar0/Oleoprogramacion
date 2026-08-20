@@ -30,15 +30,15 @@ export default function Dashboard() {
 
   if (loading) return <div>Cargando dashboard...</div>;
 
-  const filteredProgrammings = programmings;
+  const filteredProgrammings = programmings.filter(p => p.status !== 'RECHAZADA');
   const filteredMachineries = machineries;
   const filteredAbsences = absences;
 
   const NormalDashboard = () => {
     const uniquePersonnel = new Set<string>();
-    filteredProgrammings.filter(p => p.status === 'CONFIRMADA').forEach(p => (p.personnelIds || []).forEach((id: string) => uniquePersonnel.add(id)));
+    filteredProgrammings.forEach(p => (p.personnelIds || []).forEach((id: string) => uniquePersonnel.add(id)));
     
-    const confirmedCount = filteredProgrammings.filter(p => p.status === 'CONFIRMADA').length;
+    const activeProgrammingsCount = filteredProgrammings.length;
     const machineryCount = filteredMachineries.filter(m => m.status !== 'CANCELADA').length;
     const absencesCount = filteredAbsences.filter(a => a.status === 'REGISTRADA').length;
     
@@ -50,7 +50,7 @@ export default function Dashboard() {
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-lime-100 text-lime-700 rounded-lg"><Users size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Personal Programado</p><h3 className="text-2xl font-bold text-forest-950">{uniquePersonnel.size} <span className="text-sm font-normal text-gray-500">/ {totalActive - absencesCount}</span></h3></div></CardContent></Card>
-          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-green-100 text-green-700 rounded-lg"><CalendarCheck size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Progs. Confirmadas</p><h3 className="text-2xl font-bold text-forest-950">{confirmedCount}</h3></div></CardContent></Card>
+          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-green-100 text-green-700 rounded-lg"><CalendarCheck size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Progs. Activas</p><h3 className="text-2xl font-bold text-forest-950">{activeProgrammingsCount}</h3></div></CardContent></Card>
           <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-amber-100 text-amber-700 rounded-lg"><CalendarX size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Ausencias / Novedades</p><h3 className="text-2xl font-bold text-forest-950">{absencesCount}</h3></div></CardContent></Card>
           <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-blue-100 text-blue-700 rounded-lg"><Tractor size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Maquinaria Activa</p><h3 className="text-2xl font-bold text-forest-950">{machineryCount}</h3></div></CardContent></Card>
         </div>
@@ -93,7 +93,7 @@ export default function Dashboard() {
       const availableCount = activePersonnel.length - totalUnavailable;
 
       let programmedSet = new Set<string>();
-      programmings.forEach(p => (p.personnelIds||[]).forEach((id:string) => {
+      filteredProgrammings.forEach(p => (p.personnelIds||[]).forEach((id:string) => {
         const per = activePersonnel.find((x:any) => x.id === id);
         if (per) programmedSet.add(per.documento);
       }));
@@ -103,7 +103,7 @@ export default function Dashboard() {
       const utilRate = availableCount > 0 ? (programmedCount / availableCount) * 100 : 0;
 
       const bySupMap = new Map<string, Set<string>>();
-      programmings.forEach(p => {
+      filteredProgrammings.forEach(p => {
         if (!bySupMap.has(p.idSupervisor)) bySupMap.set(p.idSupervisor, new Set());
         (p.personnelIds||[]).forEach((id:string) => {
            const per = activePersonnel.find((x:any) => x.id === id);
@@ -130,7 +130,7 @@ export default function Dashboard() {
         vacations: vacaciones.size, incapacity: incapacidades.size, utilRate: utilRate.toFixed(1),
         chartBySup, chartState
       };
-    }, [date, programmings, absences, catalogs]);
+    }, [date, filteredProgrammings, absences, catalogs]);
 
     return (
       <div className="space-y-6">

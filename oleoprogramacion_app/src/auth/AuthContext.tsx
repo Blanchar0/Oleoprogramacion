@@ -84,6 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     localStorage.removeItem(LOCAL_STORAGE_KEY);
     setUser(null);
+    window.location.href = '/login';
   };
 
   return (

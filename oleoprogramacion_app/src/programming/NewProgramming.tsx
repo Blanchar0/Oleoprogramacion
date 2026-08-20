@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { repository } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, Button, Input, Label, cn } from '@/src/components/ui';
 import { Combobox } from '@/src/components/ui/combobox';
 import { Labor, Activity, Location, Personnel, Novedad, VoiceExtraction, ProgrammingPerformance, ActivityPerformanceReference, ResolvedField } from '../types';
@@ -26,6 +26,9 @@ export default function NewProgramming() {
   const [machineries, setMachineries] = useState<any[]>([]);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [absences, setAbsences] = useState<any[]>([]);
+  const cloneTemplate = location.state?.cloneTemplate;
   
   // Data
   const labors = (catalogs.labors || []).filter(l => l.active);
@@ -40,19 +43,21 @@ export default function NewProgramming() {
   const [method, setMethod] = useState<'form' | 'voice'>('form');
   const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }));
   
+  const [laborId, setLaborId] = useState(cloneTemplate?.laborId || '');
+  const [activityId, setActivityId] = useState(cloneTemplate?.activityId || '');
+  const [zone, setZone] = useState(cloneTemplate?.zoneSnapshot?.split(' - ')[0] || '');
+  const [locationId, setLocationId] = useState(cloneTemplate?.locationId || '');
+  const [selectedPersonnel, setSelectedPersonnel] = useState<string[]>(cloneTemplate?.personnelIds || []);
+  const [observations, setObservations] = useState(cloneTemplate?.observations || '');
+  
   useEffect(() => {
     const filters: any = { date };
     if (user?.role === 'SUPERVISOR') filters.supervisorId = user.idSupervisor;
     const unsub1 = repository.subscribeProgramming(filters, setProgrammings);
     const unsub2 = repository.subscribeMachinery(filters, setMachineries);
-    return () => { unsub1(); unsub2(); };
+    const unsub3 = repository.subscribeAbsences(filters, setAbsences);
+    return () => { unsub1(); unsub2(); unsub3(); };
   }, [date, user]);
-  const [laborId, setLaborId] = useState('');
-  const [activityId, setActivityId] = useState('');
-  const [zone, setZone] = useState('');
-  const [locationId, setLocationId] = useState('');
-  const [selectedPersonnel, setSelectedPersonnel] = useState<string[]>([]);
-  const [observations, setObservations] = useState('');
 
   const [performance, setPerformance] = useState<ProgrammingPerformance>({
     unit: 'Sin referencia',
@@ -108,6 +113,8 @@ export default function NewProgramming() {
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  const [conflictAbsences, setConflictAbsences] = useState<any[]>([]);
 
   // State: Voice
   const [voiceState, setVoiceState] = useState<VoiceState>('LISTO');
@@ -334,9 +341,20 @@ export default function NewProgramming() {
   };
 
   // --- MANUAL FORM SUBMISSION ---
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (e?: React.FormEvent, skipConflictCheck = false) => {
+    if (e) e.preventDefault();
     setLoading(true);
+
+    if (!skipConflictCheck) {
+      const conflicts = absences.filter(a => selectedPersonnel.includes(a.personnelId));
+      if (conflicts.length > 0) {
+        setConflictAbsences(conflicts);
+        setConflictModalOpen(true);
+        setLoading(false);
+        return; // Stop submission until user confirms
+      }
+    }
+
     const payload = {
       date,
       idSupervisor: user?.idSupervisor,
@@ -352,12 +370,22 @@ export default function NewProgramming() {
     repository.createProgramming(payload).then(res => {
       setLoading(false);
       if (res.ok) {
-        console.log(true);
-        setTimeout(() => window.location.href = '/programming/pending', 2000);
+        setTimeout(() => navigate('/programming/pending'), 2000);
       } else {
         alert(res.error);
       }
     });
+  };
+
+  const handleResolveConflicts = async () => {
+    setLoading(true);
+    setConflictModalOpen(false);
+    // Delete conflicting absences first
+    for (const conflict of conflictAbsences) {
+      await repository.deleteAbsence(conflict.id);
+    }
+    // Then proceed to submit ignoring conflicts
+    handleSubmit(undefined, true);
   };
 
   const togglePersonnel = (id: string) => {
@@ -392,6 +420,29 @@ export default function NewProgramming() {
           Formulario Manual
         </button>
       </div>
+
+      {conflictModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+            <h3 className="text-lg font-bold text-negative flex items-center gap-2 mb-4">
+              <AlertCircle size={20} />
+              Conflicto de Inasistencias
+            </h3>
+            <p className="text-sm text-gray-700 mb-4">
+              Las siguientes personas están marcadas como inasistentes hoy. ¿Deseas aceptar el cambio y <strong>eliminar</strong> sus inasistencias?
+            </p>
+            <ul className="text-sm list-disc pl-5 text-gray-600 mb-6 max-h-32 overflow-y-auto">
+              {conflictAbsences.map(c => (
+                <li key={c.id}>{c.personnelName}</li>
+              ))}
+            </ul>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setConflictModalOpen(false)}>Cancelar</Button>
+              <Button onClick={handleResolveConflicts} className="bg-negative hover:bg-negative/90">Aceptar y Sobrescribir</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardContent className="pt-6">
