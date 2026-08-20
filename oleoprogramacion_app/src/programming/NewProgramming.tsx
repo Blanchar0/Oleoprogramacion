@@ -72,14 +72,18 @@ export default function NewProgramming() {
   useEffect(() => {
     const refs = (catalogs.performanceReferences || []) as any[];
     const ref = refs.find(r => r.activityId === activityId && r.active);
+    const act = (catalogs.activities || []).find((a:any) => a.id === activityId);
+    
     const uniquePersonnelCount = new Set(selectedPersonnel).size;
 
     setPerformance(prev => {
+      const newUnit = act ? act.unit : 'Sin referencia';
+      
       // If activity changed, we must reset
-      if (prev.referencePerformancePerPersonDay !== (ref ? ref.performancePerPersonDay : null) || prev.unit !== (ref ? ref.unit : 'Sin referencia')) {
+      if (prev.referencePerformancePerPersonDay !== (ref ? ref.performancePerPersonDay : null) || prev.unit !== newUnit) {
         if (!ref) {
            return {
-             unit: 'Sin referencia',
+             unit: newUnit,
              referencePerformancePerPersonDay: null,
              performancePerPersonDay: null,
              plannedQuantity: null,
@@ -87,7 +91,7 @@ export default function NewProgramming() {
            };
         }
         return {
-          unit: ref.unit,
+          unit: newUnit,
           referencePerformancePerPersonDay: ref.performancePerPersonDay,
           performancePerPersonDay: ref.performancePerPersonDay,
           plannedQuantity: ref.performancePerPersonDay * uniquePersonnelCount,
@@ -101,6 +105,14 @@ export default function NewProgramming() {
            ...prev,
            plannedQuantity: prev.performancePerPersonDay! * uniquePersonnelCount
          };
+      }
+      
+      // If manually edited, we just update the total based on the manual performance * count
+      if (prev.wasManuallyEdited && prev.performancePerPersonDay !== null) {
+          return {
+              ...prev,
+              plannedQuantity: prev.performancePerPersonDay * uniquePersonnelCount
+          };
       }
       
       return prev;
@@ -646,6 +658,64 @@ export default function NewProgramming() {
                   />
                 </div>
               </div>
+              
+              {/* Performance / Rendimiento (Only show if an activity is selected) */}
+              {activityId && (
+                <div className="border border-gray-200 rounded-lg p-4 bg-gray-50/50">
+                  <div className="flex justify-between items-center mb-4">
+                    <Label className="mb-0 text-base">Rendimiento Estimado ({performance.unit})</Label>
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setIsEditingPerformance(!isEditingPerformance)}
+                      className="text-xs h-7 text-primary"
+                    >
+                      {isEditingPerformance ? 'Bloquear' : 'Modificar Rendimiento'}
+                    </Button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="perfPerPerson" className="text-xs text-gray-500 uppercase">Por persona / día</Label>
+                      <Input
+                        id="perfPerPerson"
+                        type="number"
+                        step="0.01"
+                        disabled={!isEditingPerformance}
+                        value={performance.performancePerPersonDay !== null ? performance.performancePerPersonDay : ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                          setPerformance(prev => ({
+                            ...prev,
+                            performancePerPersonDay: val,
+                            plannedQuantity: val !== null ? val * selectedPersonnel.length : null,
+                            wasManuallyEdited: true
+                          }));
+                        }}
+                        className={!isEditingPerformance ? "bg-gray-100 font-medium" : "font-medium border-primary"}
+                        placeholder="N/A"
+                      />
+                      {!isEditingPerformance && performance.referencePerformancePerPersonDay !== null && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Estándar: {performance.referencePerformancePerPersonDay} {performance.unit}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <Label htmlFor="totalPerf" className="text-xs text-gray-500 uppercase">Cantidad Total ({selectedPersonnel.length} personas)</Label>
+                      <Input
+                        id="totalPerf"
+                        type="number"
+                        disabled
+                        value={performance.plannedQuantity !== null ? performance.plannedQuantity.toFixed(2) : ''}
+                        className="bg-gray-100 font-medium"
+                        placeholder="N/A"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Personnel Selection */}
               <div className="border border-gray-200 rounded-lg p-4 bg-gray-50/50">

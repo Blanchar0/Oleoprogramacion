@@ -459,6 +459,149 @@ class SupabaseRepository implements AgronomicRepository {
       supabase.removeChannel(channel);
     };
   }
+
+  // --- CATALOG CRUD OPERATIONS ---
+
+  // Users
+  async createUser(input: any): Promise<Result> {
+    try {
+      const payload = {
+        id: crypto.randomUUID(),
+        username: input.username,
+        password: input.password,
+        name: input.name,
+        role: input.role,
+        id_supervisor: input.idSupervisor || null,
+        active: input.active ?? true,
+      };
+      const { data, error } = await supabase.from('users').insert(payload).select().single();
+      if (error) throw error;
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async updateUser(id: string, input: any): Promise<Result> {
+    try {
+      const payload = {
+        username: input.username,
+        name: input.name,
+        role: input.role,
+        id_supervisor: input.idSupervisor || null,
+        active: input.active,
+      };
+      const { data, error } = await supabase.from('users').update(payload).eq('id', id).select().single();
+      if (error) throw error;
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // Personnel
+  async createPersonnel(input: any): Promise<Result> {
+    try {
+      const payload = {
+        id: crypto.randomUUID(),
+        name: input.name,
+        documento: input.documento,
+        type: input.type,
+        cuadrilla: input.cuadrilla,
+        job_title: input.jobTitle,
+        active: input.active ?? true,
+      };
+      const { data, error } = await supabase.from('personnel').insert(payload).select().single();
+      if (error) throw error;
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async updatePersonnel(id: string, input: any): Promise<Result> {
+    try {
+      const payload = {
+        name: input.name,
+        documento: input.documento,
+        type: input.type,
+        cuadrilla: input.cuadrilla,
+        job_title: input.jobTitle,
+        active: input.active,
+      };
+      const { data, error } = await supabase.from('personnel').update(payload).eq('id', id).select().single();
+      if (error) throw error;
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // Activities
+  async createActivity(input: any): Promise<Result> {
+    try {
+      const payload = {
+        id: crypto.randomUUID(),
+        name: input.name,
+        unit: input.unit,
+        labor_id: input.laborId,
+        active: input.active ?? true,
+      };
+      const { data, error } = await supabase.from('activities').insert(payload).select().single();
+      if (error) throw error;
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async updateActivity(id: string, input: any): Promise<Result> {
+    try {
+      const payload = {
+        name: input.name,
+        unit: input.unit,
+        labor_id: input.laborId,
+        active: input.active,
+      };
+      const { data, error } = await supabase.from('activities').update(payload).eq('id', id).select().single();
+      if (error) throw error;
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // Equipment
+  async createEquipment(input: any): Promise<Result> {
+    try {
+      const payload = {
+        id: crypto.randomUUID(),
+        name: input.name,
+        type: input.type,
+        active: input.active ?? true,
+      };
+      const { data, error } = await supabase.from('equipment').insert(payload).select().single();
+      if (error) throw error;
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async updateEquipment(id: string, input: any): Promise<Result> {
+    try {
+      const payload = {
+        name: input.name,
+        type: input.type,
+        active: input.active,
+      };
+      const { data, error } = await supabase.from('equipment').update(payload).eq('id', id).select().single();
+      if (error) throw error;
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
 }
 
 export const repository = new SupabaseRepository();
