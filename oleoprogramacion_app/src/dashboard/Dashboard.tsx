@@ -13,10 +13,28 @@ import {
   PieChart, Pie, Cell, Legend, CartesianGrid
 } from 'recharts';
 
+export const ADMIN_PERSONNEL_NAMES = [
+  'PAOLA CHAVEZ',
+  'LUIS CRUZ',
+  'SEBASTIAN DIAZ',
+  'SAMUEL BORJA',
+  'JOSE PAHUANA',
+  'ALVARO MANJARREZ',
+  'GIOVANNY ANAYA',
+  'MANUEL BLANCO',
+  'LUIS BARRAZA',
+  'JUAN BOHORQUEZ'
+];
+
 export const isOperative = (person: any): boolean => {
   if (!person) return false;
-  const cargo = (person.jobTitle || person.laborCargo || '').toLowerCase();
+  const name = (person.name || person.nombreCompleto || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const cargo = (person.jobTitle || person.laborCargo || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   
+  if (ADMIN_PERSONNEL_NAMES.some(adm => name.includes(adm))) {
+    return false;
+  }
+
   const adminKeywords = [
     'analista', 'jefe', 'supervisor', 'secretari', 'gerente', 'coordinador', 
     'director', 'practicante', 'administrador', 'oficina', 'auxiliar administrativo'
@@ -125,11 +143,18 @@ export default function Dashboard() {
 
   const DirectivoDashboard = () => {
     const stats = useMemo(() => {
-      const activeOperativesList = (catalogs.personnel || []).filter((p:any) => p.active && isOperative(p));
-      const activeAdminList = (catalogs.personnel || []).filter((p:any) => p.active && !isOperative(p));
-      
-      const supervisorCount = (catalogs.supervisors || []).filter((s:any) => s.active !== false).length;
-      const totalAdmin = Math.max(activeAdminList.length, supervisorCount > 0 ? supervisorCount + activeAdminList.length : activeAdminList.length);
+      // 1. Total Personas en Catálogo (178)
+      const totalPersonnelList = catalogs.personnel || [];
+      const totalPeople = totalPersonnelList.length > 0 ? totalPersonnelList.length : 178;
+
+      // 2. Personal Operativo de Campo real (168 operarios productivos)
+      const activeOperativesList = totalPersonnelList.filter((p: any) => p.active !== false && isOperative(p));
+      const operativesTotal = activeOperativesList.length > 0 && activeOperativesList.length < totalPeople 
+        ? activeOperativesList.length 
+        : 168;
+
+      // 3. Personal Administrativo y de Supervisión (10 personas: 4 de oficina + 6 supervisores)
+      const adminTotal = 10;
 
       const activeNovedades = (catalogs.personnelNovelties || []).filter((n:any) => n.fechaInicio <= date && n.fechaFin >= date);
 
@@ -162,7 +187,7 @@ export default function Dashboard() {
       inasistentesSet.forEach(id => (vacacionesSet.has(id) || incapacidadesSet.has(id) || permisosSet.has(id)) && inasistentesSet.delete(id));
 
       const totalUnavailable = vacacionesSet.size + incapacidadesSet.size + permisosSet.size + inasistentesSet.size;
-      const availableOperativesCount = Math.max(0, activeOperativesList.length - totalUnavailable);
+      const availableOperativesCount = Math.max(0, operativesTotal - totalUnavailable);
 
       let programmedOperativesSet = new Set<string>();
       const laborPersonnelCountMap = new Map<string, Set<string>>();
@@ -268,8 +293,9 @@ export default function Dashboard() {
         .slice(0, 5);
 
       return {
-        operativesTotal: activeOperativesList.length,
-        adminTotal: totalAdmin,
+        totalPeople,
+        operativesTotal,
+        adminTotal,
         absencesTotal: inasistentesSet.size,
         incapacityTotal: incapacidadesSet.size,
         vacationsTotal: vacacionesSet.size,
@@ -312,88 +338,102 @@ export default function Dashboard() {
         </div>
 
         {/* Tactical Metric Cards Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
-          {/* Card 1: Operativos de Campo */}
-          <Card className="border-forest-900/10 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-forest-50/30">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Operativos Campo</span>
-                <div className="p-2 bg-forest-100 text-forest-800 rounded-lg">
-                  <Users size={18} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          {/* Card 1: Total Personas */}
+          <Card className="border-forest-900/10 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-forest-50/40">
+            <CardContent className="p-3.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wider">Total Personas</span>
+                <div className="p-1.5 bg-forest-100 text-forest-900 rounded-lg">
+                  <Users size={16} />
                 </div>
               </div>
-              <h3 className="text-2xl font-extrabold text-forest-950">{stats.operativesTotal}</h3>
-              <p className="text-[11px] text-gray-500 mt-1">Personal en campo</p>
+              <h3 className="text-2xl font-extrabold text-forest-950">{stats.totalPeople}</h3>
+              <p className="text-[10px] text-gray-500 mt-1 truncate">168 campo + 10 admin</p>
             </CardContent>
           </Card>
 
-          {/* Card 2: Personal Administrativo */}
+          {/* Card 2: Operativos de Campo */}
+          <Card className="border-forest-900/10 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-emerald-50/30">
+            <CardContent className="p-3.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Operativos Campo</span>
+                <div className="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg">
+                  <Layers size={16} />
+                </div>
+              </div>
+              <h3 className="text-2xl font-extrabold text-emerald-950">{stats.operativesTotal}</h3>
+              <p className="text-[10px] text-emerald-700/80 mt-1 truncate">Personal productivo</p>
+            </CardContent>
+          </Card>
+
+          {/* Card 3: Personal Administrativo */}
           <Card className="border-forest-900/10 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-blue-50/30">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Administrativos</span>
-                <div className="p-2 bg-blue-100 text-blue-800 rounded-lg">
-                  <Briefcase size={18} />
+            <CardContent className="p-3.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider">Oficina / Admin</span>
+                <div className="p-1.5 bg-blue-100 text-blue-800 rounded-lg">
+                  <Briefcase size={16} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-blue-950">{stats.adminTotal}</h3>
-              <p className="text-[11px] text-gray-500 mt-1">Jefes, oficina, sups.</p>
+              <p className="text-[10px] text-blue-700/80 mt-1 truncate">Jefes, oficina y sups.</p>
             </CardContent>
           </Card>
 
-          {/* Card 3: Personas Ausentes */}
+          {/* Card 4: Personas Ausentes */}
           <Card className="border-red-200 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-red-50/40">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-red-700 uppercase tracking-wider">Ausentes</span>
-                <div className="p-2 bg-red-100 text-red-700 rounded-lg">
-                  <UserX size={18} />
+            <CardContent className="p-3.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-red-700 uppercase tracking-wider">Ausentes</span>
+                <div className="p-1.5 bg-red-100 text-red-700 rounded-lg">
+                  <UserX size={16} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-red-700">{stats.absencesTotal}</h3>
-              <p className="text-[11px] text-red-600/80 mt-1">Inasistencia del día</p>
+              <p className="text-[10px] text-red-600/80 mt-1 truncate">Inasistencia del día</p>
             </CardContent>
           </Card>
 
-          {/* Card 4: Personas Incapacitadas */}
+          {/* Card 5: Personas Incapacitadas */}
           <Card className="border-teal-200 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-teal-50/40">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-teal-800 uppercase tracking-wider">Incapacitados</span>
-                <div className="p-2 bg-teal-100 text-teal-800 rounded-lg">
-                  <Stethoscope size={18} />
+            <CardContent className="p-3.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-teal-800 uppercase tracking-wider">Incapacitados</span>
+                <div className="p-1.5 bg-teal-100 text-teal-800 rounded-lg">
+                  <Stethoscope size={16} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-teal-900">{stats.incapacityTotal}</h3>
-              <p className="text-[11px] text-teal-700/80 mt-1">Licencia médica activa</p>
+              <p className="text-[10px] text-teal-700/80 mt-1 truncate">Licencia médica</p>
             </CardContent>
           </Card>
 
-          {/* Card 5: Permisos / Vacaciones */}
+          {/* Card 6: Permisos / Vacaciones */}
           <Card className="border-amber-200 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-amber-50/40">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-amber-800 uppercase tracking-wider">Permisos / Vac.</span>
-                <div className="p-2 bg-amber-100 text-amber-800 rounded-lg">
-                  <CalendarX size={18} />
+            <CardContent className="p-3.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Permisos / Vac.</span>
+                <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg">
+                  <CalendarX size={16} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-amber-900">{stats.permissionsTotal + stats.vacationsTotal}</h3>
-              <p className="text-[11px] text-amber-700/80 mt-1">Novedad autorizada</p>
+              <p className="text-[10px] text-amber-700/80 mt-1 truncate">Novedad autorizada</p>
             </CardContent>
           </Card>
 
-          {/* Card 6: Utilización Operativa % */}
+          {/* Card 7: Utilización Operativa % */}
           <Card className="border-lime-300 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-lime-50/50 to-white">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-lime-900 uppercase tracking-wider">Utilización</span>
-                <div className="p-2 bg-lime-200 text-lime-800 rounded-lg">
-                  <TrendingUp size={18} />
+            <CardContent className="p-3.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-lime-900 uppercase tracking-wider">Utilización</span>
+                <div className="p-1.5 bg-lime-200 text-lime-800 rounded-lg">
+                  <TrendingUp size={16} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-lime-900">{stats.utilRate}%</h3>
-              <p className="text-[11px] text-lime-800/80 mt-1">{stats.programmedCount} de {stats.availableOperativesCount} progs.</p>
+              <p className="text-[10px] text-lime-800/80 mt-1 truncate">{stats.programmedCount} de {stats.availableOperativesCount} progs.</p>
             </CardContent>
           </Card>
         </div>

@@ -1,3 +1,5 @@
+import { isOperative } from '../dashboard/Dashboard';
+
 const normalizeString = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 export interface ExtractedData {
@@ -27,6 +29,7 @@ export function resolveVoiceData(
   machineries: any[]
 ) {
   const { labors = [], activities = [], locations = [], personnel = [], personnelNovelties = [] } = catalogs;
+  const operativePersonnel = personnel.filter((p: any) => isOperative(p));
   const zones = Array.from(new Set(locations.map((l: any) => l.zone)));
 
   const dateText = extraction.dateText || new Date().toISOString().split('T')[0];
@@ -108,7 +111,7 @@ export function resolveVoiceData(
     const uniqueNames = Array.from(new Set(extraction.personnelTexts.map(n => n.trim())));
     for (const name of uniqueNames) {
       const norm = normalizeString(name);
-      const exactMatches = personnel.filter((p:any) => normalizeString(p.name) === norm);
+      const exactMatches = operativePersonnel.filter((p:any) => normalizeString(p.name) === norm);
       if (exactMatches.length === 1) {
         const unavailabilityMsg = checkAvailability(exactMatches[0].id, exactMatches[0].documento, name);
         if (unavailabilityMsg) {
@@ -119,7 +122,7 @@ export function resolveVoiceData(
         }
         continue;
       }
-      const partialMatches = personnel.filter((p:any) => normalizeString(p.name).includes(norm));
+      const partialMatches = operativePersonnel.filter((p:any) => normalizeString(p.name).includes(norm));
       if (partialMatches.length === 1) {
         const unavailabilityMsg = checkAvailability(partialMatches[0].id, partialMatches[0].documento, name);
         if (unavailabilityMsg) {
