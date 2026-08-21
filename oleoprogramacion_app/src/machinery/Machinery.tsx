@@ -4,7 +4,7 @@ import { repository } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, cn } from '@/src/components/ui';
 import { Combobox } from '@/src/components/ui/combobox';
-import { Play, Square } from 'lucide-react';
+import { Play, Square, Tractor, Calendar } from 'lucide-react';
 
 export default function Machinery() {
   const { user } = useAuth();
@@ -21,6 +21,8 @@ export default function Machinery() {
   const [loading, setLoading] = useState(false);
 
   const [todaysMachinery, setTodaysMachinery] = useState<any[]>([]);
+
+  const isDirectivo = user?.role === 'DIRECTIVO';
 
   useEffect(() => {
     const filters: any = { date };
@@ -77,103 +79,131 @@ export default function Machinery() {
     }
   };
 
-  if (catLoading) return <div>Cargando...</div>;
+  if (catLoading) return <div className="p-6 text-gray-500">Cargando...</div>;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-primary">Maquinaria</h2>
-        <p className="text-gray-500 text-sm mt-1">Control de operaciones mecanizadas</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-primary flex items-center gap-2">
+            <Tractor className="w-6 h-6 text-forest-700" /> Maquinaria
+          </h2>
+          <p className="text-gray-500 text-sm mt-1">Control y seguimiento de operaciones mecanizadas</p>
+        </div>
+
+        {/* Date selector */}
+        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-xs self-start sm:self-auto">
+          <Calendar size={16} className="text-gray-500" />
+          <span className="text-xs font-semibold text-gray-600">Fecha:</span>
+          <Input 
+            type="date" 
+            value={date} 
+            onChange={e => setDate(e.target.value)} 
+            className="border-0 h-8 text-sm font-bold text-primary focus-visible:ring-0 p-0 w-36" 
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-1 h-fit">
-          <CardHeader>
-            <CardTitle>Nueva Operación</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleStart} className="space-y-4">
-              {error && <div className="text-sm text-negative bg-negative/10 p-2 rounded">{error}</div>}
-              <div>
-                <Label>Fecha</Label>
-                <Input type="date" value={date} onChange={e => setDate(e.target.value)} required />
-              </div>
-              <div>
-                <Label>Tractor / Equipo</Label>
-                <Combobox
-                  options={tractors.map((t: any) => ({ value: t.id, label: `${t.code} - ${t.name}` }))}
-                  value={equipmentId} onChange={setEquipmentId} placeholder="Seleccione tractor..."
-                />
-              </div>
-              <div>
-                <Label>Operador</Label>
-                <Combobox
-                  options={allPersonnel.map((p: any) => ({ value: p.id, label: p.name }))}
-                  value={operatorId} onChange={setOperatorId} placeholder="Seleccione operador..."
-                />
-              </div>
-              <div>
-                <Label>Implemento (Opcional)</Label>
-                <Combobox
-                  options={implementsData.map((t: any) => ({ value: t.id, label: `${t.code} - ${t.name}` }))}
-                  value={implementId} onChange={setImplementId} placeholder="Seleccione implemento..."
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
+      <div className={cn("grid gap-6", isDirectivo ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-3")}>
+        {/* Formulario solo para NO Directivos */}
+        {!isDirectivo && (
+          <Card className="lg:col-span-1 h-fit shadow-xs">
+            <CardHeader className="pb-3 border-b border-gray-100">
+              <CardTitle className="text-base font-bold text-gray-800">Nueva Operación</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <form onSubmit={handleStart} className="space-y-4">
+                {error && <div className="text-sm text-negative bg-negative/10 p-2.5 rounded-md">{error}</div>}
                 <div>
-                  <Label>Zona</Label>
+                  <Label>Fecha</Label>
+                  <Input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+                </div>
+                <div>
+                  <Label>Tractor / Equipo</Label>
                   <Combobox
-                    options={zones.map(z => ({ value: z as string, label: z as string }))}
-                    value={zone} onChange={setZone} placeholder="Zona"
+                    options={tractors.map((t: any) => ({ value: t.id, label: `${t.code} - ${t.name}` }))}
+                    value={equipmentId} onChange={setEquipmentId} placeholder="Seleccione tractor..."
                   />
                 </div>
                 <div>
-                  <Label>Lote</Label>
+                  <Label>Operador</Label>
                   <Combobox
-                    options={lotes.map((l: any) => ({ value: l.id, label: l.name }))}
-                    value={locationId} onChange={setLocationId} placeholder="Lote" disabled={!zone}
+                    options={allPersonnel.map((p: any) => ({ value: p.id, label: p.name }))}
+                    value={operatorId} onChange={setOperatorId} placeholder="Seleccione operador..."
                   />
                 </div>
-              </div>
-              <Button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                <Play size={18} className="mr-2" /> Iniciar Operación
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                <div>
+                  <Label>Implemento (Opcional)</Label>
+                  <Combobox
+                    options={implementsData.map((t: any) => ({ value: t.id, label: `${t.code} - ${t.name}` }))}
+                    value={implementId} onChange={setImplementId} placeholder="Seleccione implemento..."
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label>Zona</Label>
+                    <Combobox
+                      options={zones.map(z => ({ value: z as string, label: z as string }))}
+                      value={zone} onChange={setZone} placeholder="Zona"
+                    />
+                  </div>
+                  <div>
+                    <Label>Lote</Label>
+                    <Combobox
+                      options={lotes.map((l: any) => ({ value: l.id, label: l.name }))}
+                      value={locationId} onChange={setLocationId} placeholder="Lote" disabled={!zone}
+                    />
+                  </div>
+                </div>
+                <Button type="submit" disabled={loading} className="w-full bg-forest-800 hover:bg-forest-900 text-white">
+                  <Play size={18} className="mr-2" /> Iniciar Operación
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Operaciones del {date}</CardTitle>
+        {/* Listado de Operaciones */}
+        <Card className={cn(isDirectivo ? "col-span-1" : "lg:col-span-2", "shadow-xs")}>
+          <CardHeader className="pb-3 border-b border-gray-100 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-bold text-gray-800">Operaciones del {date}</CardTitle>
+              <p className="text-xs text-gray-500 mt-0.5">{todaysMachinery.length} operación{todaysMachinery.length === 1 ? '' : 'es'} registrada{todaysMachinery.length === 1 ? '' : 's'}</p>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {todaysMachinery.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">No hay operaciones registradas en esta fecha.</div>
+              <div className="text-center py-12 text-gray-500 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+                <Tractor size={32} className="mx-auto text-gray-400 mb-2" />
+                <p className="font-medium text-sm">No hay operaciones registradas en esta fecha.</p>
+              </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {todaysMachinery.map(m => {
                   const eq = catalogs.equipment.find((e: any) => e.id === m.equipmentId);
                   const op = catalogs.personnel.find((p: any) => p.id === m.operatorId);
                   return (
-                    <div key={m.id} className="border border-gray-200 rounded-lg p-4 flex justify-between items-center bg-gray-50">
+                    <div key={m.id} className="border border-gray-200/80 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white hover:border-gray-300 transition-colors shadow-xs">
                       <div>
-                        <div className="font-bold text-gray-900">{eq?.code} - {eq?.name}</div>
-                        <div className="text-sm text-gray-600">Operador: {op?.name}</div>
-                        <div className="text-xs text-gray-500 mt-1">Lugar: {m.zoneSnapshot}</div>
-                        <div className="text-xs font-mono mt-1">Inicio: {m.startTime} {m.endTime && `| Fin: ${m.endTime}`}</div>
+                        <div className="font-bold text-gray-900 text-base">{eq?.code || 'EQ'} - {eq?.name || 'Equipo'}</div>
+                        <div className="text-xs text-gray-700 font-medium mt-0.5">Operador: <span className="text-gray-900">{op?.name || 'Sin asignar'}</span></div>
+                        <div className="text-xs text-gray-500 mt-0.5">Ubicación: <span className="font-medium text-gray-700">{m.zoneSnapshot}</span></div>
+                        <div className="text-xs font-mono mt-1 text-gray-600 bg-gray-100 inline-block px-2 py-0.5 rounded">
+                          Inicio: {m.startTime} {m.endTime && `| Fin: ${m.endTime}`}
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
+                      <div className="flex sm:flex-col items-end gap-2 self-stretch sm:self-auto justify-between sm:justify-start">
                         <span className={cn(
-                          "px-2 py-1 text-xs rounded-full font-medium",
-                          m.status === 'EN_PROGRESO' ? "bg-blue-100 text-blue-700" :
-                            m.status === 'FINALIZADA' ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                          "px-2.5 py-1 text-xs rounded-full font-bold uppercase tracking-wider",
+                          m.status === 'EN_PROGRESO' ? "bg-blue-100 text-blue-800 border border-blue-200" :
+                            m.status === 'FINALIZADA' ? "bg-green-100 text-green-800 border border-green-200" : "bg-red-100 text-red-800 border border-red-200"
                         )}>
                           {m.status.replace('_', ' ')}
                         </span>
-                        {m.status === 'EN_PROGRESO' && (
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleCancel(m.id, m.version)}>Cancelar</Button>
-                            <Button size="sm" className="bg-gray-800 text-white" onClick={() => handleStop(m.id, m.version)}><Square size={14} className="mr-1" /> Detener</Button>
+                        {!isDirectivo && m.status === 'EN_PROGRESO' && (
+                          <div className="flex gap-2 mt-1">
+                            <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 text-xs h-7 px-2.5" onClick={() => handleCancel(m.id, m.version)}>Cancelar</Button>
+                            <Button size="sm" className="bg-gray-800 hover:bg-gray-900 text-white text-xs h-7 px-2.5" onClick={() => handleStop(m.id, m.version)}><Square size={12} className="mr-1" /> Detener</Button>
                           </div>
                         )}
                       </div>

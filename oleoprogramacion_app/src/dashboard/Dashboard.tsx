@@ -217,7 +217,7 @@ export default function Dashboard() {
       });
 
       const programmedCount = programmedOperativesSet.size;
-      const utilRate = availableOperativesCount > 0 ? (programmedCount / availableOperativesCount) * 100 : 0;
+      const utilRate = operativesTotal > 0 ? (programmedCount / operativesTotal) * 100 : 0;
 
       // 1. Chart: Personas por Labor
       const palette = ['#123C2E', '#315D43', '#7FA33D', '#B9CF58', '#E6B94F', '#0284C7', '#6366F1', '#A855F7', '#EC4899'];
@@ -359,7 +359,6 @@ export default function Dashboard() {
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-forest-950">{stats.totalPeople}</h3>
-              <p className="text-[10px] text-gray-500 mt-1 truncate">168 campo + 10 admin</p>
             </CardContent>
           </Card>
 
@@ -443,7 +442,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-lime-900">{stats.utilRate}%</h3>
-              <p className="text-[10px] text-lime-800/80 mt-1 truncate">{stats.programmedCount} de {stats.availableOperativesCount} progs.</p>
+              <p className="text-[10px] text-lime-800/80 mt-1 truncate">{stats.programmedCount} de {stats.operativesTotal} progs.</p>
             </CardContent>
           </Card>
         </div>

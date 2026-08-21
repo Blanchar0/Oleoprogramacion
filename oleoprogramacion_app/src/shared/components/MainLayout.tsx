@@ -55,8 +55,8 @@ export default function MainLayout() {
     { name: 'Inasistencias', href: '/absences', icon: UserX, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
     { name: 'Novedades', href: '/novedades', icon: CalendarDays, roles: ['ADMIN', 'DIRECTIVO'] },
     { name: 'Maquinaria', href: '/machinery', icon: Tractor, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
-    { name: 'Registros Recientes', href: '/records', icon: Activity, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
-    { name: 'Catálogos', href: '/admin/catalogs', icon: Settings, roles: ['ADMIN', 'DIRECTIVO'] },
+    { name: 'Registros Recientes', href: '/records', icon: Activity, roles: ['ADMIN', 'SUPERVISOR'] },
+    { name: 'Catálogos', href: '/admin/catalogs', icon: Settings, roles: ['ADMIN'] },
     { name: 'Auditoría', href: '/admin/audit', icon: Users, roles: ['ADMIN'] },
   ];
 

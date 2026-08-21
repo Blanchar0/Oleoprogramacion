@@ -206,13 +206,13 @@ function AppContent() {
                 </RoleGuard>
               } />
               <Route path="/records" element={
-                <RoleGuard roles={['ADMIN', 'DIRECTIVO', 'SUPERVISOR']}>
+                <RoleGuard roles={['ADMIN', 'SUPERVISOR']}>
                   <GeneralProgramming />
                 </RoleGuard>
               } />
               {/* Admin Only */}
               <Route path="/admin/catalogs" element={
-                <RoleGuard roles={['ADMIN', 'DIRECTIVO']}>
+                <RoleGuard roles={['ADMIN']}>
                   <Catalogs />
                 </RoleGuard>
               } />
