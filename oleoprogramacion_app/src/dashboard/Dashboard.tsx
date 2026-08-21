@@ -28,6 +28,17 @@ export const ADMIN_PERSONNEL_NAMES = [
 
 export const isOperative = (person: any): boolean => {
   if (!person) return false;
+
+  // 1. Si el usuario definió la clasificación en Catálogos
+  const tipo = (person.tipoPersonal || person.tipo_personal || person.type || '').toUpperCase();
+  if (tipo === 'ADMINISTRATIVO' || tipo === 'ADMIN' || tipo === 'OFICINA') {
+    return false;
+  }
+  if (tipo === 'CAMPO' || tipo === 'OPERATIVO') {
+    return true;
+  }
+
+  // 2. Si no tiene clasificación explícita, comprobar por nombre y palabras clave de cargo
   const name = (person.name || person.nombreCompleto || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const cargo = (person.jobTitle || person.laborCargo || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   

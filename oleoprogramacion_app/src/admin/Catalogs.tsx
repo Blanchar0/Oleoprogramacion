@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { supabase } from '../shared/supabase';
 import { repository } from '../shared/AgronomicRepository';
 import { Plus, Edit2 } from 'lucide-react';
+import { isOperative } from '../dashboard/Dashboard';
 
 export default function Catalogs() {
   const { user } = useAuth();
@@ -148,25 +149,40 @@ export default function Catalogs() {
 
                 {activeTab === 'personnel' && personnel
                   .filter((p:any) => (p.name || p.nombreCompleto)?.toLowerCase().includes(searchTerm.toLowerCase()) || p.documento?.includes(searchTerm))
-                  .map((p:any) => (
-                    <tr key={p.id} className="border-b border-gray-100">
-                      <td className="px-4 py-3 font-medium">{p.name || p.nombreCompleto} <span className="text-xs text-gray-400">(CC: {p.documento})</span></td>
-                      <td className="px-4 py-3">{p.type || p.tipoPersonal} - {p.jobTitle || p.laborCargo} ({p.cuadrilla || p.actividadCuadrilla || 'S/C'})</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 text-xs rounded-full ${p.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {p.active ? 'Activo' : 'Inactivo'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Button size="sm" variant="ghost" onClick={() => openModal(p)} className="mr-1 text-primary">
-                          <Edit2 size={16} />
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleToggle(p.id, 'personnel', p.active)}>
-                          {p.active ? 'Desactivar' : 'Activar'}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  .map((p:any) => {
+                    const isAdmin = (p.tipoPersonal || p.tipo_personal || p.type || '').toUpperCase() === 'ADMINISTRATIVO' || !isOperative(p);
+                    return (
+                      <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                        <td className="px-4 py-3 font-medium">
+                          {p.name || p.nombreCompleto} 
+                          <span className="text-xs text-gray-400 block font-normal">CC: {p.documento}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 text-xs font-bold rounded-md ${
+                              isAdmin ? 'bg-blue-100 text-blue-800 border border-blue-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            }`}>
+                              {isAdmin ? 'ADMINISTRATIVO' : 'CAMPO'}
+                            </span>
+                            <span className="text-xs text-gray-600">{p.jobTitle || p.laborCargo || 'Sin cargo'} ({p.cuadrilla || p.actividadCuadrilla || 'S/C'})</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${p.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {p.active ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button size="sm" variant="ghost" onClick={() => openModal(p)} className="mr-1 text-primary">
+                            <Edit2 size={16} />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleToggle(p.id, 'personnel', p.active)}>
+                            {p.active ? 'Desactivar' : 'Activar'}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
 
                 {activeTab === 'activities' && activities
                   .filter((a:any) => a.name?.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -248,11 +264,22 @@ export default function Catalogs() {
 
             {activeTab === 'personnel' && (
               <>
-                <div><Label>Nombre Completo</Label><Input required value={formData.name || formData.nombreCompleto || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
+                <div><Label>Nombre Completo</Label><Input required value={formData.name || formData.nombreCompleto || ''} onChange={e => setFormData({...formData, name: e.target.value, nombreCompleto: e.target.value})} /></div>
                 <div><Label>Documento (C.C.)</Label><Input required value={formData.documento || ''} onChange={e => setFormData({...formData, documento: e.target.value})} /></div>
-                <div><Label>Tipo</Label><Input value={formData.type || formData.tipoPersonal || ''} onChange={e => setFormData({...formData, type: e.target.value})} placeholder="Ej: Obrero" /></div>
-                <div><Label>Cargo</Label><Input value={formData.jobTitle || formData.laborCargo || ''} onChange={e => setFormData({...formData, jobTitle: e.target.value})} placeholder="Ej: Cosechero" /></div>
-                <div><Label>Cuadrilla</Label><Input value={formData.cuadrilla || formData.actividadCuadrilla || ''} onChange={e => setFormData({...formData, cuadrilla: e.target.value})} placeholder="Opcional" /></div>
+                <div>
+                  <Label>Clasificación / Área</Label>
+                  <Combobox 
+                    options={[
+                      { value: 'CAMPO', label: 'CAMPO (Operativo / Productivo)' },
+                      { value: 'ADMINISTRATIVO', label: 'ADMINISTRATIVO (Oficina / Supervisor / Directivo)' }
+                    ]} 
+                    value={formData.tipoPersonal || formData.type || 'CAMPO'} 
+                    onChange={v => setFormData({...formData, tipoPersonal: v, type: v})} 
+                    placeholder="Seleccione Área"
+                  />
+                </div>
+                <div><Label>Cargo / Función</Label><Input value={formData.jobTitle || formData.laborCargo || ''} onChange={e => setFormData({...formData, jobTitle: e.target.value, laborCargo: e.target.value})} placeholder="Ej: Administrador, Supervisor, Cosechero, etc." /></div>
+                <div><Label>Cuadrilla / Zona</Label><Input value={formData.cuadrilla || formData.actividadCuadrilla || ''} onChange={e => setFormData({...formData, cuadrilla: e.target.value})} placeholder="Opcional" /></div>
               </>
             )}
 

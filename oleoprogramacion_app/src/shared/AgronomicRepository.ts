@@ -428,10 +428,17 @@ class SupabaseRepository implements AgronomicRepository {
           fechaFin: n.fecha_fin,
         }));
 
+        const mappedPersonnel = (personnel || []).map((p: any) => ({
+          ...p,
+          jobTitle: p.job_title || p.jobTitle || p.labor_cargo || p.laborCargo,
+          tipoPersonal: p.tipo_personal || p.tipoPersonal || p.type || 'CAMPO',
+          nombreCompleto: p.nombre_completo || p.name,
+        }));
+
         callback({
           users: mappedUsers,
           supervisors: supervisors || [],
-          personnel: personnel || [],
+          personnel: mappedPersonnel,
           labors: labors || [],
           activities: mappedActivities,
           locations: locations || [],
@@ -503,13 +510,14 @@ class SupabaseRepository implements AgronomicRepository {
   async createPersonnel(input: any): Promise<Result> {
     try {
       const payload = {
-        id: crypto.randomUUID(),
-        name: input.name,
+        id: input.id || `PER-${input.documento || crypto.randomUUID().slice(0,8)}`,
+        name: input.name || input.nombreCompleto,
         documento: input.documento,
-        type: input.type,
-        cuadrilla: input.cuadrilla,
-        job_title: input.jobTitle,
-        active: input.active ?? true,
+        type: input.type || input.tipoPersonal || 'CAMPO',
+        tipo_personal: input.tipoPersonal || input.type || 'CAMPO',
+        cuadrilla: input.cuadrilla || '',
+        job_title: input.jobTitle || input.job_title || input.laborCargo || '',
+        active: input.active !== undefined ? input.active : true,
       };
       const { data, error } = await supabase.from('personnel').insert(payload).select().single();
       if (error) throw error;
@@ -521,14 +529,15 @@ class SupabaseRepository implements AgronomicRepository {
 
   async updatePersonnel(id: string, input: any): Promise<Result> {
     try {
-      const payload = {
-        name: input.name,
+      const payload: any = {
+        name: input.name || input.nombreCompleto,
         documento: input.documento,
-        type: input.type,
-        cuadrilla: input.cuadrilla,
-        job_title: input.jobTitle,
-        active: input.active,
+        type: input.type || input.tipoPersonal || 'CAMPO',
+        tipo_personal: input.tipoPersonal || input.type || 'CAMPO',
+        cuadrilla: input.cuadrilla || '',
+        job_title: input.jobTitle || input.job_title || input.laborCargo || '',
       };
+      if (input.active !== undefined) payload.active = input.active;
       const { data, error } = await supabase.from('personnel').update(payload).eq('id', id).select().single();
       if (error) throw error;
       return { ok: true, data };
