@@ -21,9 +21,20 @@ import { Loader2 } from 'lucide-react';
 function RoleGuard({ children, roles }: { children: React.ReactNode, roles: string[] }) {
   const { user } = useAuth();
   if (!user || !roles.includes(user.role)) {
+    if (user?.role === 'SUPERVISOR') {
+      return <Navigate to="/programming/new" replace />;
+    }
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;
+}
+
+function HomeRoute() {
+  const { user } = useAuth();
+  if (user?.role === 'SUPERVISOR') {
+    return <Navigate to="/programming/new" replace />;
+  }
+  return <Dashboard />;
 }
 
 function LoadingScreen({ hasLongWait }: { hasLongWait: boolean }) {
@@ -174,7 +185,7 @@ function AppContent() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route element={<MainLayout />}>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<HomeRoute />} />
               
               {/* Supervisor Routes */}
               <Route path="/programming/new" element={

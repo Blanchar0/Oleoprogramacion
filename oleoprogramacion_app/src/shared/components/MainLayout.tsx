@@ -48,7 +48,7 @@ export default function MainLayout() {
   }, [logout]);
 
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
+    { name: 'Dashboard', href: '/', icon: Home, roles: ['ADMIN', 'DIRECTIVO'] },
     { name: 'Nueva Programación', href: '/programming/new', icon: CalendarPlus, roles: ['SUPERVISOR'] },
     { name: 'Pendientes', href: '/programming/pending', icon: CheckSquare, roles: ['SUPERVISOR'] },
     { name: 'Programación General', href: '/programming/all', icon: Clock, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
