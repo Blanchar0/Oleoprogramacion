@@ -10,10 +10,47 @@ import {
   PieChart, Pie, Cell, Legend
 } from 'recharts';
 
+export const isOperative = (person: any): boolean => {
+  if (!person) return false;
+  const cargo = (person.jobTitle || person.laborCargo || '').toLowerCase();
+  
+  const adminKeywords = [
+    'analista', 'jefe', 'supervisor', 'secretari', 'gerente', 'coordinador', 'director', 'practicante', 'administrador'
+  ];
+  return !adminKeywords.some(kw => cargo.includes(kw));
+};
+
 export default function Dashboard() {
   const { user } = useAuth();
   const { catalogs, loading } = useCatalogs();
   const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }));
+  
+  const NovedadesPanel = () => {
+    const activeNovedades = (catalogs.personnelNovelties || []).filter((n:any) => n.fechaInicio <= date && n.fechaFin >= date);
+    if (activeNovedades.length === 0) return null;
+
+    return (
+      <Card className="border-amber-200 shadow-sm bg-amber-50/30">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2 text-amber-800">
+            <CalendarX size={16} /> Personal en Novedad ({activeNovedades.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {activeNovedades.map((n:any) => (
+              <div key={n.id} className="p-3 bg-white rounded border border-amber-100 flex justify-between items-center">
+                <div>
+                  <p className="font-semibold text-sm text-gray-800">{n.personaNombreFuente}</p>
+                  <p className="text-xs text-gray-500">{n.tipo} • {n.fechaInicio} al {n.fechaFin}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
   
   const [programmings, setProgrammings] = useState<any[]>([]);
   const [machineries, setMachineries] = useState<any[]>([]);
@@ -42,7 +79,8 @@ export default function Dashboard() {
     const machineryCount = filteredMachineries.filter(m => m.status !== 'CANCELADA').length;
     const absencesCount = filteredAbsences.filter(a => a.status === 'REGISTRADA').length;
     
-    const totalActive = catalogs.personnel.filter((p:any) => p.active).length;
+    const activeOperatives = catalogs.personnel.filter((p:any) => p.active && isOperative(p));
+    const totalActive = activeOperatives.length;
 
     return (
       <div className="space-y-6">
@@ -51,16 +89,18 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-lime-100 text-lime-700 rounded-lg"><Users size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Personal Programado</p><h3 className="text-2xl font-bold text-forest-950">{uniquePersonnel.size} <span className="text-sm font-normal text-gray-500">/ {totalActive - absencesCount}</span></h3></div></CardContent></Card>
           <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-green-100 text-green-700 rounded-lg"><CalendarCheck size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Progs. Activas</p><h3 className="text-2xl font-bold text-forest-950">{activeProgrammingsCount}</h3></div></CardContent></Card>
-          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-amber-100 text-amber-700 rounded-lg"><CalendarX size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Ausencias / Novedades</p><h3 className="text-2xl font-bold text-forest-950">{absencesCount}</h3></div></CardContent></Card>
+          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-amber-100 text-amber-700 rounded-lg"><CalendarX size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Ausencias (Día)</p><h3 className="text-2xl font-bold text-forest-950">{absencesCount}</h3></div></CardContent></Card>
           <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-blue-100 text-blue-700 rounded-lg"><Tractor size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Maquinaria Activa</p><h3 className="text-2xl font-bold text-forest-950">{machineryCount}</h3></div></CardContent></Card>
         </div>
+
+        <NovedadesPanel />
       </div>
     );
   };
 
   const DirectivoDashboard = () => {
     const stats = useMemo(() => {
-      const activePersonnel = catalogs.personnel.filter((p:any) => p.active);
+      const activePersonnel = catalogs.personnel.filter((p:any) => p.active && isOperative(p));
       const activeNovedades = catalogs.personnelNovelties.filter((n:any) => n.fechaInicio <= date && n.fechaFin >= date);
 
       let inasistentes = new Set<string>();
@@ -182,6 +222,8 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        <NovedadesPanel />
 
         <div className="mt-8 pt-8 border-t border-gray-200">
            <GeneralProgramming overrideDate={date} />

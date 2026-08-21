@@ -602,6 +602,56 @@ class SupabaseRepository implements AgronomicRepository {
       return { ok: false, error: e.message };
     }
   }
+
+  // Novedades
+  async createNovedad(input: any): Promise<Result> {
+    try {
+      const payload = {
+        id: crypto.randomUUID(),
+        tipo: input.tipo,
+        persona_documento: input.personaDocumento,
+        persona_nombre_fuente: input.personaNombreFuente,
+        fecha_inicio: input.fechaInicio,
+        fecha_fin: input.fechaFin,
+        zona: input.zona || 'N/A',
+        estado: input.estado || 'ACTIVA_EN_RANGO_DE_FECHAS',
+      };
+      const { data, error } = await supabase.from('personnel_novelties').insert(payload).select().single();
+      if (error) throw error;
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async updateNovedad(id: string, input: any): Promise<Result> {
+    try {
+      const payload = {
+        tipo: input.tipo,
+        persona_documento: input.personaDocumento,
+        persona_nombre_fuente: input.personaNombreFuente,
+        fecha_inicio: input.fechaInicio,
+        fecha_fin: input.fechaFin,
+        zona: input.zona || 'N/A',
+        estado: input.estado || 'ACTIVA_EN_RANGO_DE_FECHAS',
+      };
+      const { data, error } = await supabase.from('personnel_novelties').update(payload).eq('id', id).select().single();
+      if (error) throw error;
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async deleteNovedad(id: string): Promise<Result> {
+    try {
+      const { data, error } = await supabase.from('personnel_novelties').delete().eq('id', id).select().single();
+      if (error) throw error;
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
 }
 
 export const repository = new SupabaseRepository();

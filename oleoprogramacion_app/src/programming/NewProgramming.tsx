@@ -8,6 +8,7 @@ import { Combobox } from '@/src/components/ui/combobox';
 import { Labor, Activity, Location, Personnel, Novedad, VoiceExtraction, ProgrammingPerformance, ActivityPerformanceReference, ResolvedField } from '../types';
 import { Mic, MicOff, Square, RefreshCcw, Check, X, AlertCircle, Play, Pause, FileText, CheckCircle2 } from 'lucide-react';
 import { resolveVoiceData } from './voiceResolver';
+import { isOperative } from '../dashboard/Dashboard';
 
 type VoiceState = 
   | 'LISTO' 
@@ -34,7 +35,7 @@ export default function NewProgramming() {
   const labors = (catalogs.labors || []).filter(l => l.active);
   const allActivities = (catalogs.activities || []).filter(a => a.active);
   const locations = (catalogs.locations || []).filter(l => l.active);
-  const allPersonnel = (catalogs.personnel || []).filter(p => p.active);
+  const allPersonnel = (catalogs.personnel || []).filter(p => p.active && isOperative(p));
   const allNovedades = (catalogs.personnelNovelties || []) || [];
   
   const zones = Array.from(new Set(locations.map(l => l.zone))).sort();

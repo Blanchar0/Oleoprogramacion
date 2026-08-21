@@ -4,7 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { Navigate, Outlet, Link, useLocation } from 'react-router-dom';
 import { 
   Menu, X, Home, CalendarPlus, CheckSquare, 
-  Clock, UserX, Tractor, Users, Settings, LogOut, Activity
+  Clock, UserX, Tractor, Users, Settings, LogOut, Activity, CalendarDays
 } from 'lucide-react';
 import { cn } from '@/src/components/ui';
 
@@ -53,9 +53,10 @@ export default function MainLayout() {
     { name: 'Pendientes', href: '/programming/pending', icon: CheckSquare, roles: ['SUPERVISOR'] },
     { name: 'Programación General', href: '/programming/all', icon: Clock, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
     { name: 'Inasistencias', href: '/absences', icon: UserX, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
+    { name: 'Novedades', href: '/novedades', icon: CalendarDays, roles: ['ADMIN', 'DIRECTIVO'] },
     { name: 'Maquinaria', href: '/machinery', icon: Tractor, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
     { name: 'Registros Recientes', href: '/records', icon: Activity, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
-    { name: 'Catálogos', href: '/admin/catalogs', icon: Settings, roles: ['ADMIN'] },
+    { name: 'Catálogos', href: '/admin/catalogs', icon: Settings, roles: ['ADMIN', 'DIRECTIVO'] },
     { name: 'Auditoría', href: '/admin/audit', icon: Users, roles: ['ADMIN'] },
   ];
 

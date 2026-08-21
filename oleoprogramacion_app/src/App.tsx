@@ -11,6 +11,7 @@ import Absences from './absences/Absences';
 import Machinery from './machinery/Machinery';
 import Catalogs from './admin/Catalogs';
 import Audit from './admin/Audit';
+import Novedades from './admin/Novedades';
 import { Leaf } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'motion/react';
@@ -211,8 +212,14 @@ function AppContent() {
               } />
               {/* Admin Only */}
               <Route path="/admin/catalogs" element={
-                <RoleGuard roles={['ADMIN']}>
+                <RoleGuard roles={['ADMIN', 'DIRECTIVO']}>
                   <Catalogs />
+                </RoleGuard>
+              } />
+              
+              <Route path="/novedades" element={
+                <RoleGuard roles={['ADMIN', 'DIRECTIVO']}>
+                  <Novedades />
                 </RoleGuard>
               } />
               
