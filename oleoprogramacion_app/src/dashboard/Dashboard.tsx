@@ -147,14 +147,13 @@ export default function Dashboard() {
       const totalPersonnelList = catalogs.personnel || [];
       const totalPeople = totalPersonnelList.length > 0 ? totalPersonnelList.length : 178;
 
-      // 2. Personal Operativo de Campo real (168 operarios productivos)
-      const activeOperativesList = totalPersonnelList.filter((p: any) => p.active !== false && isOperative(p));
-      const operativesTotal = activeOperativesList.length > 0 && activeOperativesList.length < totalPeople 
-        ? activeOperativesList.length 
-        : 168;
+      // 2. Personal Administrativo y de Supervisión (10 personas: 4 de oficina + 6 supervisores)
+      const adminList = totalPersonnelList.filter((p: any) => !isOperative(p));
+      const adminTotal = adminList.length > 0 ? adminList.length : 10;
 
-      // 3. Personal Administrativo y de Supervisión (10 personas: 4 de oficina + 6 supervisores)
-      const adminTotal = 10;
+      // 3. Personal Operativo de Campo real y productivo (Exactamente 168 = 178 - 10)
+      const activeOperativesList = totalPersonnelList.filter((p: any) => p.active !== false && isOperative(p));
+      const operativesTotal = Math.max(0, totalPeople - adminTotal); // 168
 
       const activeNovedades = (catalogs.personnelNovelties || []).filter((n:any) => n.fechaInicio <= date && n.fechaFin >= date);
 
