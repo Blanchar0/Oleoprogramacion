@@ -33,8 +33,10 @@ export default function NewProgramming() {
   const editRecord = location.state?.editRecord;
   const isEditing = !!editRecord;
   
-  // Data - Sorted alphabetically A to Z
-  const labors = (catalogs.labors || []).filter(l => l.active).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+  // Data - Sorted alphabetically A to Z (Excluding MAQUINARIA since it has its dedicated module)
+  const labors = (catalogs.labors || [])
+    .filter(l => l.active && l.name.toUpperCase().trim() !== 'MAQUINARIA')
+    .sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
   const allActivities = (catalogs.activities || []).filter(a => a.active).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
   const locations = (catalogs.locations || []).filter(l => l.active).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
   const allPersonnel = (catalogs.personnel || []).filter(p => p.active && isOperative(p)).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));

@@ -128,6 +128,9 @@ export default function Dashboard() {
   const NormalDashboard = () => {
     const uniquePersonnel = new Set<string>();
     filteredProgrammings.forEach(p => (p.personnelIds || []).forEach((id: string) => uniquePersonnel.add(id)));
+    filteredMachineries.filter(m => m.status !== 'CANCELADA').forEach(m => {
+      if (m.operatorId) uniquePersonnel.add(m.operatorId);
+    });
     
     const activeProgrammingsCount = filteredProgrammings.length;
     const machineryCount = filteredMachineries.filter(m => m.status !== 'CANCELADA').length;
@@ -208,6 +211,7 @@ export default function Dashboard() {
       let programmedOperativesSet = new Set<string>();
       const laborPersonnelCountMap = new Map<string, Set<string>>();
 
+      // 1. Personal en programaciones confirmadas
       filteredProgrammings.forEach(p => {
         const laborObj = catalogs.labors.find((l:any) => l.id === p.laborId);
         const laborName = laborObj ? laborObj.name : 'Otra Labor';
@@ -223,6 +227,19 @@ export default function Dashboard() {
             laborPersonnelCountMap.get(laborName)?.add(id);
           }
         });
+      });
+
+      // 2. Operadores / Tractoristas en maquinaria del día
+      filteredMachineries.filter(m => m.status !== 'CANCELADA').forEach(m => {
+        if (!m.operatorId) return;
+        const per = activeOperativesList.find((x: any) => x.id === m.operatorId || x.documento === m.operatorId || x.name === m.operatorName);
+        const doc = per ? (per.documento || per.id) : m.operatorId;
+        programmedOperativesSet.add(doc);
+
+        const laborObj = catalogs.labors.find((l:any) => l.id === (m.laborId || m.labor_id));
+        const laborName = laborObj ? laborObj.name : 'Maquinaria';
+        if (!laborPersonnelCountMap.has(laborName)) laborPersonnelCountMap.set(laborName, new Set());
+        laborPersonnelCountMap.get(laborName)?.add(doc);
       });
 
       const programmedCount = programmedOperativesSet.size;
@@ -243,19 +260,28 @@ export default function Dashboard() {
       // 2. Chart: Despliegue por Supervisor
       const bySupMap = new Map<string, Set<string>>();
       filteredProgrammings.forEach(p => {
-        if (!bySupMap.has(p.supervisorId || p.idSupervisor)) {
-          bySupMap.set(p.supervisorId || p.idSupervisor, new Set());
-        }
+        const sup = catalogs.supervisors.find((s:any) => s.id === p.idSupervisor);
+        const supName = sup ? sup.name : (p.idSupervisor || 'Otros');
+        if (!bySupMap.has(supName)) bySupMap.set(supName, new Set());
         (p.personnelIds || []).forEach((id: string) => {
           const per = activeOperativesList.find((x: any) => x.id === id);
-          if (per) bySupMap.get(p.supervisorId || p.idSupervisor)?.add(per.documento);
+          bySupMap.get(supName)?.add(per ? (per.documento || per.id) : id);
         });
       });
 
+      filteredMachineries.filter(m => m.status !== 'CANCELADA').forEach(m => {
+        if (!m.operatorId) return;
+        const supId = m.supervisorId || m.idSupervisor;
+        const sup = catalogs.supervisors.find((s:any) => s.id === supId);
+        const supName = sup ? sup.name : (supId || 'Otros');
+        if (!bySupMap.has(supName)) bySupMap.set(supName, new Set());
+        const per = activeOperativesList.find((x: any) => x.id === m.operatorId);
+        bySupMap.get(supName)?.add(per ? (per.documento || per.id) : m.operatorId);
+      });
+
       const chartBySup = Array.from(bySupMap.entries())
-        .map(([supId, set]) => {
-          const sup = catalogs.supervisors.find((s: any) => s.id === supId);
-          return { name: sup?.name ? sup.name.split(' ')[0] + ' ' + (sup.name.split(' ')[1] || '') : 'Sin Asignar', personas: set.size };
+        .map(([name, set]) => {
+          return { name: name.split(' ')[0] + ' ' + (name.split(' ')[1] || ''), personas: set.size };
         })
         .sort((a, b) => b.personas - a.personas)
         .slice(0, 8);

@@ -65,16 +65,15 @@ export default function MainLayout() {
   }, [isEnlargedSupervisor]);
 
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home, roles: ['ADMIN', 'DIRECTIVO'] },
-    { name: 'Nueva Programación', href: '/programming/new', icon: CalendarPlus, roles: ['SUPERVISOR'] },
-    { name: 'Pendientes', href: '/programming/pending', icon: CheckSquare, roles: ['SUPERVISOR'] },
-    { name: 'Programación General', href: '/programming/all', icon: Clock, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
-    { name: 'Inasistencias', href: '/absences', icon: UserX, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
-    { name: 'Novedades', href: '/novedades', icon: CalendarDays, roles: ['ADMIN', 'DIRECTIVO'] },
-    { name: 'Maquinaria', href: '/machinery', icon: Tractor, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
-    { name: 'Registros Recientes', href: '/records', icon: Activity, roles: ['ADMIN', 'SUPERVISOR'] },
-    { name: 'Catálogos', href: '/admin/catalogs', icon: Settings, roles: ['ADMIN'] },
-    { name: 'Auditoría', href: '/admin/audit', icon: Users, roles: ['ADMIN'] },
+    { name: 'Dashboard', shortName: 'Dashboard', href: '/', icon: Home, roles: ['ADMIN', 'DIRECTIVO'] },
+    { name: 'Nueva Programación', shortName: 'Nueva Prog.', href: '/programming/new', icon: CalendarPlus, roles: ['SUPERVISOR'] },
+    { name: 'Pendientes', shortName: 'Pendientes', href: '/programming/pending', icon: CheckSquare, roles: ['SUPERVISOR'] },
+    { name: 'Programación General', shortName: 'Prog. General', href: '/programming/all', icon: Clock, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
+    { name: 'Inasistencias', shortName: 'Inasistencias', href: '/absences', icon: UserX, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
+    { name: 'Novedades', shortName: 'Novedades', href: '/novedades', icon: CalendarDays, roles: ['ADMIN', 'DIRECTIVO'] },
+    { name: 'Maquinaria', shortName: 'Maquinaria', href: '/machinery', icon: Tractor, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
+    { name: 'Catálogos', shortName: 'Catálogos', href: '/admin/catalogs', icon: Settings, roles: ['ADMIN'] },
+    { name: 'Auditoría', shortName: 'Auditoría', href: '/admin/audit', icon: Users, roles: ['ADMIN'] },
   ];
 
   const filteredNav = navigation.filter(item => item.roles.includes(user.role));
@@ -98,7 +97,7 @@ export default function MainLayout() {
           </Link>
           <SyncIndicator />
         </div>
-        <button onClick={() => logout()} className="text-gray-300 hover:text-white p-1">
+        <button onClick={() => logout()} className="text-gray-300 hover:text-white p-1 cursor-pointer" title="Cerrar sesión">
           <LogOut size={20} />
         </button>
       </div>
@@ -143,7 +142,7 @@ export default function MainLayout() {
                     to={item.href}
                     className={cn(
                       "flex items-center space-x-3 px-3 py-2.5 rounded-md transition-colors text-sm font-medium",
-                      isActive ? "bg-secondary text-white" : "text-gray-300 hover:bg-secondary/50 hover:text-white"
+                      isActive ? "bg-secondary text-white font-bold" : "text-gray-300 hover:bg-secondary/50 hover:text-white"
                     )}
                   >
                     <item.icon size={18} />
@@ -185,9 +184,9 @@ export default function MainLayout() {
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 flex justify-around items-center h-16 safe-bottom">
-        {filteredNav.slice(0, 4).map((item) => {
+      {/* Mobile Bottom Navigation - All sections compressed without "Más" button */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200/80 z-50 flex items-stretch h-16 safe-bottom shadow-lg px-1">
+        {filteredNav.map((item) => {
           const isActive = location.pathname === item.href || 
                           (item.href !== '/' && location.pathname.startsWith(item.href));
           return (
@@ -195,26 +194,22 @@ export default function MainLayout() {
               key={item.name}
               to={item.href}
               className={cn(
-                "flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors",
-                isActive ? "text-primary" : "text-gray-400 hover:text-gray-600"
+                "flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 transition-all text-center rounded-lg my-1 mx-0.5",
+                isActive 
+                  ? "text-forest-900 font-bold bg-forest-50/80 border border-forest-200/60 shadow-2xs" 
+                  : "text-gray-500 hover:text-forest-800 hover:bg-gray-50"
               )}
             >
-              <item.icon size={20} className={isActive ? "fill-primary/20" : ""} />
-              <span className="text-[10px] font-medium truncate max-w-[80px] px-1">{item.name}</span>
+              <item.icon size={18} className={cn("shrink-0 mb-0.5", isActive ? "stroke-[2.5px] text-forest-900" : "text-gray-500")} />
+              <span className={cn(
+                "text-[9px] sm:text-[10px] tracking-tight leading-none truncate w-full text-center block",
+                isActive ? "font-bold text-forest-950" : "font-medium text-gray-600"
+              )}>
+                {item.shortName || item.name}
+              </span>
             </Link>
           );
         })}
-        {filteredNav.length > 4 && (
-          <Link
-            to={filteredNav[4].href}
-            className={cn(
-              "flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors text-gray-400 hover:text-gray-600"
-            )}
-          >
-            <Menu size={20} />
-            <span className="text-[10px] font-medium truncate max-w-[80px] px-1">Más</span>
-          </Link>
-        )}
       </div>
     </div>
   );

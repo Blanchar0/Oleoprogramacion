@@ -217,11 +217,7 @@ function AppContent() {
                   <Machinery />
                 </RoleGuard>
               } />
-              <Route path="/records" element={
-                <RoleGuard roles={['ADMIN', 'SUPERVISOR']}>
-                  <GeneralProgramming />
-                </RoleGuard>
-              } />
+              <Route path="/records" element={<Navigate to="/programming/all" replace />} />
               {/* Admin Only */}
               <Route path="/admin/catalogs" element={
                 <RoleGuard roles={['ADMIN']}>

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Input, Button, cn } from '@/src/components/ui';
-import { ChevronDown, ChevronRight, ChevronUp, Download, Search, Copy, Edit2, Trash2, Users, UserCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Download, Search, Copy, Edit2, Trash2, Users, UserCheck, Tractor } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { repository } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
@@ -355,6 +355,84 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
             )}
           </Card>
         ))
+      )}
+
+      {/* Operaciones de Maquinaria y Tractoristas del Día */}
+      {filteredMachineries.length > 0 && (
+        <Card className="border-forest-900/15 shadow-sm overflow-hidden bg-white mt-8">
+          <CardHeader className="bg-gradient-to-r from-forest-900 via-forest-950 to-forest-900 text-white p-4 flex flex-row items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-lime-400/20 text-lime-300 rounded-lg">
+                <Tractor size={20} />
+              </div>
+              <div>
+                <CardTitle className="text-base font-bold text-white tracking-tight">Operaciones de Maquinaria y Tractoristas</CardTitle>
+                <p className="text-xs text-forest-200">Personal y equipos mecanizados programados en la jornada ({date})</p>
+              </div>
+            </div>
+            <span className="px-3 py-1 text-xs font-extrabold rounded-full bg-lime-400 text-forest-950 shadow-xs">
+              {filteredMachineries.length} Operación{filteredMachineries.length > 1 ? 'es' : ''}
+            </span>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-forest-50 text-forest-950 font-bold border-b border-forest-200 uppercase tracking-wider text-[11px]">
+                    <th className="px-4 py-3">Tractor / Equipo</th>
+                    <th className="px-4 py-3">Operador (Tractorista)</th>
+                    <th className="px-4 py-3">Labor y Actividad</th>
+                    <th className="px-4 py-3">Ubicación</th>
+                    <th className="px-4 py-3">Horario</th>
+                    <th className="px-4 py-3">Observaciones</th>
+                    <th className="px-4 py-3 text-center">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredMachineries.map((m: any) => {
+                    const eq = catalogs.equipment?.find((e: any) => e.id === m.equipmentId);
+                    const op = catalogs.personnel?.find((p: any) => p.id === m.operatorId);
+                    const labor = catalogs.labors?.find((l: any) => l.id === (m.laborId || m.labor_id));
+                    const act = catalogs.activities?.find((a: any) => a.id === (m.activityId || m.activity_id));
+                    return (
+                      <tr key={m.id} className="hover:bg-forest-50/40 transition-colors">
+                        <td className="px-4 py-3 font-bold text-forest-950 text-sm">
+                          {eq?.code ? `${eq.code} - ${eq.name}` : (eq?.name || 'Equipo')}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-gray-900">{op?.name || m.operatorName || 'Sin asignar'}</div>
+                          {op?.jobTitle && <div className="text-[10px] text-gray-500">{op.jobTitle}</div>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="font-bold text-forest-900">{labor?.name || 'Maquinaria'}</span>
+                          {act?.name && <span className="text-gray-600 font-normal"> ({act.name})</span>}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700 font-medium">
+                          {m.zoneSnapshot || '-'}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-gray-600 text-[11px]">
+                          {m.startTime || '-'}{m.endTime ? ` a ${m.endTime}` : ''}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">
+                          {m.observations || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={cn(
+                            "px-2 py-0.5 text-[10px] rounded-full font-bold uppercase",
+                            m.status === 'EN_PROGRESO' ? "bg-blue-100 text-blue-800 border border-blue-200" :
+                            m.status === 'FINALIZADA' ? "bg-green-100 text-green-800 border border-green-200" : "bg-red-100 text-red-800 border border-red-200"
+                          )}>
+                            {m.status?.replace('_', ' ') || 'ACTIVA'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
