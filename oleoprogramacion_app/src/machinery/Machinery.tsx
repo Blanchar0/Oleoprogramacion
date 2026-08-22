@@ -13,6 +13,8 @@ export default function Machinery() {
   const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }));
   const [equipmentId, setEquipmentId] = useState('');
   const [operatorId, setOperatorId] = useState('');
+  const [laborId, setLaborId] = useState('');
+  const [activityId, setActivityId] = useState('');
   const [observations, setObservations] = useState('');
   const [zone, setZone] = useState('');
   const [locationId, setLocationId] = useState('');
@@ -57,13 +59,25 @@ export default function Machinery() {
     .filter((e: any) => e.type === 'TRACTOR')
     .sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true }));
 
+  const labors = (catalogs.labors || [])
+    .filter((l: any) => l.active)
+    .sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+
+  const allActivities = (catalogs.activities || [])
+    .filter((a: any) => a.active)
+    .sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+
+  const activities = laborId
+    ? allActivities.filter((a: any) => a.laborId === laborId)
+    : allActivities;
+
   const zones = Array.from(new Set((catalogs.locations || []).map((l: any) => l.zone))).sort((a: any, b: any) => String(a).localeCompare(String(b), 'es', { numeric: true }));
   const lotes = zone ? (catalogs.locations || []).filter((l: any) => l.zone === zone).sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true })) : [];
 
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!equipmentId || !operatorId || !zone || !locationId) {
-      setError('Complete los campos obligatorios');
+    if (!equipmentId || !operatorId || !laborId || !zone || !locationId) {
+      setError('Complete los campos obligatorios (*)');
       return;
     }
     setError('');
@@ -72,6 +86,8 @@ export default function Machinery() {
       date,
       equipmentId,
       operatorId,
+      laborId,
+      activityId: activityId || null,
       observations: observations || '',
       locationId,
       zoneSnapshot: `${zone} - ${lotes.find((l: any) => l.id === locationId)?.name || locationId}`,
@@ -85,6 +101,8 @@ export default function Machinery() {
     if (res.ok) {
       setEquipmentId('');
       setOperatorId('');
+      setLaborId('');
+      setActivityId('');
       setObservations('');
       setZone('');
       setLocationId('');
@@ -144,11 +162,11 @@ export default function Machinery() {
               <form onSubmit={handleStart} className="space-y-4">
                 {error && <div className="text-sm text-negative bg-negative/10 p-2.5 rounded-md">{error}</div>}
                 <div>
-                  <Label>Fecha</Label>
+                  <Label>Fecha *</Label>
                   <Input type="date" value={date} onChange={e => setDate(e.target.value)} required />
                 </div>
                 <div>
-                  <Label>Tractor / Equipo</Label>
+                  <Label>Tractor / Equipo *</Label>
                   <Combobox
                     options={tractors.map((t: any) => ({
                       value: t.id,
@@ -160,7 +178,7 @@ export default function Machinery() {
                   />
                 </div>
                 <div>
-                  <Label>Operador (Tractorista)</Label>
+                  <Label>Operador (Tractorista) *</Label>
                   <Combobox
                     options={operatorOptions.map((p: any) => ({
                       value: p.id,
@@ -172,6 +190,44 @@ export default function Machinery() {
                   />
                 </div>
                 <div>
+                  <Label>Labor *</Label>
+                  <Combobox
+                    options={labors.map((l: any) => ({ value: l.id, label: l.name }))}
+                    value={laborId}
+                    onChange={(val) => {
+                      setLaborId(val);
+                      setActivityId('');
+                    }}
+                    placeholder="Seleccione labor..."
+                  />
+                </div>
+                <div>
+                  <Label>Actividad</Label>
+                  <Combobox
+                    options={activities.map((a: any) => ({ value: a.id, label: a.name }))}
+                    value={activityId}
+                    onChange={setActivityId}
+                    placeholder={laborId ? "Seleccione actividad (opcional)..." : "Seleccione labor primero..."}
+                    disabled={!laborId}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label>Zona *</Label>
+                    <Combobox
+                      options={zones.map(z => ({ value: z as string, label: z as string }))}
+                      value={zone} onChange={setZone} placeholder="Zona"
+                    />
+                  </div>
+                  <div>
+                    <Label>Lote *</Label>
+                    <Combobox
+                      options={lotes.map((l: any) => ({ value: l.id, label: l.name }))}
+                      value={locationId} onChange={setLocationId} placeholder="Lote" disabled={!zone}
+                    />
+                  </div>
+                </div>
+                <div>
                   <Label htmlFor="machinery-obs">Observaciones (Opcional)</Label>
                   <Input
                     id="machinery-obs"
@@ -179,22 +235,6 @@ export default function Machinery() {
                     onChange={(e) => setObservations(e.target.value)}
                     placeholder="Notas u observaciones de la operación..."
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label>Zona</Label>
-                    <Combobox
-                      options={zones.map(z => ({ value: z as string, label: z as string }))}
-                      value={zone} onChange={setZone} placeholder="Zona"
-                    />
-                  </div>
-                  <div>
-                    <Label>Lote</Label>
-                    <Combobox
-                      options={lotes.map((l: any) => ({ value: l.id, label: l.name }))}
-                      value={locationId} onChange={setLocationId} placeholder="Lote" disabled={!zone}
-                    />
-                  </div>
                 </div>
                 <Button type="submit" disabled={loading} className="w-full shadow-md font-bold">
                   <Play size={18} className="mr-2 fill-white" /> {loading ? 'Iniciando...' : 'Iniciar Operación'}
@@ -223,13 +263,21 @@ export default function Machinery() {
                 {todaysMachinery.map(m => {
                   const eq = catalogs.equipment.find((e: any) => e.id === m.equipmentId);
                   const op = catalogs.personnel.find((p: any) => p.id === m.operatorId);
+                  const labor = catalogs.labors.find((l: any) => l.id === (m.laborId || m.labor_id));
+                  const act = catalogs.activities.find((a: any) => a.id === (m.activityId || m.activity_id));
                   return (
                     <div key={m.id} className="border border-gray-200/80 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white hover:border-gray-300 transition-colors shadow-xs">
                       <div>
                         <div className="font-bold text-gray-900 text-base">
                           {eq?.code ? `${eq.code} - ${eq.name}` : (eq?.name || 'Equipo')}
                         </div>
-                        <div className="text-xs text-gray-700 font-medium mt-0.5">Operador: <span className="text-gray-900">{op?.name || 'Sin asignar'}</span></div>
+                        <div className="text-xs text-gray-700 font-medium mt-0.5">Operador: <span className="text-gray-900 font-semibold">{op?.name || 'Sin asignar'}</span></div>
+                        {(labor || act) && (
+                          <div className="text-xs text-forest-900 font-medium mt-0.5">
+                            Labor: <span className="font-bold text-forest-950">{labor?.name || 'No especificada'}</span>
+                            {act?.name && <span className="text-gray-600 font-normal"> ({act.name})</span>}
+                          </div>
+                        )}
                         <div className="text-xs text-gray-500 mt-0.5">Ubicación: <span className="font-medium text-gray-700">{m.zoneSnapshot}</span></div>
                         {m.observations && (
                           <div className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded border border-gray-200/60 mt-1 max-w-md">
