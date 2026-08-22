@@ -13,7 +13,7 @@ export default function Machinery() {
   const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }));
   const [equipmentId, setEquipmentId] = useState('');
   const [operatorId, setOperatorId] = useState('');
-  const [implementId, setImplementId] = useState('');
+  const [observations, setObservations] = useState('');
   const [zone, setZone] = useState('');
   const [locationId, setLocationId] = useState('');
 
@@ -31,9 +31,32 @@ export default function Machinery() {
     return () => unsub();
   }, [date, user]);
 
-  const allPersonnel = (catalogs.personnel || []).filter((p: any) => p.active).sort((a: any, b: any) => (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true }));
-  const tractors = (catalogs.equipment || []).filter((e: any) => e.type === 'TRACTOR').sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true }));
-  const implementsData = (catalogs.equipment || []).filter((e: any) => e.type === 'IMPLEMENTO').sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+  const isTractorista = (person: any): boolean => {
+    if (!person) return false;
+    const cargo = (person.jobTitle || person.laborCargo || person.cargo || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const cuadrilla = (person.cuadrilla || person.zona || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const tipo = (person.tipoPersonal || person.tipo_personal || person.type || '').toUpperCase();
+    
+    return cargo.includes('TRACTOR') || 
+           cargo.includes('OPERADOR') || 
+           cargo.includes('MAQUINARIA') ||
+           cuadrilla.includes('TRACTOR') || 
+           cuadrilla.includes('OPERADOR') ||
+           tipo.includes('TRACTOR');
+  };
+
+  const tractoristas = (catalogs.personnel || [])
+    .filter((p: any) => p.active && isTractorista(p))
+    .sort((a: any, b: any) => (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true }));
+
+  const operatorOptions = tractoristas.length > 0
+    ? tractoristas
+    : (catalogs.personnel || []).filter((p: any) => p.active).sort((a: any, b: any) => (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true }));
+
+  const tractors = (catalogs.equipment || [])
+    .filter((e: any) => e.type === 'TRACTOR')
+    .sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+
   const zones = Array.from(new Set((catalogs.locations || []).map((l: any) => l.zone))).sort((a: any, b: any) => String(a).localeCompare(String(b), 'es', { numeric: true }));
   const lotes = zone ? (catalogs.locations || []).filter((l: any) => l.zone === zone).sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true })) : [];
 
@@ -43,22 +66,28 @@ export default function Machinery() {
       setError('Complete los campos obligatorios');
       return;
     }
+    setError('');
     setLoading(true);
     const payload = {
       date,
       equipmentId,
       operatorId,
-      implementId: implementId || null,
+      observations: observations || '',
       locationId,
-      zoneSnapshot: `${zone} - ${lotes.find((l: any) => l.id === locationId)?.name}`,
-      idSupervisor: user?.idSupervisor || null,
+      zoneSnapshot: `${zone} - ${lotes.find((l: any) => l.id === locationId)?.name || locationId}`,
+      idSupervisor: user?.idSupervisor || 'SUP001',
+      supervisorId: user?.idSupervisor || 'SUP001',
       status: 'EN_PROGRESO',
       startTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
     };
     const res = await repository.createMachineryOperation(payload);
     setLoading(false);
     if (res.ok) {
-      setEquipmentId(''); setOperatorId(''); setImplementId('');
+      setEquipmentId('');
+      setOperatorId('');
+      setObservations('');
+      setZone('');
+      setLocationId('');
     } else {
       setError(res.error || 'Error al guardar');
     }
@@ -121,22 +150,34 @@ export default function Machinery() {
                 <div>
                   <Label>Tractor / Equipo</Label>
                   <Combobox
-                    options={tractors.map((t: any) => ({ value: t.id, label: `${t.code} - ${t.name}` }))}
-                    value={equipmentId} onChange={setEquipmentId} placeholder="Seleccione tractor..."
+                    options={tractors.map((t: any) => ({
+                      value: t.id,
+                      label: t.code ? `${t.code} - ${t.name}` : t.name
+                    }))}
+                    value={equipmentId} 
+                    onChange={setEquipmentId} 
+                    placeholder="Seleccione tractor..."
                   />
                 </div>
                 <div>
-                  <Label>Operador</Label>
+                  <Label>Operador (Tractorista)</Label>
                   <Combobox
-                    options={allPersonnel.map((p: any) => ({ value: p.id, label: p.name }))}
-                    value={operatorId} onChange={setOperatorId} placeholder="Seleccione operador..."
+                    options={operatorOptions.map((p: any) => ({
+                      value: p.id,
+                      label: p.name || p.nombreCompleto
+                    }))}
+                    value={operatorId} 
+                    onChange={setOperatorId} 
+                    placeholder="Seleccione operador..."
                   />
                 </div>
                 <div>
-                  <Label>Implemento (Opcional)</Label>
-                  <Combobox
-                    options={implementsData.map((t: any) => ({ value: t.id, label: `${t.code} - ${t.name}` }))}
-                    value={implementId} onChange={setImplementId} placeholder="Seleccione implemento..."
+                  <Label htmlFor="machinery-obs">Observaciones (Opcional)</Label>
+                  <Input
+                    id="machinery-obs"
+                    value={observations}
+                    onChange={(e) => setObservations(e.target.value)}
+                    placeholder="Notas u observaciones de la operación..."
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -185,9 +226,16 @@ export default function Machinery() {
                   return (
                     <div key={m.id} className="border border-gray-200/80 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white hover:border-gray-300 transition-colors shadow-xs">
                       <div>
-                        <div className="font-bold text-gray-900 text-base">{eq?.code || 'EQ'} - {eq?.name || 'Equipo'}</div>
+                        <div className="font-bold text-gray-900 text-base">
+                          {eq?.code ? `${eq.code} - ${eq.name}` : (eq?.name || 'Equipo')}
+                        </div>
                         <div className="text-xs text-gray-700 font-medium mt-0.5">Operador: <span className="text-gray-900">{op?.name || 'Sin asignar'}</span></div>
                         <div className="text-xs text-gray-500 mt-0.5">Ubicación: <span className="font-medium text-gray-700">{m.zoneSnapshot}</span></div>
+                        {m.observations && (
+                          <div className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded border border-gray-200/60 mt-1 max-w-md">
+                            <span className="font-semibold text-gray-700">Obs:</span> {m.observations}
+                          </div>
+                        )}
                         <div className="text-xs font-mono mt-1 text-gray-600 bg-gray-100 inline-block px-2 py-0.5 rounded">
                           Inicio: {m.startTime} {m.endTime && `| Fin: ${m.endTime}`}
                         </div>

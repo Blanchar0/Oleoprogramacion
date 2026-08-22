@@ -328,12 +328,17 @@ class SupabaseRepository implements AgronomicRepository {
         supervisorId: item.supervisor_id || item.id_supervisor,
         idSupervisor: item.id_supervisor || item.supervisor_id,
         equipmentId: item.equipment_id,
+        operatorId: item.operator_id || item.operator_name,
         operatorName: item.operator_name,
         activityId: item.activity_id,
         locationId: item.location_id,
+        zoneSnapshot: item.zone_snapshot,
         initialHourMeter: item.initial_hour_meter,
         finalHourMeter: item.final_hour_meter,
         effectiveHours: item.effective_hours,
+        observations: item.observations,
+        startTime: item.start_time || item.startTime,
+        endTime: item.end_time || item.endTime,
       }));
       callback(mapped);
     };
@@ -355,20 +360,25 @@ class SupabaseRepository implements AgronomicRepository {
 
   async createMachineryOperation(input: any): Promise<Result> {
     try {
+      const supId = input.supervisorId || input.idSupervisor || 'SUP001';
       const payload = {
         id: crypto.randomUUID(),
         date: input.date,
-        supervisor_id: input.supervisorId || input.idSupervisor,
-        id_supervisor: input.idSupervisor || input.supervisorId,
+        supervisor_id: supId,
+        id_supervisor: supId,
         equipment_id: input.equipmentId,
-        operator_name: input.operatorName,
-        activity_id: input.activityId,
+        operator_id: input.operatorId || null,
+        operator_name: input.operatorName || null,
+        activity_id: input.activityId || null,
         location_id: input.locationId,
-        initial_hour_meter: input.initial_hour_meter,
-        final_hour_meter: input.final_hour_meter,
-        effective_hours: input.effectiveHours,
+        zone_snapshot: input.zoneSnapshot || null,
+        initial_hour_meter: input.initialHourMeter || null,
+        final_hour_meter: input.finalHourMeter || null,
+        effective_hours: input.effectiveHours || null,
         observations: input.observations || '',
-        status: input.status || 'CONFIRMADA',
+        start_time: input.startTime || null,
+        end_time: input.endTime || null,
+        status: input.status || 'EN_PROGRESO',
         version: 1,
       };
 
@@ -398,6 +408,9 @@ class SupabaseRepository implements AgronomicRepository {
         updated_at: new Date().toISOString(),
       };
       if (input.status !== undefined) payload.status = input.status;
+      if (input.endTime !== undefined) payload.end_time = input.endTime;
+      if (input.end_time !== undefined) payload.end_time = input.end_time;
+      if (input.observations !== undefined) payload.observations = input.observations;
       if (input.observations !== undefined) payload.observations = input.observations;
 
       const { error } = await supabase.from('machinery_operations').update(payload).eq('id', id);
