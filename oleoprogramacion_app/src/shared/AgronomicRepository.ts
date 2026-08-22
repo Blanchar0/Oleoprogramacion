@@ -85,6 +85,7 @@ class SupabaseRepository implements AgronomicRepository {
         laborId: item.labor_id,
         activityId: item.activity_id,
         locationId: item.location_id,
+        locationIds: item.location_ids || (item.location_id ? item.location_id.split(',').map((s: string) => s.trim()).filter(Boolean) : []),
         zoneSnapshot: item.zone_snapshot,
         loteSnapshot: item.lote_snapshot,
         personnelIds: item.personnel_ids || [],
@@ -113,6 +114,7 @@ class SupabaseRepository implements AgronomicRepository {
 
   async createProgramming(input: any): Promise<Result> {
     try {
+      const locationIdVal = Array.isArray(input.locationIds) ? input.locationIds.join(',') : (input.locationId || null);
       const payload = {
         id: crypto.randomUUID(),
         date: input.date,
@@ -120,7 +122,7 @@ class SupabaseRepository implements AgronomicRepository {
         id_supervisor: input.idSupervisor || input.supervisorId,
         labor_id: input.laborId,
         activity_id: input.activityId,
-        location_id: input.locationId,
+        location_id: locationIdVal,
         zone_snapshot: input.zoneSnapshot || null,
         lote_snapshot: input.loteSnapshot || null,
         personnel_ids: input.personnelIds || [],
@@ -171,8 +173,11 @@ class SupabaseRepository implements AgronomicRepository {
         payload.supervisor_id = input.supervisorId || input.idSupervisor;
       }
       if (input.laborId !== undefined) payload.labor_id = input.laborId;
-      if (input.activityId !== undefined) payload.activity_id = input.activityId;
-      if (input.locationId !== undefined) payload.location_id = input.locationId;
+      if (input.locationIds !== undefined) {
+        payload.location_id = Array.isArray(input.locationIds) ? input.locationIds.join(',') : input.locationIds;
+      } else if (input.locationId !== undefined) {
+        payload.location_id = input.locationId;
+      }
       if (input.zoneSnapshot !== undefined) payload.zone_snapshot = input.zoneSnapshot;
       if (input.loteSnapshot !== undefined) payload.lote_snapshot = input.loteSnapshot;
       if (input.personnelIds !== undefined) payload.personnel_ids = input.personnelIds;

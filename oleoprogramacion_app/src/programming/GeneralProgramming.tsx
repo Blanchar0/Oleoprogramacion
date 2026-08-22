@@ -13,6 +13,7 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [expandedRowPersonnel, setExpandedRowPersonnel] = useState<Record<string, boolean>>({});
+  const [expandedRowLotes, setExpandedRowLotes] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
 
   const canModify = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
@@ -43,6 +44,7 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
 
   const toggleGroup = (id: string) => setExpandedGroups(p => ({ ...p, [id]: !p[id] }));
   const toggleRowPersonnel = (progId: string) => setExpandedRowPersonnel(p => ({ ...p, [progId]: !p[progId] }));
+  const toggleRowLotes = (progId: string) => setExpandedRowLotes(p => ({ ...p, [progId]: !p[progId] }));
 
   const validProgrammings = programmings.filter(p => p.status !== 'RECHAZADA');
   const filteredProgrammings = user?.role === 'SUPERVISOR' ? validProgrammings.filter(p => p.idSupervisor === user.idSupervisor) : validProgrammings;
@@ -68,6 +70,30 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
         
         const zoneName = p.zoneSnapshot?.split(' - ')[0] || '';
         const locationName = p.zoneSnapshot?.split(' - ')[1] || '';
+
+        // Extract lotes list
+        let lotesList: string[] = [];
+        if (p.locationIds && Array.isArray(p.locationIds) && p.locationIds.length > 0) {
+          lotesList = p.locationIds.map((locId: string) => {
+            const loc = catalogs.locations?.find((l: any) => l.id === locId);
+            return loc?.name || locId;
+          });
+        } else if (p.locationId && String(p.locationId).includes(',')) {
+          lotesList = String(p.locationId).split(',').map((locId: string) => {
+            const loc = catalogs.locations?.find((l: any) => l.id === locId.trim());
+            return loc?.name || locId.trim();
+          });
+        } else if (p.loteSnapshot) {
+          lotesList = String(p.loteSnapshot).split(',').map((s: string) => s.trim()).filter(Boolean);
+        } else if (p.zoneSnapshot?.includes(' - ')) {
+          const rawLotePart = p.zoneSnapshot.split(' - ')[1];
+          lotesList = rawLotePart ? rawLotePart.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+        } else if (p.zoneSnapshot) {
+          lotesList = [p.zoneSnapshot];
+        } else if (p.locationId) {
+          const loc = catalogs.locations?.find((l: any) => l.id === p.locationId);
+          lotesList = [loc?.name || p.locationId];
+        }
         
         const personnelDetails = (p.personnelIds || []).map((id: string) => {
           const person = catalogs.personnel?.find((per: any) => per.id === id);
@@ -94,6 +120,7 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
           activityName: activity?.name || '-',
           zoneName,
           locationName,
+          lotesList,
           personnelDetails,
           numPeople,
           unit,
@@ -239,7 +266,48 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
                             )}
                           </td>
 
-                          <td className="px-4 py-3 border-r text-gray-700">{p.locationName}</td>
+                          <td className="px-4 py-3 border-r text-gray-700">
+                            {(!p.lotesList || p.lotesList.length === 0) ? (
+                              <span className="text-gray-400">{p.locationName || '-'}</span>
+                            ) : p.lotesList.length === 1 ? (
+                              <span className="font-medium text-forest-950">{p.lotesList[0]}</span>
+                            ) : (
+                              <div>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => toggleRowLotes(p.id)}
+                                  className={cn(
+                                    "h-7 px-2 text-xs font-semibold uppercase tracking-wider flex items-center gap-1 rounded-md border-2 transition-all cursor-pointer",
+                                    expandedRowLotes[p.id] 
+                                      ? "bg-forest-900 text-white border-forest-950" 
+                                      : "bg-white text-forest-900 border-forest-900/30 hover:border-forest-900 hover:bg-forest-50"
+                                  )}
+                                >
+                                  <span>{expandedRowLotes[p.id] ? `Ocultar (${p.lotesList.length})` : `Ver ${p.lotesList.length} lotes`}</span>
+                                  {expandedRowLotes[p.id] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                </Button>
+
+                                {expandedRowLotes[p.id] && (
+                                  <div className="mt-2 p-2 bg-forest-50/90 border border-forest-200 rounded-md text-left shadow-xs">
+                                    <div className="text-[10px] font-bold text-forest-900 uppercase tracking-wider mb-1">
+                                      Lotes ({p.lotesList.length}):
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {p.lotesList.map((loteName: string, idx: number) => (
+                                        <span 
+                                          key={idx} 
+                                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-white text-forest-950 border border-forest-300 shadow-2xs"
+                                        >
+                                          {loteName}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </td>
                           <td className="px-4 py-3 border-r text-center text-gray-700">{p.perfDisplay}</td>
                           <td className="px-4 py-3 border-r text-center font-bold text-forest-900">{p.totalDisplay}</td>
                           <td className="px-4 py-3 border-r max-w-[200px] whitespace-normal text-xs text-gray-600">{p.obs}</td>

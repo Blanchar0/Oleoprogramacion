@@ -33,14 +33,14 @@ export default function NewProgramming() {
   const editRecord = location.state?.editRecord;
   const isEditing = !!editRecord;
   
-  // Data
-  const labors = (catalogs.labors || []).filter(l => l.active);
-  const allActivities = (catalogs.activities || []).filter(a => a.active);
-  const locations = (catalogs.locations || []).filter(l => l.active);
-  const allPersonnel = (catalogs.personnel || []).filter(p => p.active && isOperative(p));
+  // Data - Sorted alphabetically A to Z
+  const labors = (catalogs.labors || []).filter(l => l.active).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+  const allActivities = (catalogs.activities || []).filter(a => a.active).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+  const locations = (catalogs.locations || []).filter(l => l.active).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+  const allPersonnel = (catalogs.personnel || []).filter(p => p.active && isOperative(p)).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
   const allNovedades = (catalogs.personnelNovelties || []) || [];
   
-  const zones = Array.from(new Set(locations.map(l => l.zone))).sort();
+  const zones = Array.from(new Set(locations.map(l => l.zone))).sort((a,b) => String(a).localeCompare(String(b), 'es', { numeric: true }));
   
   const getNextDateString = (dateStr?: string): string => {
     if (!dateStr) {
@@ -74,7 +74,16 @@ export default function NewProgramming() {
   const [laborId, setLaborId] = useState(editRecord?.laborId || cloneTemplate?.laborId || '');
   const [activityId, setActivityId] = useState(editRecord?.activityId || cloneTemplate?.activityId || '');
   const [zone, setZone] = useState(editRecord?.zoneSnapshot?.split(' - ')[0] || cloneTemplate?.zoneSnapshot?.split(' - ')[0] || '');
-  const [locationId, setLocationId] = useState(editRecord?.locationId || cloneTemplate?.locationId || '');
+  
+  const [selectedLocations, setSelectedLocations] = useState<string[]>(() => {
+    if (editRecord?.locationIds?.length) return editRecord.locationIds;
+    if (editRecord?.locationId) return String(editRecord.locationId).split(',').map((s: string) => s.trim()).filter(Boolean);
+    if (cloneTemplate?.locationIds?.length) return cloneTemplate.locationIds;
+    if (cloneTemplate?.locationId) return String(cloneTemplate.locationId).split(',').map((s: string) => s.trim()).filter(Boolean);
+    return [];
+  });
+  const [loteSearchTerm, setLoteSearchTerm] = useState('');
+
   const [selectedPersonnel, setSelectedPersonnel] = useState<string[]>(editRecord?.personnelIds || cloneTemplate?.personnelIds || []);
   const [observations, setObservations] = useState(editRecord?.observations || cloneTemplate?.observations || '');
 
@@ -102,27 +111,39 @@ export default function NewProgramming() {
     if (lId) setLaborId(lId);
     if (aId) setActivityId(aId);
 
-    // Zone and Location (Lote)
-    let locId = source.locationId || '';
+    // Zone and Locations (Lotes)
     let z = '';
+    let locIds: string[] = [];
 
-    if (locId && catalogs.locations?.length) {
-      const loc = catalogs.locations.find((l: any) => l.id === locId);
-      if (loc) {
-        z = loc.zone;
-      }
+    if (source.locationIds && Array.isArray(source.locationIds) && source.locationIds.length > 0) {
+      locIds = source.locationIds;
+    } else if (source.locationId) {
+      locIds = String(source.locationId).split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    if (locIds.length > 0 && catalogs.locations?.length) {
+      const firstLoc = catalogs.locations.find((l: any) => l.id === locIds[0]);
+      if (firstLoc) z = firstLoc.zone;
     }
 
     if (!z && source.zoneSnapshot) {
       if (source.zoneSnapshot.includes(' - ')) {
-        z = source.zoneSnapshot.split(' - ')[0];
+        const [zonePart, lotesPart] = source.zoneSnapshot.split(' - ');
+        z = zonePart.trim();
+        if (locIds.length === 0 && lotesPart && catalogs.locations?.length) {
+          const names = lotesPart.split(',').map((s: string) => s.trim());
+          const found = catalogs.locations.filter((l: any) => names.includes(l.name) || names.includes(l.code));
+          if (found.length > 0) {
+            locIds = found.map((l: any) => l.id);
+          }
+        }
       } else if (catalogs.locations?.length) {
         const locByCodeOrName = catalogs.locations.find((l: any) => 
           l.name === source.zoneSnapshot || l.code === source.zoneSnapshot || l.id === source.zoneSnapshot
         );
         if (locByCodeOrName) {
           z = locByCodeOrName.zone;
-          if (!locId) locId = locByCodeOrName.id;
+          if (locIds.length === 0) locIds = [locByCodeOrName.id];
         } else {
           const matchingZone = zones.find(zn => String(zn) === source.zoneSnapshot);
           if (matchingZone) z = String(matchingZone);
@@ -131,7 +152,7 @@ export default function NewProgramming() {
     }
 
     if (z) setZone(z);
-    if (locId) setLocationId(locId);
+    if (locIds.length > 0) setSelectedLocations(locIds);
 
     // Selected Personnel
     if (source.personnelIds && Array.isArray(source.personnelIds) && source.personnelIds.length > 0) {
@@ -230,7 +251,15 @@ export default function NewProgramming() {
 
   
   const activities = laborId ? allActivities.filter(a => a.laborId === laborId) : [];
-  const lotes = zone ? locations.filter(l => l.zone === zone) : [];
+  const lotes = zone ? locations.filter(l => l.zone === zone).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true })) : [];
+  const filteredLotes = lotes.filter(l => l.name.toLowerCase().includes(loteSearchTerm.toLowerCase()));
+
+  const toggleLocation = (id: string) => {
+    setSelectedLocations(prev =>
+      prev.includes(id) ? prev.filter(lId => lId !== id) : [...prev, id]
+    );
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -276,12 +305,10 @@ export default function NewProgramming() {
 
   useEffect(() => {
     if (zone) {
-      const currentValid = (catalogs.locations || []).find(l => l.active && l.id === locationId && l.zone === zone);
-      if (!currentValid && locationId !== '') {
-        setLocationId(''); 
-      }
+      const validLoteIds = locations.filter(l => l.zone === zone).map(l => l.id);
+      setSelectedLocations(prev => prev.filter(id => validLoteIds.includes(id)));
     } else {
-      if (locationId !== '') setLocationId('');
+      setSelectedLocations([]);
     }
   }, [zone]);
 
@@ -308,45 +335,35 @@ export default function NewProgramming() {
     }
     audioBlobRef.current = null;
     audioChunksRef.current = [];
+    setIsPlaying(false);
   };
 
   const startRecording = async () => {
-    cleanupAudio();
-    setVoiceState('SOLICITANDO_PERMISO');
-    setVoiceError('');
-    setDraftResult(null);
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType });
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         audioBlobRef.current = audioBlob;
         audioUrlRef.current = URL.createObjectURL(audioBlob);
-        audioElementRef.current = new Audio(audioUrlRef.current);
-        audioElementRef.current.onended = () => setIsPlaying(false);
-        
-        // Stop all tracks to turn off the microphone light
-        stream.getTracks().forEach(track => track.stop());
-
-        // Send automatically
-        submitAudio();
+        setVoiceState('CONFIRMACION_REPRODUCCION');
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(250); // Slice chunks every 250ms
       setVoiceState('GRABANDO');
       setRecordingTime(0);
 
+      // Start timer
       timerRef.current = window.setInterval(() => {
-        setRecordingTime(prev => {
-          if (prev >= 59) {
+        setRecordingTime((prev) => {
+          if (prev >= 60) {
             stopRecording();
             return 60;
           }
@@ -354,17 +371,24 @@ export default function NewProgramming() {
         });
       }, 1000);
 
-    } catch (err) {
+    } catch (err: any) {
+      console.error(err);
       setVoiceState('ERROR_RECUPERABLE');
-      setVoiceError('Permiso de micrófono denegado o no encontrado.');
+      setVoiceError('No se pudo acceder al micrófono. Por favor verifica los permisos.');
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
     }
     if (timerRef.current) clearInterval(timerRef.current);
+  };
+
+  const retryRecording = () => {
+    cleanupAudio();
+    startRecording();
   };
 
   const cancelRecording = () => {
@@ -434,9 +458,6 @@ export default function NewProgramming() {
 
       setVoiceState('RESOLVIENDO_CATALOGOS');
       
-      // Determine target date. If dateText is provided, try to parse it relative, else use current date in UI.
-      // For simplicity in this demo, if they don't say a date, we use the UI date.
-      // A full implementation would parse NLP dates. We'll just pass the UI date as fallback.
       const resolved = resolveVoiceData(extraction as any, catalogs, programmings, machineries);
       
       // Load resolved values into UI form state
@@ -444,14 +465,13 @@ export default function NewProgramming() {
       if (resolved.labor.canonicalId) setLaborId(resolved.labor.canonicalId);
       if (resolved.activity.canonicalId) setActivityId(resolved.activity.canonicalId);
       if (resolved.zone.canonicalId) setZone(resolved.zone.canonicalId);
-      if (resolved.lot.canonicalId) setLocationId(resolved.lot.canonicalId);
+      if (resolved.lot.canonicalId) setSelectedLocations([resolved.lot.canonicalId]);
       if (resolved.personnel.value && resolved.personnel.value.length > 0) setSelectedPersonnel(resolved.personnel.value);
       if (resolved.observations.value) setObservations(resolved.observations.value);
 
       setDraftResult(resolved);
       setVoiceState('BORRADOR_LISTO');
       
-      // Clean up audio from memory as required
       cleanupAudio();
 
     } catch (err: any) {
@@ -476,13 +496,19 @@ export default function NewProgramming() {
       }
     }
 
+    const selectedLoteNames = selectedLocations
+      .map(id => locations.find(l => l.id === id)?.name || id)
+      .join(', ');
+
     if (isEditing) {
       const payload = {
         date,
         laborId,
         activityId,
-        locationId,
-        zoneSnapshot: `${zone} - ${locations.find((l:any) => l.id === locationId)?.name || ''}`,
+        locationId: selectedLocations.join(','),
+        locationIds: selectedLocations,
+        zoneSnapshot: `${zone} - ${selectedLoteNames}`,
+        loteSnapshot: selectedLoteNames,
         personnelIds: selectedPersonnel,
         observations,
         performancePerPerson: performance.performancePerPersonDay,
@@ -504,8 +530,10 @@ export default function NewProgramming() {
       idSupervisor: user?.idSupervisor,
       laborId,
       activityId,
-      locationId,
-      zoneSnapshot: `${zone} - ${locations.find((l:any) => l.id === locationId)?.name}`,
+      locationId: selectedLocations.join(','),
+      locationIds: selectedLocations,
+      zoneSnapshot: `${zone} - ${selectedLoteNames}`,
+      loteSnapshot: selectedLoteNames,
       personnelIds: selectedPersonnel,
       status: 'PENDIENTE',
       observations,
@@ -779,25 +807,97 @@ export default function NewProgramming() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              <div className="space-y-4">
                 <div>
                   <Label htmlFor="zone">Zona</Label>
                   <Combobox 
                     options={zones.map(z => ({ value: String(z), label: String(z) }))}
                     value={zone}
-                    onChange={setZone}
+                    onChange={(newZone) => {
+                      setZone(newZone);
+                      setSelectedLocations([]);
+                    }}
                     placeholder="Seleccione zona"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="location">Lote</Label>
-                  <Combobox 
-                    options={lotes.map(l => ({ value: l.id, label: l.name }))}
-                    value={locationId}
-                    onChange={setLocationId}
-                    placeholder={!zone ? 'Seleccione zona primero' : 'Seleccione lote'}
-                    disabled={!zone}
-                  />
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="lotes" className="font-semibold text-sm">
+                      Lotes {zone ? `(${selectedLocations.length} seleccionados)` : ''}
+                    </Label>
+                    {zone && lotes.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLocations(lotes.map(l => l.id))}
+                          className="text-[11px] font-bold text-forest-800 hover:text-forest-950 hover:underline cursor-pointer uppercase tracking-wider"
+                        >
+                          Seleccionar Todos
+                        </button>
+                        <span className="text-gray-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLocations([])}
+                          className="text-[11px] font-bold text-gray-500 hover:text-red-700 hover:underline cursor-pointer uppercase tracking-wider"
+                        >
+                          Limpiar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {!zone ? (
+                    <div className="p-3 text-xs text-gray-500 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-center">
+                      Seleccione una zona primero para ver los lotes disponibles.
+                    </div>
+                  ) : lotes.length === 0 ? (
+                    <div className="p-3 text-xs text-warning-700 bg-amber-50 border border-amber-200 rounded-lg text-center font-medium">
+                      No hay lotes registrados para la zona seleccionada.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {lotes.length > 8 && (
+                        <Input
+                          placeholder="Buscar lote por código o nombre..."
+                          value={loteSearchTerm}
+                          onChange={(e) => setLoteSearchTerm(e.target.value)}
+                          className="text-xs h-8 bg-white"
+                        />
+                      )}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-44 overflow-y-auto p-2.5 bg-gray-50/80 border border-gray-200 rounded-lg">
+                        {filteredLotes.map(lote => {
+                          const isSelected = selectedLocations.includes(lote.id);
+                          return (
+                            <div
+                              key={lote.id}
+                              onClick={() => toggleLocation(lote.id)}
+                              className={cn(
+                                "flex items-center justify-between p-2 rounded-md border text-xs font-semibold cursor-pointer transition-all select-none shadow-2xs",
+                                isSelected
+                                  ? "bg-primary text-white border-primary-dark shadow-xs"
+                                  : "bg-white text-gray-700 border-gray-200 hover:border-primary/40 hover:bg-gray-100/80"
+                              )}
+                            >
+                              <span className="truncate mr-1.5">{lote.name}</span>
+                              <div className={cn(
+                                "w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors",
+                                isSelected ? "bg-white text-primary border-white" : "border-gray-300 bg-white"
+                              )}>
+                                {isSelected && <Check size={11} className="stroke-[3]" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {selectedLocations.length > 0 && (
+                        <div className="text-[11px] text-forest-800 font-medium flex items-center gap-1">
+                          <Check size={12} className="text-forest-700" />
+                          <span>{selectedLocations.length} lote{selectedLocations.length > 1 ? 's' : ''} seleccionado{selectedLocations.length > 1 ? 's' : ''} para esta programación.</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -939,7 +1039,7 @@ export default function NewProgramming() {
                 <Button 
                   type="submit" 
                   size="lg" 
-                  disabled={loading || !laborId || (activities.length > 0 && !activityId) || !locationId || selectedPersonnel.length === 0} 
+                  disabled={loading || !laborId || (activities.length > 0 && !activityId) || !zone || selectedLocations.length === 0 || selectedPersonnel.length === 0} 
                   className="w-full md:w-auto min-h-[48px] px-8 shadow-md"
                 >
                   {loading ? 'Procesando...' : isEditing ? 'Guardar Cambios' : 'Crear Pendiente'}

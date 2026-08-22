@@ -36,7 +36,13 @@ export function Combobox({
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
 
-  const selected = options.find((option) => option.value === value)
+  const sortedOptions = React.useMemo(() => {
+    return [...options].sort((a, b) => 
+      (a.label || '').localeCompare(b.label || '', 'es', { numeric: true, sensitivity: 'base' })
+    )
+  }, [options])
+
+  const selected = sortedOptions.find((option) => option.value === value)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -58,7 +64,7 @@ export function Combobox({
           <CommandList>
             <CommandEmpty>No se encontraron resultados.</CommandEmpty>
             <CommandGroup>
-              {options.map((option) => (
+              {sortedOptions.map((option) => (
                 <CommandItem
                   key={option.value}
                   value={option.label}

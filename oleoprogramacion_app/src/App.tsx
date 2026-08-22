@@ -22,7 +22,7 @@ function RoleGuard({ children, roles }: { children: React.ReactNode, roles: stri
   const { user } = useAuth();
   if (!user || !roles.includes(user.role)) {
     if (user?.role === 'SUPERVISOR') {
-      return <Navigate to="/programming/new" replace />;
+      return <Navigate to="/programming/all" replace />;
     }
     return <Navigate to="/" replace />;
   }
@@ -32,7 +32,7 @@ function RoleGuard({ children, roles }: { children: React.ReactNode, roles: stri
 function HomeRoute() {
   const { user } = useAuth();
   if (user?.role === 'SUPERVISOR') {
-    return <Navigate to="/programming/new" replace />;
+    return <Navigate to="/programming/all" replace />;
   }
   return <Dashboard />;
 }

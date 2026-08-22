@@ -31,11 +31,11 @@ export default function Machinery() {
     return () => unsub();
   }, [date, user]);
 
-  const allPersonnel = catalogs.personnel.filter((p: any) => p.active);
-  const tractors = catalogs.equipment.filter((e: any) => e.type === 'TRACTOR');
-  const implementsData = catalogs.equipment.filter((e: any) => e.type === 'IMPLEMENTO');
-  const zones = Array.from(new Set(catalogs.locations.map((l: any) => l.zone)));
-  const lotes = zone ? catalogs.locations.filter((l: any) => l.zone === zone) : [];
+  const allPersonnel = (catalogs.personnel || []).filter((p: any) => p.active).sort((a: any, b: any) => (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true }));
+  const tractors = (catalogs.equipment || []).filter((e: any) => e.type === 'TRACTOR').sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+  const implementsData = (catalogs.equipment || []).filter((e: any) => e.type === 'IMPLEMENTO').sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+  const zones = Array.from(new Set((catalogs.locations || []).map((l: any) => l.zone))).sort((a: any, b: any) => String(a).localeCompare(String(b), 'es', { numeric: true }));
+  const lotes = zone ? (catalogs.locations || []).filter((l: any) => l.zone === zone).sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true })) : [];
 
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();

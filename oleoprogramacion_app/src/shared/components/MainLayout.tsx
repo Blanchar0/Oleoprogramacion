@@ -61,13 +61,20 @@ export default function MainLayout() {
   ];
 
   const filteredNav = navigation.filter(item => item.roles.includes(user.role));
+  const homePath = user.role === 'SUPERVISOR' ? '/programming/all' : '/';
 
   return (
     <div className="min-h-screen bg-bg-light flex flex-col md:flex-row pb-16 md:pb-0">
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between bg-primary text-white p-4">
         <div className="flex items-center gap-3">
-          <div className="font-bold">Oleoflores</div>
+          <Link 
+            to={homePath} 
+            className="font-bold text-white hover:text-accent transition-colors flex items-center gap-2 cursor-pointer"
+            title="Ir a Inicio"
+          >
+            Oleoflores
+          </Link>
           <SyncIndicator />
         </div>
         <button onClick={() => logout()} className="text-gray-300 hover:text-white">
@@ -80,7 +87,13 @@ export default function MainLayout() {
         "hidden md:flex inset-y-0 left-0 z-50 w-64 bg-primary text-white flex-col"
       )}>
         <div className="p-4 border-b border-primary-dark/30 flex justify-between items-center hidden md:flex">
-          <span className="font-bold text-lg">Oleoflores</span>
+          <Link 
+            to={homePath} 
+            className="font-bold text-lg text-white hover:text-accent transition-colors flex items-center gap-2 cursor-pointer"
+            title="Ir a Inicio"
+          >
+            Oleoflores
+          </Link>
         </div>
         
         {user.role === 'ADMIN' && (

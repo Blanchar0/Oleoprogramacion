@@ -30,10 +30,10 @@ export default function Absences() {
     return () => unsub();
   }, [date, user]);
 
-  const allPersonnel = catalogs.personnel.filter((p:any) => p.active);
+  const allPersonnel = (catalogs.personnel || []).filter((p:any) => p.active).sort((a: any, b: any) => (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true }));
   const reasons = [
-    'Incapacidad', 'Calamidad doméstica', 'Permiso autorizado', 
-    'Ausencia injustificada', 'Vacaciones', 'Suspensión', 'Otro'
+    'Ausencia injustificada', 'Calamidad doméstica', 'Incapacidad', 
+    'Otro', 'Permiso autorizado', 'Suspensión', 'Vacaciones'
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -18,7 +18,7 @@ export default function Novedades() {
 
   const novedades = catalogs.personnelNovelties || [];
   const personnel = catalogs.personnel || [];
-  const activePersonnel = personnel.filter(p => p.active);
+  const activePersonnel = personnel.filter(p => p.active).sort((a: any, b: any) => (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true }));
 
   // Sorting newest first
   const sortedNovedades = [...novedades].sort((a, b) => new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime());

@@ -22,11 +22,11 @@ export default function Catalogs() {
 
   if (loading) return <div className="p-6 text-gray-500">Cargando catálogos de Supabase...</div>;
 
-  const users = catalogs.users || [];
-  const personnel = catalogs.personnel || [];
-  const activities = catalogs.activities || [];
-  const equipment = catalogs.equipment || [];
-  const labors = catalogs.labors || [];
+  const users = [...(catalogs.users || [])].sort((a: any, b: any) => (a.name || a.username || '').localeCompare(b.name || b.username || '', 'es', { numeric: true }));
+  const personnel = [...(catalogs.personnel || [])].sort((a: any, b: any) => (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true }));
+  const activities = [...(catalogs.activities || [])].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', 'es', { numeric: true }));
+  const equipment = [...(catalogs.equipment || [])].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', 'es', { numeric: true }));
+  const labors = [...(catalogs.labors || [])].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', 'es', { numeric: true }));
 
   const handleToggle = async (id: string, table: string, currentState: boolean) => {
     try {
