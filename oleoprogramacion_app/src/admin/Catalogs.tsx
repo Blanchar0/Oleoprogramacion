@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useCatalogs } from '../shared/useCatalogs';
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Dialog, DialogContent, DialogHeader, DialogTitle, Label, Combobox } from '@/src/components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Dialog, DialogContent, DialogHeader, DialogTitle, Label, Combobox, cn } from '@/src/components/ui';
 import { useAuth } from '../auth/AuthContext';
 import { supabase } from '../shared/supabase';
 import { repository } from '../shared/AgronomicRepository';
@@ -107,7 +107,7 @@ export default function Catalogs() {
                 onChange={e => setSearchTerm(e.target.value)}
                 className="max-w-xs"
               />
-              <Button onClick={() => openModal()} className="flex items-center gap-1">
+              <Button onClick={() => openModal()} className="flex items-center gap-1.5 shadow-sm font-bold">
                 <Plus size={16} /> Agregar
               </Button>
             </div>
@@ -132,15 +132,20 @@ export default function Catalogs() {
                       <td className="px-4 py-3 font-medium">{u.name} <span className="text-xs text-gray-400">(@{u.username})</span></td>
                       <td className="px-4 py-3">{u.role} {u.idSupervisor ? `(${u.idSupervisor})` : ''}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 text-xs rounded-full ${u.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        <span className={`px-2 py-0.5 text-xs rounded-full font-semibold ${u.active ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>
                           {u.active ? 'Activo' : 'Inactivo'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button size="sm" variant="ghost" onClick={() => openModal(u)} className="mr-1 text-primary">
+                        <Button size="sm" variant="ghost" onClick={() => openModal(u)} className="mr-1 text-forest-900 hover:text-forest-950 hover:bg-forest-100 h-8 w-8 p-0" title="Editar">
                           <Edit2 size={16} />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleToggle(u.id, 'users', u.active)}>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleToggle(u.id, 'users', u.active)}
+                          className={cn("text-xs h-8 px-2.5 font-bold", u.active ? "text-red-700 border-2 border-red-300 hover:bg-red-50" : "text-emerald-700 border-2 border-emerald-300 hover:bg-emerald-50")}
+                        >
                           {u.active ? 'Desactivar' : 'Activar'}
                         </Button>
                       </td>
@@ -168,15 +173,20 @@ export default function Catalogs() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-0.5 text-xs rounded-full ${p.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          <span className={`px-2 py-0.5 text-xs rounded-full font-semibold ${p.active ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>
                             {p.active ? 'Activo' : 'Inactivo'}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <Button size="sm" variant="ghost" onClick={() => openModal(p)} className="mr-1 text-primary">
+                          <Button size="sm" variant="ghost" onClick={() => openModal(p)} className="mr-1 text-forest-900 hover:text-forest-950 hover:bg-forest-100 h-8 w-8 p-0" title="Editar">
                             <Edit2 size={16} />
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleToggle(p.id, 'personnel', p.active)}>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => handleToggle(p.id, 'personnel', p.active)}
+                            className={cn("text-xs h-8 px-2.5 font-bold", p.active ? "text-red-700 border-2 border-red-300 hover:bg-red-50" : "text-emerald-700 border-2 border-emerald-300 hover:bg-emerald-50")}
+                          >
                             {p.active ? 'Desactivar' : 'Activar'}
                           </Button>
                         </td>
@@ -191,15 +201,20 @@ export default function Catalogs() {
                       <td className="px-4 py-3 font-medium">{a.name}</td>
                       <td className="px-4 py-3">Unidad: {a.unit || 'JORNAL'}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 text-xs rounded-full ${a.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        <span className={`px-2 py-0.5 text-xs rounded-full font-semibold ${a.active ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>
                           {a.active ? 'Activo' : 'Inactivo'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button size="sm" variant="ghost" onClick={() => openModal(a)} className="mr-1 text-primary">
+                        <Button size="sm" variant="ghost" onClick={() => openModal(a)} className="mr-1 text-forest-900 hover:text-forest-950 hover:bg-forest-100 h-8 w-8 p-0" title="Editar">
                           <Edit2 size={16} />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleToggle(a.id, 'activities', a.active)}>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleToggle(a.id, 'activities', a.active)}
+                          className={cn("text-xs h-8 px-2.5 font-bold", a.active ? "text-red-700 border-2 border-red-300 hover:bg-red-50" : "text-emerald-700 border-2 border-emerald-300 hover:bg-emerald-50")}
+                        >
                           {a.active ? 'Desactivar' : 'Activar'}
                         </Button>
                       </td>
@@ -213,15 +228,20 @@ export default function Catalogs() {
                       <td className="px-4 py-3 font-medium">{e.name}</td>
                       <td className="px-4 py-3">{e.type || 'Maquinaria'}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 text-xs rounded-full ${e.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        <span className={`px-2 py-0.5 text-xs rounded-full font-semibold ${e.active ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>
                           {e.active ? 'Activo' : 'Inactivo'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button size="sm" variant="ghost" onClick={() => openModal(e)} className="mr-1 text-primary">
+                        <Button size="sm" variant="ghost" onClick={() => openModal(e)} className="mr-1 text-forest-900 hover:text-forest-950 hover:bg-forest-100 h-8 w-8 p-0" title="Editar">
                           <Edit2 size={16} />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleToggle(e.id, 'equipment', e.active)}>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleToggle(e.id, 'equipment', e.active)}
+                          className={cn("text-xs h-8 px-2.5 font-bold", e.active ? "text-red-700 border-2 border-red-300 hover:bg-red-50" : "text-emerald-700 border-2 border-emerald-300 hover:bg-emerald-50")}
+                        >
                           {e.active ? 'Desactivar' : 'Activar'}
                         </Button>
                       </td>

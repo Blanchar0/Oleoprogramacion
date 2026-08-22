@@ -127,10 +127,11 @@ function LoadingScreen({ hasLongWait }: { hasLongWait: boolean }) {
             >
               <p className="text-sm text-[#F5F6F1]/90 mb-4">La conexión está tardando más de lo esperado.</p>
               <button 
+                type="button"
                 onClick={() => window.location.reload()} 
-                className="px-5 py-2.5 bg-[#F5F6F1] text-[#123C2E] rounded-lg text-sm font-semibold hover:bg-white transition-colors shadow-lg"
+                className="px-6 py-3 bg-[#F5F6F1] text-[#123C2E] rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-white transition-all shadow-lg cursor-pointer"
               >
-                Reintentar conexión
+                Reintentar Conexión
               </button>
             </motion.div>
           )}

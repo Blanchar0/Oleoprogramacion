@@ -11,7 +11,8 @@ export type Unsubscribe = () => void;
 export interface AgronomicRepository {
   subscribeProgramming(filters: any, callback: (data: any[]) => void): Unsubscribe;
   createProgramming(input: any): Promise<Result>;
-  updateProgramming(id: string, input: any, expectedVersion: number): Promise<Result>;
+  updateProgramming(id: string, input: any, expectedVersion?: number): Promise<Result>;
+  deleteProgramming(id: string): Promise<Result>;
 
   subscribeAbsences(filters: any, callback: (data: any[]) => void): Unsubscribe;
   createAbsence(input: any): Promise<Result>;
@@ -141,34 +142,60 @@ class SupabaseRepository implements AgronomicRepository {
     }
   }
 
-  async updateProgramming(id: string, input: any, expectedVersion: number): Promise<Result> {
+  async updateProgramming(id: string, input: any, expectedVersion?: number): Promise<Result> {
     try {
-      // Optimistic concurrency check
-      const { data: current, error: fetchErr } = await supabase
-        .from('programming')
-        .select('version')
-        .eq('id', id)
-        .single();
+      let nextVersion = expectedVersion !== undefined && expectedVersion !== null ? expectedVersion + 1 : undefined;
 
-      if (fetchErr) throw fetchErr;
-      if (current.version !== expectedVersion) {
-        throw new Error("CONFLICT");
+      if (expectedVersion !== undefined && expectedVersion !== null) {
+        // Optimistic concurrency check
+        const { data: current, error: fetchErr } = await supabase
+          .from('programming')
+          .select('version')
+          .eq('id', id)
+          .single();
+
+        if (fetchErr) throw fetchErr;
+        if (current.version !== expectedVersion) {
+          throw new Error("CONFLICT");
+        }
       }
 
       const payload: any = {
-        version: expectedVersion + 1,
         updated_at: new Date().toISOString(),
       };
 
-      if (input.status !== undefined) payload.status = input.status;
-      if (input.observations !== undefined) payload.observations = input.observations;
+      if (nextVersion !== undefined) payload.version = nextVersion;
+      if (input.date !== undefined) payload.date = input.date;
+      if (input.idSupervisor !== undefined || input.supervisorId !== undefined) {
+        payload.id_supervisor = input.idSupervisor || input.supervisorId;
+        payload.supervisor_id = input.supervisorId || input.idSupervisor;
+      }
+      if (input.laborId !== undefined) payload.labor_id = input.laborId;
+      if (input.activityId !== undefined) payload.activity_id = input.activityId;
+      if (input.locationId !== undefined) payload.location_id = input.locationId;
+      if (input.zoneSnapshot !== undefined) payload.zone_snapshot = input.zoneSnapshot;
+      if (input.loteSnapshot !== undefined) payload.lote_snapshot = input.loteSnapshot;
       if (input.personnelIds !== undefined) payload.personnel_ids = input.personnelIds;
+      if (input.observations !== undefined) payload.observations = input.observations;
       if (input.performance !== undefined) payload.performance = input.performance;
+      if (input.performancePerPerson !== undefined) payload.performance_per_person = input.performancePerPerson;
+      if (input.expectedTotalQuantity !== undefined) payload.expected_total_quantity = input.expectedTotalQuantity;
+      if (input.status !== undefined) payload.status = input.status;
       if (input.needsReview !== undefined) payload.needs_review = input.needsReview;
 
       const { error } = await supabase.from('programming').update(payload).eq('id', id);
       if (error) throw error;
 
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async deleteProgramming(id: string): Promise<Result> {
+    try {
+      const { error } = await supabase.from('programming').delete().eq('id', id);
+      if (error) throw error;
       return { ok: true };
     } catch (e: any) {
       return { ok: false, error: e.message };

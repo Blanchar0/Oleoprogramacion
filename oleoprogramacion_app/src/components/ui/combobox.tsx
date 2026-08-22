@@ -46,7 +46,7 @@ export function Combobox({
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className="w-full justify-between font-normal"
+          className="w-full justify-between font-normal normal-case tracking-normal border-gray-300 text-gray-800 hover:text-gray-900 hover:bg-gray-50"
         >
           {selected ? selected.label : placeholder}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />

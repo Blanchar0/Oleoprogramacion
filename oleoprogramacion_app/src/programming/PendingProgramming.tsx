@@ -128,7 +128,7 @@ export default function PendingProgramming() {
           <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-100">
             <Button 
               variant="outline" 
-              className="flex-1 border-negative text-negative hover:bg-negative hover:text-white"
+              className="flex-1 border-2 border-negative text-negative hover:bg-negative hover:text-white font-bold"
               onClick={() => handleAction('RECHAZADA')}
               disabled={actionLoading}
             >
@@ -137,7 +137,7 @@ export default function PendingProgramming() {
             </Button>
             <Button 
               variant="primary" 
-              className="flex-1"
+              className="flex-1 font-bold"
               onClick={() => handleAction('CONFIRMADA')}
               disabled={actionLoading}
             >

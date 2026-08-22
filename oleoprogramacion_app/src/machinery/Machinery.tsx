@@ -155,8 +155,8 @@ export default function Machinery() {
                     />
                   </div>
                 </div>
-                <Button type="submit" disabled={loading} className="w-full bg-forest-800 hover:bg-forest-900 text-white">
-                  <Play size={18} className="mr-2" /> Iniciar Operación
+                <Button type="submit" disabled={loading} className="w-full shadow-md font-bold">
+                  <Play size={18} className="mr-2 fill-white" /> {loading ? 'Iniciando...' : 'Iniciar Operación'}
                 </Button>
               </form>
             </CardContent>
@@ -202,8 +202,8 @@ export default function Machinery() {
                         </span>
                         {!isDirectivo && m.status === 'EN_PROGRESO' && (
                           <div className="flex gap-2 mt-1">
-                            <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 text-xs h-7 px-2.5" onClick={() => handleCancel(m.id, m.version)}>Cancelar</Button>
-                            <Button size="sm" className="bg-gray-800 hover:bg-gray-900 text-white text-xs h-7 px-2.5" onClick={() => handleStop(m.id, m.version)}><Square size={12} className="mr-1" /> Detener</Button>
+                            <Button size="sm" variant="outline" className="text-red-700 border-2 border-red-300 hover:bg-red-50 text-xs h-7 px-2.5 font-bold" onClick={() => handleCancel(m.id, m.version)}>Cancelar</Button>
+                            <Button size="sm" className="bg-forest-900 hover:bg-forest-950 text-white text-xs h-7 px-2.5 font-bold" onClick={() => handleStop(m.id, m.version)}><Square size={12} className="mr-1 fill-white" /> Detener</Button>
                           </div>
                         )}
                       </div>

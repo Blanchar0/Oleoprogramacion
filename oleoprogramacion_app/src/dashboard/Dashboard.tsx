@@ -628,16 +628,18 @@ export default function Dashboard() {
               </CardTitle>
               <p className="text-xs text-gray-500 mt-0.5">Monitoreo de frecuencia de ausentismo para control directo</p>
             </div>
-            <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-semibold">
+            <div className="flex bg-gray-200/80 p-1 rounded-xl text-xs font-bold uppercase tracking-wider">
               <button 
+                type="button"
                 onClick={() => setAbsencesRange('month')} 
-                className={`px-3 py-1 rounded-lg transition-colors ${absencesRange === 'month' ? 'bg-white text-forest-950 shadow-xs font-bold' : 'text-gray-500 hover:text-gray-900'}`}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${absencesRange === 'month' ? 'bg-primary text-white shadow-xs font-bold' : 'text-gray-600 hover:text-primary hover:bg-gray-100'}`}
               >
                 Mes Actual
               </button>
               <button 
+                type="button"
                 onClick={() => setAbsencesRange('day')} 
-                className={`px-3 py-1 rounded-lg transition-colors ${absencesRange === 'day' ? 'bg-white text-forest-950 shadow-xs font-bold' : 'text-gray-500 hover:text-gray-900'}`}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${absencesRange === 'day' ? 'bg-primary text-white shadow-xs font-bold' : 'text-gray-600 hover:text-primary hover:bg-gray-100'}`}
               >
                 Día Seleccionado
               </button>

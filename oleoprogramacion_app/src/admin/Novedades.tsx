@@ -96,7 +96,7 @@ export default function Novedades() {
                 onChange={e => setSearchTerm(e.target.value)}
                 className="max-w-xs"
               />
-              <Button onClick={() => openModal()} className="flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white">
+              <Button onClick={() => openModal()} className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm">
                 <Plus size={16} /> Registrar Novedad
               </Button>
             </div>
@@ -138,10 +138,10 @@ export default function Novedades() {
                         {isFuture && <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">Programada</span>}
                       </td>
                       <td className="px-4 py-3 text-right flex justify-end gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => openModal(n)} className="text-primary h-8 w-8 p-0">
+                        <Button size="sm" variant="ghost" onClick={() => openModal(n)} className="text-forest-900 hover:text-forest-950 hover:bg-forest-100 h-8 w-8 p-0" title="Editar">
                           <Edit2 size={16} />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleDelete(n.id)} className="text-red-500 h-8 w-8 p-0">
+                        <Button size="sm" variant="ghost" onClick={() => handleDelete(n.id)} className="text-negative hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0" title="Eliminar">
                           <Trash2 size={16} />
                         </Button>
                       </td>

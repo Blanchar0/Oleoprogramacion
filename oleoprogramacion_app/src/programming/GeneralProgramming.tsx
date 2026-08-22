@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Input, Button, cn } from '@/src/components/ui';
-import { ChevronDown, ChevronRight, ChevronUp, Download, Search, Copy, Users, UserCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Download, Search, Copy, Edit2, Trash2, Users, UserCheck } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { repository } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
@@ -14,6 +14,17 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [expandedRowPersonnel, setExpandedRowPersonnel] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
+
+  const canModify = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('¿Está seguro de eliminar esta programación? Esta acción depurará el registro permanentemente.')) {
+      const res = await repository.deleteProgramming(id);
+      if (!res.ok) {
+        alert('Error al eliminar la programación: ' + (res.error || 'Desconocido'));
+      }
+    }
+  };
 
   useEffect(() => { if(overrideDate) setDate(overrideDate); }, [overrideDate]);
 
@@ -183,19 +194,19 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
                               <button
                                 type="button"
                                 onClick={() => toggleRowPersonnel(p.id)}
-                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-forest-50 hover:bg-forest-100 text-forest-900 border border-forest-200/90 shadow-2xs hover:shadow-xs transition-all cursor-pointer group"
+                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-forest-50 hover:bg-forest-100 text-forest-950 border-2 border-forest-300 shadow-2xs hover:shadow-xs transition-all cursor-pointer group"
                                 title="Clic para desplegar lista vertical de personal"
                               >
-                                <Users size={14} className="text-forest-700 group-hover:text-forest-900" />
-                                <span>Ver {p.numPeople} {p.numPeople === 1 ? 'persona' : 'personas'}</span>
-                                <ChevronDown size={14} className="text-forest-600 group-hover:text-forest-900 transition-transform" />
+                                <Users size={14} className="text-forest-800 group-hover:text-forest-950" />
+                                <span>Ver {p.numPeople} {p.numPeople === 1 ? 'Persona' : 'Personas'}</span>
+                                <ChevronDown size={14} className="text-forest-700 group-hover:text-forest-950 transition-transform" />
                               </button>
                             ) : (
                               <div className="space-y-2 py-0.5">
                                 <button
                                   type="button"
                                   onClick={() => toggleRowPersonnel(p.id)}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-forest-800 hover:bg-forest-900 text-white shadow-2xs transition-all cursor-pointer"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-forest-900 hover:bg-forest-950 text-white shadow-2xs transition-all cursor-pointer"
                                   title="Clic para contraer lista"
                                 >
                                   <Users size={13} />
@@ -233,15 +244,39 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
                           <td className="px-4 py-3 border-r text-center font-bold text-forest-900">{p.totalDisplay}</td>
                           <td className="px-4 py-3 border-r max-w-[200px] whitespace-normal text-xs text-gray-600">{p.obs}</td>
                           <td className="px-4 py-3 text-center">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              title="Duplicar programación"
-                              onClick={() => navigate('/programming/new', { state: { cloneTemplate: p } })}
-                              className="h-8 w-8 hover:bg-forest-50"
-                            >
-                              <Copy size={15} className="text-gray-500 hover:text-forest-800" />
-                            </Button>
+                            <div className="flex items-center justify-center gap-1">
+                              {canModify && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  title="Editar programación"
+                                  onClick={() => navigate('/programming/new', { state: { editRecord: p } })}
+                                  className="h-8 w-8 text-forest-800 hover:text-forest-950 hover:bg-forest-100 p-0"
+                                >
+                                  <Edit2 size={15} />
+                                </Button>
+                              )}
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                title="Duplicar programación"
+                                onClick={() => navigate('/programming/new', { state: { cloneTemplate: p } })}
+                                className="h-8 w-8 text-gray-500 hover:text-forest-800 hover:bg-forest-50 p-0"
+                              >
+                                <Copy size={15} />
+                              </Button>
+                              {canModify && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  title="Eliminar programación"
+                                  onClick={() => handleDelete(p.id)}
+                                  className="h-8 w-8 text-negative hover:text-red-700 hover:bg-red-50 p-0"
+                                >
+                                  <Trash2 size={15} />
+                                </Button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );

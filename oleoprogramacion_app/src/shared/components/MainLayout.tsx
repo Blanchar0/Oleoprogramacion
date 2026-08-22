@@ -119,11 +119,12 @@ export default function MainLayout() {
 
         <div className="p-4 border-t border-primary-dark/30">
           <button 
+            type="button"
             onClick={() => logout()}
-            className="flex items-center space-x-3 px-3 py-2 w-full text-left rounded-md transition-colors text-sm font-medium text-gray-300 hover:bg-secondary/50 hover:text-white"
+            className="flex items-center space-x-3 px-3 py-2.5 w-full text-left rounded-md transition-all text-xs font-bold uppercase tracking-wider text-gray-200 hover:bg-negative/80 hover:text-white cursor-pointer"
           >
             <LogOut size={18} />
-            <span>Cerrar Sesión</span>
+            <span>CERRAR SESIÓN</span>
           </button>
         </div>
       </div>

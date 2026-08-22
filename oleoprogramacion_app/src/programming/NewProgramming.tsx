@@ -30,6 +30,8 @@ export default function NewProgramming() {
   const location = useLocation();
   const [absences, setAbsences] = useState<any[]>([]);
   const cloneTemplate = location.state?.cloneTemplate;
+  const editRecord = location.state?.editRecord;
+  const isEditing = !!editRecord;
   
   // Data
   const labors = (catalogs.labors || []).filter(l => l.active);
@@ -40,16 +42,122 @@ export default function NewProgramming() {
   
   const zones = Array.from(new Set(locations.map(l => l.zone))).sort();
   
+  const getNextDateString = (dateStr?: string): string => {
+    if (!dateStr) {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      return d.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+    }
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const [year, month, day] = parts.map(Number);
+      const d = new Date(year, month - 1, day);
+      d.setDate(d.getDate() + 1);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dayStr = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${dayStr}`;
+    }
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+  };
+
   // State: Form (Manual)
   const [method, setMethod] = useState<'form' | 'voice'>('form');
-  const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }));
+  const [date, setDate] = useState(() => {
+    if (editRecord?.date) return editRecord.date;
+    if (cloneTemplate?.date) return getNextDateString(cloneTemplate.date);
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+  });
   
-  const [laborId, setLaborId] = useState(cloneTemplate?.laborId || '');
-  const [activityId, setActivityId] = useState(cloneTemplate?.activityId || '');
-  const [zone, setZone] = useState(cloneTemplate?.zoneSnapshot?.split(' - ')[0] || '');
-  const [locationId, setLocationId] = useState(cloneTemplate?.locationId || '');
-  const [selectedPersonnel, setSelectedPersonnel] = useState<string[]>(cloneTemplate?.personnelIds || []);
-  const [observations, setObservations] = useState(cloneTemplate?.observations || '');
+  const [laborId, setLaborId] = useState(editRecord?.laborId || cloneTemplate?.laborId || '');
+  const [activityId, setActivityId] = useState(editRecord?.activityId || cloneTemplate?.activityId || '');
+  const [zone, setZone] = useState(editRecord?.zoneSnapshot?.split(' - ')[0] || cloneTemplate?.zoneSnapshot?.split(' - ')[0] || '');
+  const [locationId, setLocationId] = useState(editRecord?.locationId || cloneTemplate?.locationId || '');
+  const [selectedPersonnel, setSelectedPersonnel] = useState<string[]>(editRecord?.personnelIds || cloneTemplate?.personnelIds || []);
+  const [observations, setObservations] = useState(editRecord?.observations || cloneTemplate?.observations || '');
+
+  // Effect to sync all fields once catalogs arrive or when template/editRecord changes
+  useEffect(() => {
+    const source = editRecord || cloneTemplate;
+    if (!source) return;
+
+    // Date
+    if (editRecord?.date) {
+      setDate(editRecord.date);
+    } else if (cloneTemplate?.date) {
+      setDate(getNextDateString(cloneTemplate.date));
+    }
+
+    // Labor and Activity
+    let lId = source.laborId || '';
+    let aId = source.activityId || '';
+    if (aId && catalogs.activities?.length) {
+      const act = catalogs.activities.find((a: any) => a.id === aId);
+      if (act && !lId) {
+        lId = act.laborId || act.labor_id;
+      }
+    }
+    if (lId) setLaborId(lId);
+    if (aId) setActivityId(aId);
+
+    // Zone and Location (Lote)
+    let locId = source.locationId || '';
+    let z = '';
+
+    if (locId && catalogs.locations?.length) {
+      const loc = catalogs.locations.find((l: any) => l.id === locId);
+      if (loc) {
+        z = loc.zone;
+      }
+    }
+
+    if (!z && source.zoneSnapshot) {
+      if (source.zoneSnapshot.includes(' - ')) {
+        z = source.zoneSnapshot.split(' - ')[0];
+      } else if (catalogs.locations?.length) {
+        const locByCodeOrName = catalogs.locations.find((l: any) => 
+          l.name === source.zoneSnapshot || l.code === source.zoneSnapshot || l.id === source.zoneSnapshot
+        );
+        if (locByCodeOrName) {
+          z = locByCodeOrName.zone;
+          if (!locId) locId = locByCodeOrName.id;
+        } else {
+          const matchingZone = zones.find(zn => String(zn) === source.zoneSnapshot);
+          if (matchingZone) z = String(matchingZone);
+        }
+      }
+    }
+
+    if (z) setZone(z);
+    if (locId) setLocationId(locId);
+
+    // Selected Personnel
+    if (source.personnelIds && Array.isArray(source.personnelIds) && source.personnelIds.length > 0) {
+      setSelectedPersonnel(source.personnelIds);
+    }
+
+    // Observations
+    if (source.observations !== undefined && source.observations !== null) {
+      setObservations(source.observations || '');
+    }
+
+    // Performance
+    if (source.performancePerPerson !== undefined && source.performancePerPerson !== null) {
+      const numPeople = (source.personnelIds || []).length;
+      const perfVal = parseFloat(source.performancePerPerson);
+      setPerformance({
+        unit: source.unit || 'Sin referencia',
+        referencePerformancePerPersonDay: perfVal,
+        performancePerPersonDay: perfVal,
+        plannedQuantity: source.expectedTotalQuantity !== undefined && source.expectedTotalQuantity !== null
+          ? parseFloat(source.expectedTotalQuantity)
+          : perfVal * numPeople,
+        wasManuallyEdited: true
+      });
+    }
+  }, [catalogs, cloneTemplate, editRecord]);
   
   useEffect(() => {
     const filters: any = { date };
@@ -86,17 +194,17 @@ export default function NewProgramming() {
            return {
              unit: newUnit,
              referencePerformancePerPersonDay: null,
-             performancePerPersonDay: null,
-             plannedQuantity: null,
-             wasManuallyEdited: false
+             performancePerPersonDay: prev.wasManuallyEdited ? prev.performancePerPersonDay : null,
+             plannedQuantity: prev.wasManuallyEdited && prev.performancePerPersonDay !== null ? prev.performancePerPersonDay * uniquePersonnelCount : null,
+             wasManuallyEdited: prev.wasManuallyEdited
            };
         }
         return {
           unit: newUnit,
           referencePerformancePerPersonDay: ref.performancePerPersonDay,
-          performancePerPersonDay: ref.performancePerPersonDay,
-          plannedQuantity: ref.performancePerPersonDay * uniquePersonnelCount,
-          wasManuallyEdited: false
+          performancePerPersonDay: prev.wasManuallyEdited && prev.performancePerPersonDay !== null ? prev.performancePerPersonDay : ref.performancePerPersonDay,
+          plannedQuantity: (prev.wasManuallyEdited && prev.performancePerPersonDay !== null ? prev.performancePerPersonDay : ref.performancePerPersonDay) * uniquePersonnelCount,
+          wasManuallyEdited: prev.wasManuallyEdited
         };
       }
       
@@ -368,6 +476,29 @@ export default function NewProgramming() {
       }
     }
 
+    if (isEditing) {
+      const payload = {
+        date,
+        laborId,
+        activityId,
+        locationId,
+        zoneSnapshot: `${zone} - ${locations.find((l:any) => l.id === locationId)?.name || ''}`,
+        personnelIds: selectedPersonnel,
+        observations,
+        performancePerPerson: performance.performancePerPersonDay,
+        expectedTotalQuantity: performance.plannedQuantity,
+      };
+      repository.updateProgramming(editRecord.id, payload, editRecord.version).then(res => {
+        setLoading(false);
+        if (res.ok) {
+          navigate('/programming/all');
+        } else {
+          setError(res.error || 'Error al actualizar programación');
+        }
+      });
+      return;
+    }
+
     const payload = {
       date,
       idSupervisor: user?.idSupervisor,
@@ -417,24 +548,34 @@ export default function NewProgramming() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-primary">Nueva Programación</h2>
-        <p className="text-gray-500 text-sm mt-1">Crea una programación usando tu voz o mediante el formulario.</p>
+        <h2 className="text-2xl font-bold text-primary">
+          {isEditing ? 'Editar Programación' : 'Nueva Programación'}
+        </h2>
+        <p className="text-gray-500 text-sm mt-1">
+          {isEditing 
+            ? 'Modifica los datos de la programación confirmada o existente.' 
+            : 'Crea una programación usando tu voz o mediante el formulario.'}
+        </p>
       </div>
 
-      <div className="flex bg-gray-100 p-1 rounded-lg">
-        <button 
-          onClick={() => setMethod('voice')} 
-          className={cn("flex-1 py-2 text-sm font-medium rounded-md transition-colors", method === 'voice' ? "bg-white shadow-sm text-primary" : "text-gray-500")}
-        >
-          Dictado por Voz
-        </button>
-        <button 
-          onClick={() => { setMethod('form'); setVoiceState('LISTO'); }} 
-          className={cn("flex-1 py-2 text-sm font-medium rounded-md transition-colors", method === 'form' ? "bg-white shadow-sm text-primary" : "text-gray-500")}
-        >
-          Formulario Manual
-        </button>
-      </div>
+      {!isEditing && (
+        <div className="flex bg-gray-200/80 p-1 rounded-lg">
+          <button 
+            type="button"
+            onClick={() => setMethod('voice')} 
+            className={cn("flex-1 py-2.5 text-xs md:text-sm font-bold uppercase tracking-wider rounded-md transition-all cursor-pointer", method === 'voice' ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:text-primary hover:bg-gray-100")}
+          >
+            Dictado por Voz
+          </button>
+          <button 
+            type="button"
+            onClick={() => { setMethod('form'); setVoiceState('LISTO'); }} 
+            className={cn("flex-1 py-2.5 text-xs md:text-sm font-bold uppercase tracking-wider rounded-md transition-all cursor-pointer", method === 'form' ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:text-primary hover:bg-gray-100")}
+          >
+            Formulario Manual
+          </button>
+        </div>
+      )}
 
       {conflictModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -453,7 +594,7 @@ export default function NewProgramming() {
             </ul>
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={() => setConflictModalOpen(false)}>Cancelar</Button>
-              <Button onClick={handleResolveConflicts} className="bg-negative hover:bg-negative/90">Aceptar y Sobrescribir</Button>
+              <Button onClick={handleResolveConflicts} className="bg-negative hover:bg-negative/90 text-white font-bold">Aceptar y Sobrescribir</Button>
             </div>
           </div>
         </div>
@@ -515,7 +656,7 @@ export default function NewProgramming() {
                     <AlertCircle size={32} className="text-negative mx-auto mb-2" />
                     <p className="text-negative text-sm mb-4">{voiceError}</p>
                     <Button variant="outline" onClick={() => setVoiceState('LISTO')}>
-                      Intentar de nuevo
+                      Reintentar
                     </Button>
                   </div>
                 )}
@@ -534,8 +675,8 @@ export default function NewProgramming() {
                 <div className="border border-primary/20 bg-primary/5 rounded-lg p-4 space-y-4">
                   <div className="flex justify-between items-center mb-2 border-b border-primary/10 pb-2">
                     <h3 className="font-semibold text-primary flex items-center gap-2"><FileText size={18}/> Transcripción</h3>
-                    <Button variant="ghost" size="sm" onClick={() => setVoiceState('LISTO')} className="text-xs h-7">
-                      Volver a grabar
+                    <Button variant="ghost" size="sm" onClick={() => setVoiceState('LISTO')} className="text-xs h-7 font-bold">
+                      Volver a Grabar
                     </Button>
                   </div>
                   <p className="text-sm italic text-gray-700">{draftResult?.transcript}</p>
@@ -670,7 +811,7 @@ export default function NewProgramming() {
                       variant="ghost" 
                       size="sm"
                       onClick={() => setIsEditingPerformance(!isEditingPerformance)}
-                      className="text-xs h-7 text-primary"
+                      className="text-xs h-7 text-primary font-bold hover:bg-forest-100"
                     >
                       {isEditingPerformance ? 'Bloquear' : 'Modificar Rendimiento'}
                     </Button>
@@ -795,8 +936,13 @@ export default function NewProgramming() {
 
               {/* Mobile sticky button container */}
               <div className="fixed md:static bottom-16 md:bottom-auto left-0 right-0 bg-white md:bg-transparent border-t md:border-t-0 border-gray-200 p-4 md:p-0 z-10 flex justify-end">
-                <Button type="submit" size="lg" disabled={loading || !laborId || (activities.length > 0 && !activityId) || !locationId || selectedPersonnel.length === 0} className="w-full md:w-auto min-h-[44px]">
-                  {loading ? 'Procesando...' : 'Crear Pendiente'}
+                <Button 
+                  type="submit" 
+                  size="lg" 
+                  disabled={loading || !laborId || (activities.length > 0 && !activityId) || !locationId || selectedPersonnel.length === 0} 
+                  className="w-full md:w-auto min-h-[48px] px-8 shadow-md"
+                >
+                  {loading ? 'Procesando...' : isEditing ? 'Guardar Cambios' : 'Crear Pendiente'}
                 </Button>
               </div>
 

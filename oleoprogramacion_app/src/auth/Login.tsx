@@ -214,7 +214,7 @@ export default function Login() {
             <motion.button 
               type="submit" 
               whileTap={{ scale: isLoading ? 1 : 0.98 }}
-              className="w-full h-12 md:h-14 bg-[#123C2E] hover:bg-[#0B2F24] text-white rounded-xl font-semibold shadow-lg shadow-[#123C2E]/20 transition-all flex items-center justify-center mt-2 disabled:opacity-70 disabled:cursor-not-allowed" 
+              className="w-full h-12 md:h-14 bg-[#123C2E] hover:bg-[#0B2E23] text-white rounded-xl font-bold uppercase tracking-wider shadow-lg shadow-[#123C2E]/20 transition-all flex items-center justify-center mt-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer" 
               disabled={isLoading}
             >
               {isLoading ? (
