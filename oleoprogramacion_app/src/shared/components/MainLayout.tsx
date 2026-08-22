@@ -47,6 +47,23 @@ export default function MainLayout() {
     };
   }, [logout]);
 
+  const isEnlargedSupervisor = user?.role === 'SUPERVISOR' && (user?.username || '').trim().toLowerCase() !== 'luisb';
+
+  useEffect(() => {
+    if (isEnlargedSupervisor) {
+      document.documentElement.style.fontSize = '135%';
+      document.documentElement.classList.add('supervisor-enlarged');
+    } else {
+      document.documentElement.style.fontSize = '';
+      document.documentElement.classList.remove('supervisor-enlarged');
+    }
+
+    return () => {
+      document.documentElement.style.fontSize = '';
+      document.documentElement.classList.remove('supervisor-enlarged');
+    };
+  }, [isEnlargedSupervisor]);
+
   const navigation = [
     { name: 'Dashboard', href: '/', icon: Home, roles: ['ADMIN', 'DIRECTIVO'] },
     { name: 'Nueva Programación', href: '/programming/new', icon: CalendarPlus, roles: ['SUPERVISOR'] },
