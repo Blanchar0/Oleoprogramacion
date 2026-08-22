@@ -83,9 +83,11 @@ export default function Login() {
             transition={{ delay: 0.2, duration: 0.8 }}
             className="flex items-center gap-3 mb-6 md:mb-10"
           >
-            <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-[#123C2E]/60 border border-[#315D43]/50 backdrop-blur-md flex items-center justify-center shadow-xl shadow-[#0B2F24]/40">
-              <Leaf className="w-7 h-7 md:w-8 md:h-8 text-[#B9CF58]" strokeWidth={1.5} />
-            </div>
+            <img 
+              src="/logo.png" 
+              alt="Oleoflores" 
+              className="w-16 h-16 md:w-20 md:h-20 rounded-full object-contain bg-white/10 p-1 border border-[#315D43]/50 backdrop-blur-md shadow-xl shadow-[#0B2F24]/40" 
+            />
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-white hidden md:block">Oleoflores</h1>
           </motion.div>
           

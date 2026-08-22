@@ -83,18 +83,22 @@ export default function MainLayout() {
   return (
     <div className="min-h-screen bg-bg-light flex flex-col md:flex-row pb-16 md:pb-0">
       {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between bg-primary text-white p-4">
+      <div className="md:hidden flex items-center justify-between bg-primary text-white p-3.5 px-4 shadow-sm">
         <div className="flex items-center gap-3">
           <Link 
             to={homePath} 
-            className="font-bold text-white hover:text-accent transition-colors flex items-center gap-2 cursor-pointer"
+            className="flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity"
             title="Ir a Inicio"
           >
-            Oleoflores
+            <img 
+              src="/logo.png" 
+              alt="Inicio" 
+              className="w-10 h-10 rounded-full object-contain bg-white/10 p-0.5 border border-white/20 shadow-xs" 
+            />
           </Link>
           <SyncIndicator />
         </div>
-        <button onClick={() => logout()} className="text-gray-300 hover:text-white">
+        <button onClick={() => logout()} className="text-gray-300 hover:text-white p-1">
           <LogOut size={20} />
         </button>
       </div>
@@ -103,13 +107,17 @@ export default function MainLayout() {
       <div className={cn(
         "hidden md:flex inset-y-0 left-0 z-50 w-64 bg-primary text-white flex-col"
       )}>
-        <div className="p-4 border-b border-primary-dark/30 flex justify-between items-center hidden md:flex">
+        <div className="p-4 border-b border-primary-dark/30 flex justify-center items-center hidden md:flex">
           <Link 
             to={homePath} 
-            className="font-bold text-lg text-white hover:text-accent transition-colors flex items-center gap-2 cursor-pointer"
+            className="flex items-center justify-center cursor-pointer hover:opacity-90 transition-transform hover:scale-105"
             title="Ir a Inicio"
           >
-            Oleoflores
+            <img 
+              src="/logo.png" 
+              alt="Inicio" 
+              className="w-16 h-16 rounded-full object-contain bg-white/10 p-1 border border-white/20 shadow-md" 
+            />
           </Link>
         </div>
         
