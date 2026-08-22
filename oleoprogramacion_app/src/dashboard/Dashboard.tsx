@@ -81,7 +81,7 @@ export default function Dashboard() {
     </div>
   );
 
-  const filteredProgrammings = programmings.filter(p => p.status !== 'RECHAZADA');
+  const filteredProgrammings = programmings.filter(p => p.status === 'CONFIRMADA');
   const filteredMachineries = machineries;
   const filteredAbsences = absences;
 
@@ -135,13 +135,14 @@ export default function Dashboard() {
     
     const activeOperatives = catalogs.personnel.filter((p:any) => p.active && isOperative(p));
     const totalActive = activeOperatives.length;
+    const availableCount = Math.max(0, totalActive - absencesCount);
 
     return (
       <div className="space-y-6">
         <h2 className="text-2xl font-bold text-forest-950">Panel de Control Operativo</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-lime-100 text-lime-700 rounded-lg"><Users size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Personal Programado</p><h3 className="text-2xl font-bold text-forest-950">{uniquePersonnel.size} <span className="text-sm font-normal text-gray-500">/ {totalActive - absencesCount}</span></h3></div></CardContent></Card>
+          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-lime-100 text-lime-700 rounded-lg"><Users size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Personal Programado</p><h3 className="text-2xl font-bold text-forest-950">{uniquePersonnel.size} <span className="text-sm font-normal text-gray-500">/ {availableCount}</span></h3></div></CardContent></Card>
           <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-green-100 text-green-700 rounded-lg"><CheckCircle2 size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Progs. Activas</p><h3 className="text-2xl font-bold text-forest-950">{activeProgrammingsCount}</h3></div></CardContent></Card>
           <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-amber-100 text-amber-700 rounded-lg"><CalendarX size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Ausencias (Día)</p><h3 className="text-2xl font-bold text-forest-950">{absencesCount}</h3></div></CardContent></Card>
           <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-blue-100 text-blue-700 rounded-lg"><Tractor size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Maquinaria Activa</p><h3 className="text-2xl font-bold text-forest-950">{machineryCount}</h3></div></CardContent></Card>
@@ -158,14 +159,15 @@ export default function Dashboard() {
       const totalPersonnelList = catalogs.personnel || [];
       const totalPeople = totalPersonnelList.length > 0 ? totalPersonnelList.length : 178;
 
-      // 2. Personal Administrativo y de Supervisión (10 personas: 4 de oficina + 6 supervisores)
+      // 2. Personal Administrativo y de Supervisión (oficina + supervisores)
       const adminList = totalPersonnelList.filter((p: any) => !isOperative(p));
-      const adminTotal = adminList.length > 0 ? adminList.length : 10;
+      const adminTotal = adminList.length > 0 ? adminList.length : 9;
 
-      // 3. Personal Operativo de Campo real y productivo (Exactamente 168 = 178 - 10)
+      // 3. Total Operativos Teóricos en nómina
       const activeOperativesList = totalPersonnelList.filter((p: any) => p.active !== false && isOperative(p));
-      const operativesTotal = Math.max(0, totalPeople - adminTotal); // 168
+      const operativesPayrollTotal = activeOperativesList.length > 0 ? activeOperativesList.length : Math.max(0, totalPeople - adminTotal);
 
+      // Novedades e inasistencias activas del día
       const activeNovedades = (catalogs.personnelNovelties || []).filter((n:any) => n.fechaInicio <= date && n.fechaFin >= date);
 
       let inasistentesSet = new Set<string>();
@@ -174,30 +176,34 @@ export default function Dashboard() {
       let incapacidadesSet = new Set<string>();
 
       activeNovedades.forEach((n:any) => {
-        if (n.tipo === 'VACACIONES') vacacionesSet.add(n.personaDocumento);
-        else if (n.tipo === 'INCAPACIDAD') incapacidadesSet.add(n.personaDocumento);
-        else if (n.tipo === 'PERMISO' || n.tipo === 'Permiso autorizado') permisosSet.add(n.personaDocumento);
-        else inasistentesSet.add(n.personaDocumento);
+        const doc = n.personaDocumento || n.personaId || n.personaNombreFuente;
+        if (n.tipo === 'VACACIONES') vacacionesSet.add(doc);
+        else if (n.tipo === 'INCAPACIDAD') incapacidadesSet.add(doc);
+        else if (n.tipo === 'PERMISO' || n.tipo === 'Permiso autorizado' || n.tipo === 'CALAMIDAD') permisosSet.add(doc);
+        else inasistentesSet.add(doc);
       });
 
       filteredAbsences.forEach((a:any) => {
         if (a.status === 'REGISTRADA') {
           const p = catalogs.personnel.find((per:any) => per.id === a.personnelId);
-          const doc = p ? p.documento : a.personnelId;
+          const doc = p ? (p.documento || p.id) : a.personnelId;
           
           if (a.reason === 'Vacaciones') vacacionesSet.add(doc);
           else if (a.reason === 'Incapacidad') incapacidadesSet.add(doc);
-          else if (a.reason === 'Permiso autorizado' || a.reason === 'PERMISO') permisosSet.add(doc);
+          else if (a.reason === 'Permiso autorizado' || a.reason === 'PERMISO' || a.reason === 'Calamidad doméstica') permisosSet.add(doc);
           else inasistentesSet.add(doc);
         }
       });
 
+      // Evitar doble conteo entre grupos
       incapacidadesSet.forEach(id => vacacionesSet.has(id) && incapacidadesSet.delete(id));
       permisosSet.forEach(id => (vacacionesSet.has(id) || incapacidadesSet.has(id)) && permisosSet.delete(id));
       inasistentesSet.forEach(id => (vacacionesSet.has(id) || incapacidadesSet.has(id) || permisosSet.has(id)) && inasistentesSet.delete(id));
 
       const totalUnavailable = vacacionesSet.size + incapacidadesSet.size + permisosSet.size + inasistentesSet.size;
-      const availableOperativesCount = Math.max(0, operativesTotal - totalUnavailable);
+      
+      // Operativos de campo reales y disponibles en el día (presentes y sin reporte de inasistencia/novedad)
+      const availableOperativesCount = Math.max(0, operativesPayrollTotal - totalUnavailable);
 
       let programmedOperativesSet = new Set<string>();
       const laborPersonnelCountMap = new Map<string, Set<string>>();
@@ -210,14 +216,18 @@ export default function Dashboard() {
         (p.personnelIds || []).forEach((id: string) => {
           const per = activeOperativesList.find((x: any) => x.id === id);
           if (per) {
-            programmedOperativesSet.add(per.documento);
-            laborPersonnelCountMap.get(laborName)?.add(per.documento);
+            programmedOperativesSet.add(per.documento || per.id);
+            laborPersonnelCountMap.get(laborName)?.add(per.documento || per.id);
+          } else {
+            programmedOperativesSet.add(id);
+            laborPersonnelCountMap.get(laborName)?.add(id);
           }
         });
       });
 
       const programmedCount = programmedOperativesSet.size;
-      const utilRate = operativesTotal > 0 ? (programmedCount / operativesTotal) * 100 : 0;
+      // La tasa de utilización se calcula sobre los operativos que en el día se encuentran disponibles y llegaron a la empresa
+      const utilRate = availableOperativesCount > 0 ? (programmedCount / availableOperativesCount) * 100 : 0;
 
       // 1. Chart: Personas por Labor
       const palette = ['#123C2E', '#315D43', '#7FA33D', '#B9CF58', '#E6B94F', '#0284C7', '#6366F1', '#A855F7', '#EC4899'];
@@ -304,7 +314,8 @@ export default function Dashboard() {
 
       return {
         totalPeople,
-        operativesTotal,
+        operativesTotal: availableOperativesCount,
+        operativesPayrollTotal,
         adminTotal,
         absencesTotal: inasistentesSet.size,
         incapacityTotal: incapacidadesSet.size,
@@ -313,6 +324,7 @@ export default function Dashboard() {
         utilRate: utilRate.toFixed(1),
         programmedCount,
         availableOperativesCount,
+        totalUnavailable,
         activeMachineryCount,
         totalEquipmentCount,
         chartLabor,
@@ -371,8 +383,10 @@ export default function Dashboard() {
                   <Layers size={16} />
                 </div>
               </div>
-              <h3 className="text-2xl font-extrabold text-emerald-950">{stats.operativesTotal}</h3>
-              <p className="text-[10px] text-emerald-700/80 mt-1 truncate">Personal productivo</p>
+              <h3 className="text-2xl font-extrabold text-emerald-950">{stats.availableOperativesCount}</h3>
+              <p className="text-[10px] text-emerald-700/80 mt-1 truncate">
+                {stats.totalUnavailable > 0 ? `${stats.availableOperativesCount} de ${stats.operativesPayrollTotal} disponibles` : 'Personal productivo'}
+              </p>
             </CardContent>
           </Card>
 
@@ -442,7 +456,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-lime-900">{stats.utilRate}%</h3>
-              <p className="text-[10px] text-lime-800/80 mt-1 truncate">{stats.programmedCount} de {stats.operativesTotal} progs.</p>
+              <p className="text-[10px] text-lime-800/80 mt-1 truncate">{stats.programmedCount} de {stats.availableOperativesCount} disp.</p>
             </CardContent>
           </Card>
         </div>

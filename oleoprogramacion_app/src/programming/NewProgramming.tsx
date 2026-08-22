@@ -544,7 +544,7 @@ export default function NewProgramming() {
     repository.createProgramming(payload).then(res => {
       setLoading(false);
       if (res.ok) {
-        setTimeout(() => navigate('/programming/pending'), 2000);
+        navigate('/programming/pending');
       } else {
         alert(res.error);
       }

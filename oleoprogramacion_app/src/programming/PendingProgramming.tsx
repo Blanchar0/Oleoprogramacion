@@ -3,8 +3,8 @@ import { useAuth } from '../auth/AuthContext';
 import { repository } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, Button } from '@/src/components/ui';
-import { Check, X, AlertCircle } from 'lucide-react';
+import { Card, CardContent, CardHeader, Button } from '@/src/components/ui';
+import { Check, AlertCircle, ArrowLeft } from 'lucide-react';
 
 export default function PendingProgramming() {
   const { user } = useAuth();
@@ -29,16 +29,25 @@ export default function PendingProgramming() {
     }
   }, [user]);
 
-  const handleAction = async (status: 'CONFIRMADA' | 'RECHAZADA') => {
+  const handleConfirm = async () => {
     if (!pending) return;
     setActionLoading(true);
-    const res = await repository.updateProgramming(pending.id, { status }, pending.version);
+    const res = await repository.updateProgramming(pending.id, { status: 'CONFIRMADA' }, pending.version);
     setActionLoading(false);
     if (res.ok) {
-      navigate('/');
+      navigate('/programming/all');
     } else {
-      setError(res.error || 'Error al actualizar');
+      setError(res.error || 'Error al confirmar');
     }
+  };
+
+  const handleRejectAndEdit = async () => {
+    if (!pending) return;
+    setActionLoading(true);
+    const draftData = { ...pending };
+    await repository.deleteProgramming(pending.id);
+    setActionLoading(false);
+    navigate('/programming/new', { state: { editRecord: draftData } });
   };
 
   if (loading || catLoading) return <div>Cargando...</div>;
@@ -50,7 +59,7 @@ export default function PendingProgramming() {
           <Check className="text-gray-400 w-8 h-8" />
         </div>
         <h2 className="text-xl font-medium text-gray-900 mb-2">No tienes programaciones pendientes</h2>
-        <p className="text-gray-500 mb-6">Todas tus programaciones han sido confirmadas o rechazadas.</p>
+        <p className="text-gray-500 mb-6">Todas tus programaciones han sido confirmadas o revisadas.</p>
         <Button onClick={() => navigate('/programming/new')}>Crear Nueva Programación</Button>
       </div>
     );
@@ -65,7 +74,7 @@ export default function PendingProgramming() {
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-primary">Revisión de Programación</h2>
-        <p className="text-gray-500 text-sm mt-1">Confirma o rechaza la asignación pendiente</p>
+        <p className="text-gray-500 text-sm mt-1">Confirma la asignación para enviarla a Programación General o rechaza para volver a editar.</p>
       </div>
 
       {error && (
@@ -128,17 +137,17 @@ export default function PendingProgramming() {
           <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-100">
             <Button 
               variant="outline" 
-              className="flex-1 border-2 border-negative text-negative hover:bg-negative hover:text-white font-bold"
-              onClick={() => handleAction('RECHAZADA')}
+              className="flex-1 border-2 border-negative text-negative hover:bg-negative hover:text-white font-bold cursor-pointer"
+              onClick={handleRejectAndEdit}
               disabled={actionLoading}
             >
-              <X size={18} className="mr-2" />
-              Rechazar
+              <ArrowLeft size={18} className="mr-2" />
+              Rechazar / Volver a Editar
             </Button>
             <Button 
               variant="primary" 
-              className="flex-1 font-bold"
-              onClick={() => handleAction('CONFIRMADA')}
+              className="flex-1 font-bold cursor-pointer shadow-md"
+              onClick={handleConfirm}
               disabled={actionLoading}
             >
               <Check size={18} className="mr-2" />

@@ -46,7 +46,7 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
   const toggleRowPersonnel = (progId: string) => setExpandedRowPersonnel(p => ({ ...p, [progId]: !p[progId] }));
   const toggleRowLotes = (progId: string) => setExpandedRowLotes(p => ({ ...p, [progId]: !p[progId] }));
 
-  const validProgrammings = programmings.filter(p => p.status !== 'RECHAZADA');
+  const validProgrammings = programmings.filter(p => p.status === 'CONFIRMADA');
   const filteredProgrammings = user?.role === 'SUPERVISOR' ? validProgrammings.filter(p => p.idSupervisor === user.idSupervisor) : validProgrammings;
   const filteredMachineries = user?.role === 'SUPERVISOR' ? machineries.filter(m => m.idSupervisor === user.idSupervisor) : machineries;
 
