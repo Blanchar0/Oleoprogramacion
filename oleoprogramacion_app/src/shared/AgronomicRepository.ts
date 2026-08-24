@@ -323,24 +323,40 @@ class SupabaseRepository implements AgronomicRepository {
         console.error("Machinery fetch error:", error);
         return;
       }
-      const mapped = (data || []).map((item: any) => ({
-        ...item,
-        supervisorId: item.supervisor_id || item.id_supervisor,
-        idSupervisor: item.id_supervisor || item.supervisor_id,
-        equipmentId: item.equipment_id,
-        operatorId: item.operator_id || item.operator_name,
-        operatorName: item.operator_name,
-        laborId: item.labor_id || item.laborId,
-        activityId: item.activity_id || item.activityId,
-        locationId: item.location_id,
-        zoneSnapshot: item.zone_snapshot,
-        initialHourMeter: item.initial_hour_meter,
-        finalHourMeter: item.final_hour_meter,
-        effectiveHours: item.effective_hours,
-        observations: item.observations,
-        startTime: item.start_time || item.startTime,
-        endTime: item.end_time || item.endTime,
-      }));
+      const mapped = (data || []).map((item: any) => {
+        let zoneSnap = item.zone_snapshot;
+        let sTime = item.start_time || item.startTime;
+        let eTime = item.end_time || item.endTime;
+        let obs = item.observations || '';
+
+        // Extract metadata if it was stored in observations during schema fallback
+        if (!zoneSnap && obs.startsWith('[Zonas:')) {
+          const match = obs.match(/^\[Zonas:\s*([^\]]+)\]\s*(.*)$/);
+          if (match) {
+            zoneSnap = match[1];
+            obs = match[2];
+          }
+        }
+
+        return {
+          ...item,
+          supervisorId: item.supervisor_id || item.id_supervisor,
+          idSupervisor: item.id_supervisor || item.supervisor_id,
+          equipmentId: item.equipment_id,
+          operatorId: item.operator_id || item.operator_name,
+          operatorName: item.operator_name,
+          laborId: item.labor_id || item.laborId,
+          activityId: item.activity_id || item.activityId,
+          locationId: item.location_id,
+          zoneSnapshot: zoneSnap,
+          initialHourMeter: item.initial_hour_meter,
+          finalHourMeter: item.final_hour_meter,
+          effectiveHours: item.effective_hours,
+          observations: obs,
+          startTime: sTime,
+          endTime: eTime,
+        };
+      });
       callback(mapped);
     };
 
@@ -362,7 +378,7 @@ class SupabaseRepository implements AgronomicRepository {
   async createMachineryOperation(input: any): Promise<Result> {
     try {
       const supId = input.supervisorId || input.idSupervisor || 'SUP001';
-      const payload = {
+      const payload: Record<string, any> = {
         id: crypto.randomUUID(),
         date: input.date,
         supervisor_id: supId,
@@ -372,19 +388,51 @@ class SupabaseRepository implements AgronomicRepository {
         operator_name: input.operatorName || null,
         labor_id: input.laborId || input.labor_id || null,
         activity_id: input.activityId || input.activity_id || null,
-        location_id: input.locationId,
+        location_id: input.locationId || null,
         zone_snapshot: input.zoneSnapshot || null,
         initial_hour_meter: input.initialHourMeter || null,
         final_hour_meter: input.finalHourMeter || null,
         effective_hours: input.effectiveHours || null,
         observations: input.observations || '',
         start_time: input.startTime || null,
-        end_time: input.endTime || null,
         status: input.status || 'EN_PROGRESO',
         version: 1,
       };
 
-      const { data, error } = await supabase.from('machinery_operations').insert(payload).select().single();
+      // Only include end_time if explicitly provided with a value
+      if (input.endTime || input.end_time) {
+        payload.end_time = input.endTime || input.end_time;
+      }
+
+      let { data, error } = await supabase.from('machinery_operations').insert(payload).select().single();
+
+      // Dynamic fallback if columns are missing from the schema cache (pre-migration)
+      if (error && error.message && (error.message.includes('schema cache') || error.message.includes('column'))) {
+        console.warn("Machinery insert schema mismatch, attempting fallback with standard columns:", error.message);
+        const fallbackObservations = payload.zone_snapshot
+          ? `[Zonas: ${payload.zone_snapshot}] ${payload.observations || ''}`.trim()
+          : (payload.observations || '');
+
+        const fallbackPayload: Record<string, any> = {
+          id: payload.id,
+          date: payload.date,
+          supervisor_id: payload.supervisor_id,
+          id_supervisor: payload.id_supervisor,
+          equipment_id: payload.equipment_id,
+          operator_name: payload.operator_name || payload.operator_id,
+          activity_id: payload.activity_id,
+          location_id: payload.location_id,
+          observations: fallbackObservations,
+          status: payload.status,
+          version: 1,
+        };
+
+        const resFallback = await supabase.from('machinery_operations').insert(fallbackPayload).select().single();
+        if (resFallback.error) throw resFallback.error;
+        data = resFallback.data;
+        error = null;
+      }
+
       if (error) throw error;
       return { ok: true, data };
     } catch (e: any) {
@@ -401,7 +449,7 @@ class SupabaseRepository implements AgronomicRepository {
         .single();
 
       if (fetchErr) throw fetchErr;
-      if (current.version !== expectedVersion) {
+      if (current && current.version !== expectedVersion) {
         throw new Error("CONFLICT");
       }
 
@@ -413,9 +461,22 @@ class SupabaseRepository implements AgronomicRepository {
       if (input.endTime !== undefined) payload.end_time = input.endTime;
       if (input.end_time !== undefined) payload.end_time = input.end_time;
       if (input.observations !== undefined) payload.observations = input.observations;
-      if (input.observations !== undefined) payload.observations = input.observations;
 
-      const { error } = await supabase.from('machinery_operations').update(payload).eq('id', id);
+      let { error } = await supabase.from('machinery_operations').update(payload).eq('id', id);
+
+      // Fallback if end_time or other updated columns are missing from schema cache
+      if (error && error.message && (error.message.includes('schema cache') || error.message.includes('column'))) {
+        console.warn("Machinery update schema mismatch, updating status only:", error.message);
+        const fallbackPayload: any = {
+          version: expectedVersion + 1,
+          updated_at: new Date().toISOString(),
+        };
+        if (input.status !== undefined) fallbackPayload.status = input.status;
+        const resFallback = await supabase.from('machinery_operations').update(fallbackPayload).eq('id', id);
+        if (resFallback.error) throw resFallback.error;
+        error = null;
+      }
+
       if (error) throw error;
       return { ok: true };
     } catch (e: any) {

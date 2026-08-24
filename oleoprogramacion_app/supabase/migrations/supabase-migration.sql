@@ -176,18 +176,30 @@ CREATE TABLE IF NOT EXISTS public.machinery_operations (
   supervisor_id TEXT NOT NULL,
   id_supervisor TEXT NOT NULL,
   equipment_id TEXT,
+  operator_id TEXT,
   operator_name TEXT,
+  labor_id TEXT,
   activity_id TEXT,
   location_id TEXT,
+  zone_snapshot TEXT,
   initial_hour_meter NUMERIC,
   final_hour_meter NUMERIC,
   effective_hours NUMERIC,
   observations TEXT,
+  start_time TEXT,
+  end_time TEXT,
   status TEXT DEFAULT 'CONFIRMADA',
   version INT DEFAULT 1,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure machinery_operations has all required columns if table already exists
+ALTER TABLE public.machinery_operations ADD COLUMN IF NOT EXISTS operator_id TEXT;
+ALTER TABLE public.machinery_operations ADD COLUMN IF NOT EXISTS labor_id TEXT;
+ALTER TABLE public.machinery_operations ADD COLUMN IF NOT EXISTS zone_snapshot TEXT;
+ALTER TABLE public.machinery_operations ADD COLUMN IF NOT EXISTS start_time TEXT;
+ALTER TABLE public.machinery_operations ADD COLUMN IF NOT EXISTS end_time TEXT;
 
 -- 13. AUDIT LOGS
 CREATE TABLE IF NOT EXISTS public.audit_logs (
