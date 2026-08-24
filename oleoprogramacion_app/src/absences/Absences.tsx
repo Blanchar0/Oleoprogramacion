@@ -38,6 +38,7 @@ export default function Absences() {
     return () => unsubAbsences();
   }, [date, user]);
 
+  // Suscribirse a TODAS las programaciones y maquinarias de la fecha para detectar asignaciones
   useEffect(() => {
     const filters: any = { date };
     const unsubProg = repository.subscribeProgramming(filters, setProgrammings);
@@ -57,25 +58,58 @@ export default function Absences() {
     'Otro', 'Permiso autorizado', 'Suspensión', 'Vacaciones'
   ];
 
+  const selectedPerson = catalogs.personnel?.find((p: any) => p.id === personnelId);
+
+  // Conjunto de identificadores válidos para la persona seleccionada (ID, Documento, Nombre)
+  const getPersonTargetIds = () => {
+    const targetSet = new Set<string>();
+    if (!personnelId) return targetSet;
+    targetSet.add(String(personnelId).trim().toLowerCase());
+    if (selectedPerson) {
+      if (selectedPerson.id) targetSet.add(String(selectedPerson.id).trim().toLowerCase());
+      if (selectedPerson.documento) targetSet.add(String(selectedPerson.documento).trim().toLowerCase());
+      if (selectedPerson.cedula) targetSet.add(String(selectedPerson.cedula).trim().toLowerCase());
+      if (selectedPerson.name) targetSet.add(String(selectedPerson.name).trim().toLowerCase());
+      if (selectedPerson.nombreCompleto) targetSet.add(String(selectedPerson.nombreCompleto).trim().toLowerCase());
+    }
+    return targetSet;
+  };
+
+  const personTargetIds = getPersonTargetIds();
+
   // Conflictos de programación de la persona seleccionada en esta fecha
   const conflictProgrammings = personnelId 
-    ? (programmings || []).filter((p: any) => 
-        p.date === date && 
-        p.status !== 'CANCELADA' && 
-        (p.personnelIds || []).includes(personnelId)
-      )
+    ? (programmings || []).filter((p: any) => {
+        if (p.date !== date || p.status === 'CANCELADA') return false;
+        const progIds = Array.isArray(p.personnelIds) ? p.personnelIds : [];
+        return progIds.some((rawId: any) => personTargetIds.has(String(rawId).trim().toLowerCase()));
+      })
     : [];
 
   const conflictMachineries = personnelId
-    ? (machineries || []).filter((m: any) =>
-        m.date === date &&
-        m.status !== 'CANCELADA' &&
-        m.operatorId === personnelId
-      )
+    ? (machineries || []).filter((m: any) => {
+        if (m.date !== date || m.status === 'CANCELADA') return false;
+        const opId = String(m.operatorId || m.operator_id || '').trim().toLowerCase();
+        const opName = String(m.operatorName || m.operator_name || '').trim().toLowerCase();
+        return (opId && personTargetIds.has(opId)) || (opName && personTargetIds.has(opName));
+      })
     : [];
 
   const hasConflict = conflictProgrammings.length > 0 || conflictMachineries.length > 0;
-  const selectedPerson = catalogs.personnel?.find((p: any) => p.id === personnelId);
+
+  // Nombres de actividades en las que se encuentra programado
+  const conflictActivityNames = [
+    ...conflictProgrammings.map((p: any) => {
+      const act = catalogs.activities?.find((a: any) => a.id === (p.activityId || p.activity_id));
+      const lab = catalogs.labors?.find((l: any) => l.id === (p.laborId || p.labor_id));
+      return act?.name || lab?.name || 'Labor de campo';
+    }),
+    ...conflictMachineries.map((m: any) => {
+      const act = catalogs.activities?.find((a: any) => a.id === (m.activityId || m.activity_id));
+      const eq = catalogs.equipment?.find((e: any) => e.id === m.equipmentId);
+      return `Maquinaria (${act?.name || eq?.name || 'Operación'})`;
+    })
+  ].filter(Boolean).join(', ');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,13 +138,15 @@ export default function Absences() {
     try {
       // 1. Si se confirmó desprogramar, retirar de la Programación General y Maquinaria
       if (removeFromProgramming) {
+        const targetIds = getPersonTargetIds();
+
         // A. Programación General
         for (const prog of conflictProgrammings) {
-          const currentIds: string[] = prog.personnelIds || [];
-          const updatedIds = currentIds.filter((id: string) => id !== personnelId);
+          const currentIds: string[] = Array.isArray(prog.personnelIds) ? prog.personnelIds : [];
+          const updatedIds = currentIds.filter((rawId: any) => !targetIds.has(String(rawId).trim().toLowerCase()));
 
           if (updatedIds.length === 0) {
-            // Si era la única persona de la labor, eliminar el registro completo
+            // Si era la única persona de la labor, eliminar el registro completo de la programación
             await repository.deleteProgramming(prog.id);
           } else {
             // Si hay más personas, actualizar la lista restando al inasistente
@@ -147,9 +183,10 @@ export default function Absences() {
       setShowWarningModal(false);
 
       if (res.ok) {
+        const personName = selectedPerson?.name || selectedPerson?.nombreCompleto || 'La persona';
         setSuccess(
           removeFromProgramming 
-            ? 'Inasistencia registrada exitosamente y persona retirada de la Programación General.' 
+            ? `${personName} fue eliminada de la programación y se registró su inasistencia correctamente.` 
             : 'Inasistencia registrada correctamente.'
         );
         setPersonnelId('');
@@ -238,11 +275,13 @@ export default function Absences() {
                   {/* Banner preventivo si ya está programada */}
                   {personnelId && hasConflict && (
                     <div className="mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-xs flex items-start gap-2 animate-fadeIn">
-                      <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                      <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
                       <div>
-                        <p className="font-bold">Trabajador asignado en programación hoy</p>
+                        <p className="font-bold">
+                          La persona se encuentra programada en {conflictActivityNames || 'actividades de hoy'}
+                        </p>
                         <p className="text-[11px] text-amber-800 mt-0.5">
-                          Al registrar la inasistencia se le advertirá para retirarlo de la programación general.
+                          Al hacer clic en registrar, el sistema le consultará para eliminarla de la programación general.
                         </p>
                       </div>
                     </div>
@@ -334,43 +373,49 @@ export default function Absences() {
 
       {/* Modal / Cuadro de Advertencia (Warning) cuando la persona ya está programada */}
       <Dialog open={showWarningModal} onOpenChange={setShowWarningModal}>
-        <DialogContent className="sm:max-w-lg border-amber-200">
+        <DialogContent className="sm:max-w-lg border-amber-300 shadow-xl">
           <DialogHeader>
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 mb-2">
               <AlertTriangle className="h-6 w-6 text-amber-600" />
             </div>
             <DialogTitle className="text-center text-lg font-bold text-gray-900">
-              Trabajador reportado en Programación
+              Trabajador se encuentra programado
             </DialogTitle>
             <DialogDescription className="text-center text-sm text-gray-600">
-              La persona seleccionada ya se encuentra registrada en la jornada del <strong>{date}</strong>.
+              La persona <strong>{selectedPerson?.name || selectedPerson?.nombreCompleto}</strong> se encuentra programada en la jornada del <strong>{date}</strong>.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2 text-xs">
-            <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200 space-y-2">
+            <div className="p-3.5 bg-amber-50/90 rounded-xl border border-amber-300 space-y-2.5">
               <div className="flex items-center gap-2 font-bold text-sm text-amber-950">
-                <User size={15} className="text-amber-700" />
-                {selectedPerson?.name || selectedPerson?.nombreCompleto || 'Trabajador'}
+                <User size={16} className="text-amber-700" />
+                <span>{selectedPerson?.name || selectedPerson?.nombreCompleto}</span>
                 {selectedPerson?.jobTitle && <span className="text-xs font-normal text-amber-800">({selectedPerson.jobTitle})</span>}
               </div>
 
               {/* Detalle de las programaciones generales activas */}
               {conflictProgrammings.map((prog, idx) => {
                 const labor = catalogs.labors?.find((l: any) => l.id === (prog.laborId || prog.labor_id));
+                const act = catalogs.activities?.find((a: any) => a.id === (prog.activityId || prog.activity_id));
                 const sup = catalogs.supervisors?.find((s: any) => s.id === (prog.supervisorId || prog.idSupervisor));
                 const totalPeople = (prog.personnelIds || []).length;
                 return (
-                  <div key={prog.id || idx} className="bg-white p-2.5 rounded-lg border border-amber-200 text-gray-700 space-y-1">
-                    <div className="flex items-center gap-1.5 font-semibold text-forest-950">
-                      <Briefcase size={13} className="text-forest-700" />
-                      <span>Labor: {labor?.name || 'Programación General'}</span>
+                  <div key={prog.id || idx} className="bg-white p-3 rounded-lg border border-amber-200 text-gray-700 space-y-1.5 shadow-xs">
+                    <div className="flex items-center gap-1.5 font-bold text-forest-950 text-xs">
+                      <Briefcase size={14} className="text-forest-700" />
+                      <span>Actividad: {act?.name || labor?.name || 'Labor programada'}</span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-gray-600">
-                      <MapPin size={13} className="text-gray-500" />
+                    {labor?.name && act?.name && (
+                      <div className="text-[11px] text-gray-500 pl-5">
+                        Labor: <strong>{labor.name}</strong>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 text-gray-600 pl-5">
+                      <MapPin size={13} className="text-gray-400" />
                       <span>Ubicación: {prog.zoneSnapshot || prog.loteSnapshot || 'Lote asignado'}</span>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 border-t border-gray-100">
+                    <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1.5 border-t border-gray-100">
                       <span>Supervisor: <strong className="text-gray-700">{sup?.name || prog.supervisorId || 'Asignado'}</strong></span>
                       <span>Cuadrilla: <strong>{totalPeople} {totalPeople === 1 ? 'persona' : 'personas'}</strong></span>
                     </div>
@@ -381,13 +426,19 @@ export default function Absences() {
               {/* Detalle de maquinaria activa si aplica */}
               {conflictMachineries.map((mach, idx) => {
                 const eq = catalogs.equipment?.find((e: any) => e.id === mach.equipmentId);
+                const act = catalogs.activities?.find((a: any) => a.id === (mach.activityId || mach.activity_id));
                 return (
-                  <div key={mach.id || idx} className="bg-white p-2.5 rounded-lg border border-amber-200 text-gray-700 space-y-1">
-                    <div className="flex items-center gap-1.5 font-semibold text-blue-900">
-                      <Tractor size={13} className="text-blue-600" />
+                  <div key={mach.id || idx} className="bg-white p-3 rounded-lg border border-amber-200 text-gray-700 space-y-1.5 shadow-xs">
+                    <div className="flex items-center gap-1.5 font-bold text-blue-900 text-xs">
+                      <Tractor size={14} className="text-blue-600" />
                       <span>Maquinaria: {eq?.code ? `${eq.code} - ${eq.name}` : (eq?.name || 'Equipo')}</span>
                     </div>
-                    <div className="text-[11px] text-gray-500">
+                    {act?.name && (
+                      <div className="text-[11px] text-gray-500 pl-5">
+                        Actividad: <strong>{act.name}</strong>
+                      </div>
+                    )}
+                    <div className="text-[11px] text-gray-500 pl-5">
                       <span>Zonas: <strong className="text-gray-700">{mach.zoneSnapshot || 'Zonas'}</strong> | Inicio: {mach.startTime || '--:--'}</span>
                     </div>
                   </div>
@@ -395,15 +446,18 @@ export default function Absences() {
               })}
             </div>
 
-            <div className="p-3 bg-red-50/80 rounded-xl border border-red-200 text-red-900">
-              <p className="font-semibold text-xs text-red-950">¿Desea reportarlo como inasistente?</p>
-              <p className="text-[11px] text-red-800 mt-0.5">
-                Al confirmar, se eliminará automáticamente a <strong>{selectedPerson?.name}</strong> de la Programación General de hoy y se registrará su inasistencia por <strong>{reason}</strong>.
+            {/* Mensaje claro de advertencia */}
+            <div className="p-3.5 bg-red-50 rounded-xl border border-red-200 text-red-950">
+              <p className="font-bold text-xs">
+                La persona <span className="underline">{selectedPerson?.name}</span> se encuentra programada en <span className="underline">{conflictActivityNames || 'actividades del día'}</span>.
+              </p>
+              <p className="text-[11px] text-red-800 mt-1">
+                ¿Deseas eliminarla de la programación y reportarla como inasistente por <strong>{reason}</strong>?
               </p>
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button 
               type="button" 
               variant="outline" 
@@ -418,7 +472,7 @@ export default function Absences() {
               disabled={loading}
               className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
             >
-              {loading ? 'Procesando...' : 'Sí, reportar inasistencia y desprogramar'}
+              {loading ? 'Procesando...' : 'Sí, eliminar de la programación y reportar inasistencia'}
             </Button>
           </DialogFooter>
         </DialogContent>

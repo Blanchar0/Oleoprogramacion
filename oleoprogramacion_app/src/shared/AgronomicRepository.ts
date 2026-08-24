@@ -25,6 +25,9 @@ export interface AgronomicRepository {
   deleteMachineryOperation(id: string): Promise<Result>;
 
   subscribeCatalogs(callback: (data: any) => void): Unsubscribe;
+  createPerformanceReference(input: any): Promise<Result>;
+  updatePerformanceReference(id: string, input: any): Promise<Result>;
+  deletePerformanceReference(id: string): Promise<Result>;
 }
 
 class SupabaseRepository implements AgronomicRepository {
@@ -79,22 +82,41 @@ class SupabaseRepository implements AgronomicRepository {
         return;
       }
       // Map back to camelCase properties for frontend compatibility
-      const mapped = (data || []).map((item: any) => ({
-        ...item,
-        supervisorId: item.supervisor_id || item.id_supervisor,
-        idSupervisor: item.id_supervisor || item.supervisor_id,
-        laborId: item.labor_id,
-        activityId: item.activity_id,
-        locationId: item.location_id,
-        locationIds: item.location_ids || (item.location_id ? item.location_id.split(',').map((s: string) => s.trim()).filter(Boolean) : []),
-        zoneSnapshot: item.zone_snapshot,
-        loteSnapshot: item.lote_snapshot,
-        personnelIds: item.personnel_ids || [],
-        creationMethod: item.creation_method || 'MANUAL',
-        needsReview: item.needs_review ?? false,
-        performancePerPerson: item.performance_per_person,
-        expectedTotalQuantity: item.expected_total_quantity,
-      }));
+      const mapped = (data || []).map((item: any) => {
+        const rawPersonnel = item.personnel_ids;
+        let parsedPersonnelIds: string[] = [];
+        if (Array.isArray(rawPersonnel)) {
+          parsedPersonnelIds = rawPersonnel.map((x: any) => typeof x === 'object' && x !== null ? (x.id || x.personnelId || x.documento || String(x)) : String(x));
+        } else if (typeof rawPersonnel === 'string') {
+          try {
+            const parsed = JSON.parse(rawPersonnel);
+            if (Array.isArray(parsed)) {
+              parsedPersonnelIds = parsed.map((x: any) => typeof x === 'object' && x !== null ? (x.id || x.personnelId || x.documento || String(x)) : String(x));
+            } else {
+              parsedPersonnelIds = rawPersonnel.split(',').map((s: string) => s.trim()).filter(Boolean);
+            }
+          } catch {
+            parsedPersonnelIds = rawPersonnel.split(',').map((s: string) => s.trim()).filter(Boolean);
+          }
+        }
+
+        return {
+          ...item,
+          supervisorId: item.supervisor_id || item.id_supervisor,
+          idSupervisor: item.id_supervisor || item.supervisor_id,
+          laborId: item.labor_id,
+          activityId: item.activity_id,
+          locationId: item.location_id,
+          locationIds: item.location_ids || (item.location_id ? item.location_id.split(',').map((s: string) => s.trim()).filter(Boolean) : []),
+          zoneSnapshot: item.zone_snapshot,
+          loteSnapshot: item.lote_snapshot,
+          personnelIds: parsedPersonnelIds,
+          creationMethod: item.creation_method || 'MANUAL',
+          needsReview: item.needs_review ?? false,
+          performancePerPerson: item.performance_per_person,
+          expectedTotalQuantity: item.expected_total_quantity,
+        };
+      });
       callback(mapped);
     };
 
@@ -753,6 +775,63 @@ class SupabaseRepository implements AgronomicRepository {
       const { data, error } = await supabase.from('equipment').update(payload).eq('id', id).select().single();
       if (error) throw error;
       return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // Performance References (Rendimientos)
+  async createPerformanceReference(input: any): Promise<Result> {
+    try {
+      const payload = {
+        id: input.id || crypto.randomUUID(),
+        activity_id: input.activityId || input.activity_id,
+        unit: input.unit || 'Jornal',
+        performance_per_person_day: Number(input.performancePerPersonDay ?? input.performance_per_person_day ?? 1),
+        measurement_type: input.measurementType || input.measurement_type || null,
+        source: input.source || 'MANUAL',
+        active: input.active !== undefined ? input.active : true,
+        version: 1,
+      };
+      const { data, error } = await supabase.from('performance_references').insert(payload).select().single();
+      if (error) throw error;
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async updatePerformanceReference(id: string, input: any): Promise<Result> {
+    try {
+      const payload: any = {
+        updated_at: new Date().toISOString(),
+      };
+      if (input.activityId !== undefined || input.activity_id !== undefined) {
+        payload.activity_id = input.activityId || input.activity_id;
+      }
+      if (input.unit !== undefined) payload.unit = input.unit;
+      if (input.performancePerPersonDay !== undefined || input.performance_per_person_day !== undefined) {
+        payload.performance_per_person_day = Number(input.performancePerPersonDay ?? input.performance_per_person_day);
+      }
+      if (input.measurementType !== undefined || input.measurement_type !== undefined) {
+        payload.measurement_type = input.measurementType || input.measurement_type;
+      }
+      if (input.active !== undefined) payload.active = input.active;
+      if (input.source !== undefined) payload.source = input.source;
+
+      const { data, error } = await supabase.from('performance_references').update(payload).eq('id', id).select().single();
+      if (error) throw error;
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async deletePerformanceReference(id: string): Promise<Result> {
+    try {
+      const { error } = await supabase.from('performance_references').delete().eq('id', id);
+      if (error) throw error;
+      return { ok: true };
     } catch (e: any) {
       return { ok: false, error: e.message };
     }
