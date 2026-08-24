@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { repository } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
 import { useNavigate } from 'react-router-dom';
+import { calculateDuration } from '../machinery/Machinery';
 
 export default function GeneralProgramming({ overrideDate }: { overrideDate?: string }) {
   const { user } = useAuth();
@@ -410,8 +411,17 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
                         <td className="px-4 py-3 text-gray-700 font-medium">
                           {m.zoneSnapshot || '-'}
                         </td>
-                        <td className="px-4 py-3 font-mono text-gray-600 text-[11px]">
-                          {m.startTime || '-'}{m.endTime ? ` a ${m.endTime}` : ''}
+                        <td className="px-4 py-3 font-mono text-gray-700 text-[11px]">
+                          {m.startTime ? (
+                            <span>
+                              {m.startTime}{m.endTime ? ` a ${m.endTime}` : ''}
+                              {calculateDuration(m.startTime, m.endTime) && (
+                                <span className="ml-1.5 font-sans font-bold text-forest-900 bg-lime-100 border border-lime-300 px-1.5 py-0.5 rounded text-[10px]">
+                                  {calculateDuration(m.startTime, m.endTime)}
+                                </span>
+                              )}
+                            </span>
+                          ) : '-'}
                         </td>
                         <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">
                           {m.observations || '-'}

@@ -2,9 +2,33 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { repository } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, cn } from '@/src/components/ui';
+import { 
+  Card, CardContent, CardHeader, CardTitle, Button, Input, Label, cn,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter 
+} from '@/src/components/ui';
 import { Combobox } from '@/src/components/ui/combobox';
-import { Play, Square, Tractor, Calendar, MapPin, Check, Layers } from 'lucide-react';
+import { Play, Square, Tractor, Calendar, MapPin, Check, Layers, Clock, Pencil, Trash2, X, AlertCircle } from 'lucide-react';
+
+export function calculateDuration(startTime?: string, endTime?: string): string | null {
+  if (!startTime || !endTime) return null;
+  const partsStart = startTime.split(':').map(Number);
+  const partsEnd = endTime.split(':').map(Number);
+  if (partsStart.length < 2 || partsEnd.length < 2) return null;
+  if (isNaN(partsStart[0]) || isNaN(partsStart[1]) || isNaN(partsEnd[0]) || isNaN(partsEnd[1])) return null;
+
+  let startMins = partsStart[0] * 60 + partsStart[1];
+  let endMins = partsEnd[0] * 60 + partsEnd[1];
+  if (endMins < startMins) endMins += 24 * 60;
+
+  const diffMins = endMins - startMins;
+  const hours = Math.floor(diffMins / 60);
+  const mins = diffMins % 60;
+
+  if (hours === 0 && mins === 0) return '0 min';
+  if (hours === 0) return `${mins} min`;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+}
 
 export default function Machinery() {
   const { user } = useAuth();
@@ -16,12 +40,29 @@ export default function Machinery() {
   const [laborId, setLaborId] = useState('');
   const [activityId, setActivityId] = useState('');
   const [observations, setObservations] = useState('');
+  const [startTime, setStartTime] = useState(() => 
+    new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
+  );
   const [selectedZones, setSelectedZones] = useState<string[]>([]);
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const [todaysMachinery, setTodaysMachinery] = useState<any[]>([]);
+
+  // Estados para Modal de Edición
+  const [editingOp, setEditingOp] = useState<any | null>(null);
+  const [editEquipmentId, setEditEquipmentId] = useState('');
+  const [editOperatorId, setEditOperatorId] = useState('');
+  const [editLaborId, setEditLaborId] = useState('');
+  const [editActivityId, setEditActivityId] = useState('');
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
+  const [editStatus, setEditStatus] = useState('EN_PROGRESO');
+  const [editObservations, setEditObservations] = useState('');
+  const [editSelectedZones, setEditSelectedZones] = useState<string[]>([]);
+  const [editError, setEditError] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
 
   const isDirectivo = user?.role === 'DIRECTIVO';
 
@@ -110,10 +151,16 @@ export default function Machinery() {
     setSelectedZones([]);
   };
 
+  const toggleEditZone = (z: string) => {
+    setEditSelectedZones(prev => 
+      prev.includes(z) ? prev.filter(item => item !== z) : [...prev, z]
+    );
+  };
+
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
     const effectiveLaborId = laborId || machineryLabor?.id;
-    if (!equipmentId || !operatorId || !effectiveLaborId || selectedZones.length === 0) {
+    if (!equipmentId || !operatorId || !effectiveLaborId || selectedZones.length === 0 || !startTime) {
       setError('Complete los campos obligatorios (*) y seleccione al menos una zona');
       return;
     }
@@ -136,7 +183,7 @@ export default function Machinery() {
       idSupervisor: user?.idSupervisor || 'SUP001',
       supervisorId: user?.idSupervisor || 'SUP001',
       status: 'EN_PROGRESO',
-      startTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+      startTime: startTime || new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
     };
 
     const res = await repository.createMachineryOperation(payload);
@@ -148,23 +195,92 @@ export default function Machinery() {
       setActivityId('');
       setObservations('');
       setSelectedZones([]);
+      setStartTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' }));
     } else {
       setError(res.error || 'Error al guardar');
     }
   };
 
-  const handleStop = async (id: string, currentVersion: number) => {
-    if (window.confirm('¿Detener operación mecanizada?')) {
+  const handleStop = async (id: string, currentVersion?: number) => {
+    const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+    if (window.confirm(`¿Detener operación mecanizada a las ${nowTime}? Podrá editar el horario en cualquier momento.`)) {
       await repository.updateMachineryOperation(id, {
         status: 'FINALIZADA',
-        endTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+        endTime: nowTime
       }, currentVersion);
     }
   };
 
-  const handleCancel = async (id: string, currentVersion: number) => {
-    if (window.confirm('¿Cancelar operación?')) {
+  const handleCancel = async (id: string, currentVersion?: number) => {
+    if (window.confirm('¿Cancelar operación mecanizada?')) {
       await repository.updateMachineryOperation(id, { status: 'CANCELADA' }, currentVersion);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('¿Está seguro de eliminar esta operación de maquinaria? Esta acción no se puede deshacer.')) {
+      const res = await repository.deleteMachineryOperation(id);
+      if (!res.ok) {
+        alert(res.error || 'Error al eliminar');
+      }
+    }
+  };
+
+  const openEdit = (op: any) => {
+    setEditingOp(op);
+    setEditEquipmentId(op.equipmentId || op.equipment_id || '');
+    setEditOperatorId(op.operatorId || op.operator_id || '');
+    setEditLaborId(op.laborId || op.labor_id || (machineryLabor ? machineryLabor.id : ''));
+    setEditActivityId(op.activityId || op.activity_id || '');
+    setEditStartTime(op.startTime || op.start_time || '');
+    setEditEndTime(op.endTime || op.end_time || '');
+    setEditStatus(op.status || 'EN_PROGRESO');
+    setEditObservations(op.observations || '');
+
+    // Parse zones from zoneSnapshot
+    const currentZones = (op.zoneSnapshot || '')
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+    setEditSelectedZones(currentZones);
+    setEditError('');
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOp) return;
+
+    if (!editEquipmentId || !editOperatorId || editSelectedZones.length === 0 || !editStartTime) {
+      setEditError('Complete los campos obligatorios (*) y seleccione al menos una zona');
+      return;
+    }
+
+    setEditLoading(true);
+    setEditError('');
+
+    const opObj = catalogs.personnel?.find((p: any) => p.id === editOperatorId);
+    const opName = opObj?.name || opObj?.nombreCompleto || '';
+
+    const updatePayload: any = {
+      equipmentId: editEquipmentId,
+      operatorId: editOperatorId,
+      operatorName: opName,
+      laborId: editLaborId || (machineryLabor ? machineryLabor.id : null),
+      activityId: editActivityId || null,
+      startTime: editStartTime,
+      endTime: editEndTime || null,
+      status: editStatus,
+      zoneSnapshot: editSelectedZones.join(', '),
+      observations: editObservations || '',
+    };
+
+    const res = await repository.updateMachineryOperation(editingOp.id, updatePayload, editingOp.version);
+    setEditLoading(false);
+
+    if (res.ok) {
+      setEditingOp(null);
+    } else {
+      setEditError(res.error || 'Error al actualizar operación');
     }
   };
 
@@ -206,9 +322,23 @@ export default function Machinery() {
               <form onSubmit={handleStart} className="space-y-4">
                 {error && <div className="text-sm text-negative bg-negative/10 p-2.5 rounded-md">{error}</div>}
                 
-                <div>
-                  <Label>Fecha *</Label>
-                  <Input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label>Fecha *</Label>
+                    <Input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+                  </div>
+                  <div>
+                    <Label className="flex items-center gap-1">
+                      <Clock size={13} className="text-forest-700" /> Hora Inicio *
+                    </Label>
+                    <Input 
+                      type="time" 
+                      value={startTime} 
+                      onChange={e => setStartTime(e.target.value)} 
+                      required 
+                      className="font-medium"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -374,6 +504,8 @@ export default function Machinery() {
                   const op = catalogs.personnel?.find((p: any) => p.id === m.operatorId);
                   const labor = catalogs.labors?.find((l: any) => l.id === (m.laborId || m.labor_id));
                   const act = catalogs.activities?.find((a: any) => a.id === (m.activityId || m.activity_id));
+                  const duration = calculateDuration(m.startTime, m.endTime);
+
                   return (
                     <div key={m.id} className="border border-gray-200/80 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white hover:border-gray-300 transition-colors shadow-xs">
                       <div className="space-y-1">
@@ -399,10 +531,23 @@ export default function Machinery() {
                             <span className="font-semibold text-gray-700">Obs:</span> {m.observations}
                           </div>
                         )}
-                        <div className="text-xs font-mono text-gray-600 bg-gray-100 inline-block px-2 py-0.5 rounded mt-1">
-                          Inicio: {m.startTime || '--:--'} {m.endTime && `| Fin: ${m.endTime}`}
+                        
+                        {/* Horario y Duración total */}
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <div className="text-xs font-mono text-gray-700 bg-gray-100 inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-gray-200">
+                            <Clock size={12} className="text-gray-500" />
+                            <span>Inicio: <strong>{m.startTime || '--:--'}</strong></span>
+                            {m.endTime && <span>| Fin: <strong>{m.endTime}</strong></span>}
+                          </div>
+                          {duration && (
+                            <span className="text-xs font-bold text-forest-900 bg-lime-100/90 border border-lime-300 px-2 py-0.5 rounded-full">
+                              ⏱️ Total: {duration}
+                            </span>
+                          )}
                         </div>
                       </div>
+
+                      {/* Botones de Estado y Acciones */}
                       <div className="flex sm:flex-col items-end gap-2 self-stretch sm:self-auto justify-between sm:justify-start">
                         <span className={cn(
                           "px-2.5 py-1 text-xs rounded-full font-bold uppercase tracking-wider",
@@ -411,12 +556,57 @@ export default function Machinery() {
                         )}>
                           {m.status?.replace('_', ' ') || 'EN PROGRESO'}
                         </span>
-                        {!isDirectivo && m.status === 'EN_PROGRESO' && (
-                          <div className="flex gap-2 mt-1">
-                            <Button size="sm" variant="outline" className="text-red-700 border-2 border-red-300 hover:bg-red-50 text-xs h-7 px-2.5 font-bold" onClick={() => handleCancel(m.id, m.version)}>Cancelar</Button>
-                            <Button size="sm" className="bg-forest-900 hover:bg-forest-950 text-white text-xs h-7 px-2.5 font-bold" onClick={() => handleStop(m.id, m.version)}><Square size={12} className="mr-1 fill-white" /> Detener</Button>
-                          </div>
-                        )}
+
+                        <div className="flex items-center gap-1.5 mt-1">
+                          {/* Detener o Cancelar si está en progreso */}
+                          {!isDirectivo && m.status === 'EN_PROGRESO' && (
+                            <>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="text-red-700 border border-red-300 hover:bg-red-50 text-xs h-7 px-2 font-bold" 
+                                onClick={() => handleCancel(m.id, m.version)}
+                                title="Cancelar operación"
+                              >
+                                Cancelar
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                className="bg-forest-900 hover:bg-forest-950 text-white text-xs h-7 px-2.5 font-bold flex items-center gap-1" 
+                                onClick={() => handleStop(m.id, m.version)}
+                                title="Detener operación y registrar hora de fin"
+                              >
+                                <Square size={12} className="fill-white" /> Detener
+                              </Button>
+                            </>
+                          )}
+
+                          {/* Botón Editar */}
+                          {!isDirectivo && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-gray-700 border-gray-300 hover:bg-gray-100 text-xs h-7 px-2 font-medium flex items-center gap-1"
+                              onClick={() => openEdit(m)}
+                              title="Editar operación"
+                            >
+                              <Pencil size={12} /> Editar
+                            </Button>
+                          )}
+
+                          {/* Botón Eliminar */}
+                          {!isDirectivo && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 border-red-200 hover:bg-red-50 text-xs h-7 w-7 p-0 flex items-center justify-center"
+                              onClick={() => handleDelete(m.id)}
+                              title="Eliminar operación"
+                            >
+                              <Trash2 size={13} />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -426,6 +616,153 @@ export default function Machinery() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal de Edición de Operación */}
+      <Dialog open={!!editingOp} onOpenChange={(open) => !open && setEditingOp(null)}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-forest-950 flex items-center gap-2">
+              <Pencil size={18} className="text-forest-700" /> Editar Operación de Maquinaria
+            </DialogTitle>
+          </DialogHeader>
+
+          {editError && (
+            <div className="text-sm text-negative bg-negative/10 p-2.5 rounded-md flex items-center gap-2">
+              <AlertCircle size={16} /> {editError}
+            </div>
+          )}
+
+          <form onSubmit={handleSaveEdit} className="space-y-4 py-2">
+            <div>
+              <Label>Tractor / Equipo *</Label>
+              <Combobox
+                options={tractors.map((t: any) => ({
+                  value: t.id,
+                  label: t.code ? `${t.code} - ${t.name}` : t.name
+                }))}
+                value={editEquipmentId} 
+                onChange={setEditEquipmentId} 
+                placeholder="Seleccione tractor..."
+              />
+            </div>
+
+            <div>
+              <Label>Operador (Tractorista) *</Label>
+              <Combobox
+                options={operatorOptions.map((p: any) => ({
+                  value: p.id,
+                  label: p.name || p.nombreCompleto
+                }))}
+                value={editOperatorId} 
+                onChange={setEditOperatorId} 
+                placeholder="Seleccione operador..."
+              />
+            </div>
+
+            <div>
+              <Label>Actividad *</Label>
+              <Combobox
+                options={activities.map((a: any) => ({ value: a.id, label: a.name }))}
+                value={editActivityId}
+                onChange={setEditActivityId}
+                placeholder="Seleccione actividad de maquinaria..."
+              />
+            </div>
+
+            {/* Horarios de Inicio y Fin */}
+            <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+              <div>
+                <Label className="flex items-center gap-1 font-semibold text-gray-700">
+                  <Clock size={13} className="text-forest-700" /> Hora Inicio *
+                </Label>
+                <Input 
+                  type="time" 
+                  value={editStartTime} 
+                  onChange={e => setEditStartTime(e.target.value)} 
+                  required 
+                  className="font-medium bg-white"
+                />
+              </div>
+              <div>
+                <Label className="flex items-center gap-1 font-semibold text-gray-700">
+                  <Clock size={13} className="text-forest-700" /> Hora Fin
+                </Label>
+                <Input 
+                  type="time" 
+                  value={editEndTime} 
+                  onChange={e => setEditEndTime(e.target.value)} 
+                  className="font-medium bg-white"
+                />
+              </div>
+              {editStartTime && editEndTime && (
+                <div className="col-span-2 text-xs text-forest-800 font-bold bg-lime-100/90 border border-lime-300 p-2 rounded-lg text-center">
+                  ⏱️ Duración calculada: {calculateDuration(editStartTime, editEndTime)}
+                </div>
+              )}
+            </div>
+
+            {/* Estado */}
+            <div>
+              <Label>Estado de la Operación</Label>
+              <select
+                value={editStatus}
+                onChange={e => setEditStatus(e.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
+              >
+                <option value="EN_PROGRESO">EN PROGRESO</option>
+                <option value="FINALIZADA">FINALIZADA</option>
+                <option value="CANCELADA">CANCELADA</option>
+              </select>
+            </div>
+
+            {/* Zonas de Trabajo */}
+            <div className="space-y-1.5">
+              <Label className="font-semibold text-gray-700 flex items-center gap-1.5">
+                <MapPin size={14} className="text-forest-700" /> Zonas de Trabajo *
+              </Label>
+              <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-200 flex flex-wrap gap-1.5">
+                {zones.map((z: string) => {
+                  const isSelected = editSelectedZones.includes(z);
+                  return (
+                    <button
+                      key={z}
+                      type="button"
+                      onClick={() => toggleEditZone(z)}
+                      className={cn(
+                        "px-2.5 py-1 text-xs rounded-lg font-medium transition-all flex items-center gap-1 border",
+                        isSelected 
+                          ? "bg-forest-900 text-white border-forest-950 shadow-xs font-semibold" 
+                          : "bg-white text-gray-700 border-gray-200 hover:bg-forest-50 hover:border-forest-300"
+                      )}
+                    >
+                      {isSelected ? <Check size={12} className="text-lime-400 stroke-[3]" /> : <MapPin size={12} className="text-gray-400" />}
+                      <span>{z}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <Label>Observaciones</Label>
+              <Input
+                value={editObservations}
+                onChange={e => setEditObservations(e.target.value)}
+                placeholder="Notas u observaciones..."
+              />
+            </div>
+
+            <DialogFooter className="pt-3 gap-2">
+              <Button type="button" variant="outline" onClick={() => setEditingOp(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={editLoading} className="bg-forest-900 hover:bg-forest-950 text-white font-bold">
+                {editLoading ? 'Guardando...' : 'Guardar Cambios'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
