@@ -1,9 +1,12 @@
 import { supabase } from './supabase';
+import { offlineStore } from './offlineStore';
+import { syncManager } from './syncManager';
 
 export interface Result {
   ok: boolean;
   error?: string;
   data?: any;
+  offline?: boolean;
 }
 
 export type Unsubscribe = () => void;
@@ -70,6 +73,13 @@ class SupabaseRepository implements AgronomicRepository {
 
   // -- PROGRAMMING --
   subscribeProgramming(filters: any, callback: (data: any[]) => void): Unsubscribe {
+    // 1. Cargar caché offline inmediatamente si existe
+    if (filters.date) {
+      offlineStore.getDailyCache('programming', filters.date).then(cached => {
+        if (cached && Array.isArray(cached)) callback(cached);
+      });
+    }
+
     const fetchData = async () => {
       let query = supabase.from('programming').select('*');
       if (filters.date) query = query.eq('date', filters.date);
@@ -78,7 +88,7 @@ class SupabaseRepository implements AgronomicRepository {
       }
       const { data, error } = await query;
       if (error) {
-        console.error("Programming fetch error:", error);
+        console.warn("Programming fetch error (usando datos locales si existen):", error.message);
         return;
       }
       // Map back to camelCase properties for frontend compatibility
@@ -117,6 +127,12 @@ class SupabaseRepository implements AgronomicRepository {
           expectedTotalQuantity: item.expected_total_quantity,
         };
       });
+
+      // Guardar en caché local para acceso sin conexión
+      if (filters.date) {
+        offlineStore.saveDailyCache('programming', filters.date, mapped);
+      }
+
       callback(mapped);
     };
 
@@ -136,122 +152,134 @@ class SupabaseRepository implements AgronomicRepository {
   }
 
   async createProgramming(input: any): Promise<Result> {
-    try {
-      const locationIdVal = Array.isArray(input.locationIds) ? input.locationIds.join(',') : (input.locationId || null);
-      const payload = {
-        id: crypto.randomUUID(),
-        date: input.date,
-        supervisor_id: input.supervisorId || input.idSupervisor,
-        id_supervisor: input.idSupervisor || input.supervisorId,
-        labor_id: input.laborId,
-        activity_id: input.activityId,
-        location_id: locationIdVal,
-        zone_snapshot: input.zoneSnapshot || null,
-        lote_snapshot: input.loteSnapshot || null,
-        personnel_ids: input.personnelIds || [],
-        observations: input.observations || '',
-        performance: input.performance || null,
-        status: input.status || 'PENDIENTE',
-        creation_method: input.creationMethod || 'MANUAL',
-        needs_review: input.needsReview || false,
-        performance_per_person: input.performancePerPerson,
-        expected_total_quantity: input.expectedTotalQuantity,
-        version: 1,
-      };
+    const locationIdVal = Array.isArray(input.locationIds) ? input.locationIds.join(',') : (input.locationId || null);
+    const payload = {
+      id: crypto.randomUUID(),
+      date: input.date,
+      supervisor_id: input.supervisorId || input.idSupervisor,
+      id_supervisor: input.idSupervisor || input.supervisorId,
+      labor_id: input.laborId,
+      activity_id: input.activityId,
+      location_id: locationIdVal,
+      zone_snapshot: input.zoneSnapshot || null,
+      lote_snapshot: input.loteSnapshot || null,
+      personnel_ids: input.personnelIds,
+      status: input.status || 'PENDIENTE',
+      observations: input.observations || '',
+      creation_method: input.creationMethod || input.origin || 'MANUAL',
+      needs_review: input.needsReview ?? false,
+      performance_per_person: input.performancePerPerson ?? null,
+      expected_total_quantity: input.expectedTotalQuantity ?? null,
+      version: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
 
+    // Si no hay conexión a internet, encolar en Outbox localmente
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await offlineStore.addOutboxItem({
+        id: payload.id,
+        type: 'PROGRAMMING_CREATE',
+        payload
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, data: payload, offline: true };
+    }
+
+    try {
       const { data, error } = await supabase.from('programming').insert(payload).select().single();
       if (error) throw error;
       return { ok: true, data };
     } catch (e: any) {
-      return { ok: false, error: e.message };
+      console.warn("Fallo guardado en Supabase, guardando en Outbox local:", e.message);
+      await offlineStore.addOutboxItem({
+        id: payload.id,
+        type: 'PROGRAMMING_CREATE',
+        payload
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, data: payload, offline: true };
     }
   }
 
   async updateProgramming(id: string, input: any, expectedVersion?: number): Promise<Result> {
+    const payload: any = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (input.date) payload.date = input.date;
+    if (input.laborId) payload.labor_id = input.laborId;
+    if (input.activityId) payload.activity_id = input.activityId;
+    if (input.locationId !== undefined) {
+      payload.location_id = Array.isArray(input.locationIds) ? input.locationIds.join(',') : input.locationId;
+    }
+    if (input.zoneSnapshot) payload.zone_snapshot = input.zoneSnapshot;
+    if (input.loteSnapshot) payload.lote_snapshot = input.loteSnapshot;
+    if (input.personnelIds) payload.personnel_ids = input.personnelIds;
+    if (input.status) payload.status = input.status;
+    if (input.observations !== undefined) payload.observations = input.observations;
+    if (input.performancePerPerson !== undefined) payload.performance_per_person = input.performancePerPerson;
+    if (input.expectedTotalQuantity !== undefined) payload.expected_total_quantity = input.expectedTotalQuantity;
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await offlineStore.addOutboxItem({
+        id,
+        type: 'PROGRAMMING_UPDATE',
+        payload: { id, ...payload }
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, offline: true };
+    }
+
     try {
-      let currentVersion: number | undefined = undefined;
-      try {
-        const { data: current } = await supabase
-          .from('programming')
-          .select('version')
-          .eq('id', id)
-          .single();
-        if (current && typeof current.version === 'number') {
-          currentVersion = current.version;
-        }
-      } catch (e) { }
-
-      const payload: any = {
-        updated_at: new Date().toISOString(),
-      };
-
-      if (currentVersion !== undefined) {
-        payload.version = currentVersion + 1;
-      } else if (expectedVersion !== undefined && expectedVersion !== null) {
-        payload.version = (expectedVersion || 0) + 1;
-      }
-
-      if (input.date !== undefined) payload.date = input.date;
-      if (input.idSupervisor !== undefined || input.supervisorId !== undefined) {
-        payload.id_supervisor = input.idSupervisor || input.supervisorId;
-        payload.supervisor_id = input.supervisorId || input.idSupervisor;
-      }
-      if (input.laborId !== undefined) payload.labor_id = input.laborId;
-      if (input.activityId !== undefined) payload.activity_id = input.activityId;
-      if (input.locationIds !== undefined) {
-        payload.location_id = Array.isArray(input.locationIds) ? input.locationIds.join(',') : input.locationIds;
-      } else if (input.locationId !== undefined) {
-        payload.location_id = input.locationId;
-      }
-      if (input.zoneSnapshot !== undefined) payload.zone_snapshot = input.zoneSnapshot;
-      if (input.loteSnapshot !== undefined) payload.lote_snapshot = input.loteSnapshot;
-      if (input.personnelIds !== undefined) payload.personnel_ids = input.personnelIds;
-      if (input.observations !== undefined) payload.observations = input.observations;
-      if (input.performance !== undefined) payload.performance = input.performance;
-      if (input.performancePerPerson !== undefined) payload.performance_per_person = input.performancePerPerson;
-      if (input.expectedTotalQuantity !== undefined) payload.expected_total_quantity = input.expectedTotalQuantity;
-      if (input.status !== undefined) payload.status = input.status;
-      if (input.needsReview !== undefined) payload.needs_review = input.needsReview;
-
-      let { error } = await supabase.from('programming').update(payload).eq('id', id);
-      if (error) {
-        console.warn("Programming update standard payload failed, attempting fallback:", error.message);
-        const fallbackPayload: any = {
-          updated_at: new Date().toISOString(),
-          date: payload.date,
-          id_supervisor: payload.id_supervisor,
-          labor_id: payload.labor_id,
-          activity_id: payload.activity_id,
-          location_id: payload.location_id,
-          zone_snapshot: payload.zone_snapshot,
-          personnel_ids: payload.personnel_ids,
-          status: payload.status,
-          observations: payload.observations,
-        };
-        const resFallback = await supabase.from('programming').update(fallbackPayload).eq('id', id);
-        if (resFallback.error) throw resFallback.error;
-        error = null;
-      }
-
+      const { error } = await supabase.from('programming').update(payload).eq('id', id);
+      if (error) throw error;
       return { ok: true };
     } catch (e: any) {
-      console.error("updateProgramming error:", e);
-      return { ok: false, error: e.message };
+      console.warn("Fallo update en Supabase, guardando en Outbox:", e.message);
+      await offlineStore.addOutboxItem({
+        id,
+        type: 'PROGRAMMING_UPDATE',
+        payload: { id, ...payload }
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, offline: true };
     }
   }
 
   async deleteProgramming(id: string): Promise<Result> {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await offlineStore.addOutboxItem({
+        id,
+        type: 'PROGRAMMING_DELETE',
+        payload: { id }
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, offline: true };
+    }
     try {
       const { error } = await supabase.from('programming').delete().eq('id', id);
       if (error) throw error;
       return { ok: true };
     } catch (e: any) {
-      return { ok: false, error: e.message };
+      await offlineStore.addOutboxItem({
+        id,
+        type: 'PROGRAMMING_DELETE',
+        payload: { id }
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, offline: true };
     }
   }
 
   // -- ABSENCES --
   subscribeAbsences(filters: any, callback: (data: any[]) => void): Unsubscribe {
+    if (filters.date) {
+      offlineStore.getDailyCache('absences', filters.date).then(cached => {
+        if (cached && Array.isArray(cached)) callback(cached);
+      });
+    }
+
     const fetchData = async () => {
       let query = supabase.from('absences').select('*');
       if (filters.date) {
@@ -266,7 +294,7 @@ class SupabaseRepository implements AgronomicRepository {
       }
       const { data, error } = await query;
       if (error) {
-        console.error("Absences fetch error:", error);
+        console.warn("Absences fetch error (usando caché si existe):", error.message);
         return;
       }
       const mapped = (data || []).map((item: any) => ({
@@ -278,6 +306,11 @@ class SupabaseRepository implements AgronomicRepository {
         personnelName: item.personnel_name,
         customReason: item.custom_reason,
       }));
+
+      if (filters.date) {
+        offlineStore.saveDailyCache('absences', filters.date, mapped);
+      }
+
       callback(mapped);
     };
 
@@ -297,78 +330,119 @@ class SupabaseRepository implements AgronomicRepository {
   }
 
   async createAbsence(input: any): Promise<Result> {
-    try {
-      const payload = {
-        id: crypto.randomUUID(),
-        date: input.date,
-        supervisor_id: input.supervisorId || input.idSupervisor,
-        id_supervisor: input.idSupervisor || input.supervisorId,
-        personnel_id: input.personnelId,
-        personnel_doc: input.personnelDoc,
-        personnel_name: input.personnelName,
-        reason: input.reason,
-        custom_reason: input.customReason || null,
-        observations: input.observations || '',
-        status: input.status || 'REGISTRADA',
-        version: 1,
-      };
+    const payload = {
+      id: crypto.randomUUID(),
+      date: input.date,
+      supervisor_id: input.supervisorId || input.idSupervisor,
+      id_supervisor: input.idSupervisor || input.supervisorId,
+      personnel_id: input.personnelId,
+      personnel_doc: input.personnelDoc,
+      personnel_name: input.personnelName,
+      reason: input.reason,
+      custom_reason: input.customReason || null,
+      observations: input.observations || '',
+      status: input.status || 'REGISTRADA',
+      version: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
 
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await offlineStore.addOutboxItem({
+        id: payload.id,
+        type: 'ABSENCE_CREATE',
+        payload
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, data: payload, offline: true };
+    }
+
+    try {
       const { data, error } = await supabase.from('absences').insert(payload).select().single();
       if (error) throw error;
       return { ok: true, data };
     } catch (e: any) {
-      return { ok: false, error: e.message };
+      console.warn("Fallo guardado de inasistencia en Supabase, guardando en Outbox:", e.message);
+      await offlineStore.addOutboxItem({
+        id: payload.id,
+        type: 'ABSENCE_CREATE',
+        payload
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, data: payload, offline: true };
     }
   }
 
   async updateAbsence(id: string, input: any, expectedVersion?: number): Promise<Result> {
+    const payload: any = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (input.status !== undefined) payload.status = input.status;
+    if (input.observations !== undefined) payload.observations = input.observations;
+    if (input.reason !== undefined) payload.reason = input.reason;
+    if (input.customReason !== undefined) payload.custom_reason = input.customReason;
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await offlineStore.addOutboxItem({
+        id,
+        type: 'ABSENCE_UPDATE',
+        payload: { id, ...payload }
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, offline: true };
+    }
+
     try {
-      let currentVersion: number | undefined = undefined;
-      try {
-        const { data: current } = await supabase
-          .from('absences')
-          .select('version')
-          .eq('id', id)
-          .single();
-        if (current && typeof current.version === 'number') {
-          currentVersion = current.version;
-        }
-      } catch (e) { }
-
-      const payload: any = {
-        updated_at: new Date().toISOString(),
-      };
-      if (currentVersion !== undefined) {
-        payload.version = currentVersion + 1;
-      } else if (expectedVersion !== undefined && expectedVersion !== null) {
-        payload.version = (expectedVersion || 0) + 1;
-      }
-
-      if (input.status !== undefined) payload.status = input.status;
-      if (input.observations !== undefined) payload.observations = input.observations;
-      if (input.reason !== undefined) payload.reason = input.reason;
-
       const { error } = await supabase.from('absences').update(payload).eq('id', id);
       if (error) throw error;
       return { ok: true };
     } catch (e: any) {
-      console.error("updateAbsence error:", e);
-      return { ok: false, error: e.message };
+      console.warn("Fallo update de inasistencia en Supabase, guardando en Outbox:", e.message);
+      await offlineStore.addOutboxItem({
+        id,
+        type: 'ABSENCE_UPDATE',
+        payload: { id, ...payload }
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, offline: true };
     }
   }
 
   async deleteAbsence(id: string): Promise<Result> {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await offlineStore.addOutboxItem({
+        id,
+        type: 'ABSENCE_DELETE',
+        payload: { id }
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, offline: true };
+    }
+
     try {
       const { error } = await supabase.from('absences').delete().eq('id', id);
       if (error) throw error;
       return { ok: true };
     } catch (e: any) {
-      return { ok: false, error: e.message };
+      await offlineStore.addOutboxItem({
+        id,
+        type: 'ABSENCE_DELETE',
+        payload: { id }
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, offline: true };
     }
   }
 
   // -- MACHINERY --
   subscribeMachinery(filters: any, callback: (data: any[]) => void): Unsubscribe {
+    if (filters.date) {
+      offlineStore.getDailyCache('machinery', filters.date).then(cached => {
+        if (cached && Array.isArray(cached)) callback(cached);
+      });
+    }
+
     const fetchData = async () => {
       let query = supabase.from('machinery_operations').select('*');
       if (filters.date) query = query.eq('date', filters.date);
@@ -377,7 +451,7 @@ class SupabaseRepository implements AgronomicRepository {
       }
       const { data, error } = await query;
       if (error) {
-        console.error("Machinery fetch error:", error);
+        console.warn("Machinery fetch error (usando caché si existe):", error.message);
         return;
       }
       const mapped = (data || []).map((item: any) => {
@@ -433,6 +507,11 @@ class SupabaseRepository implements AgronomicRepository {
           endTime: eTime,
         };
       });
+
+      if (filters.date) {
+        offlineStore.saveDailyCache('machinery', filters.date, mapped);
+      }
+
       callback(mapped);
     };
 
@@ -452,137 +531,161 @@ class SupabaseRepository implements AgronomicRepository {
   }
 
   async createMachineryOperation(input: any): Promise<Result> {
+    const supId = input.supervisorId || input.idSupervisor || 'SUP001';
+    const opName = input.operatorName || input.operatorId || 'Operador';
+    const sTime = input.startTime || new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+    const eTime = input.endTime || input.end_time || '';
+
+    const combinedObservations = [
+      input.zoneSnapshot ? `[Zonas: ${input.zoneSnapshot}]` : '',
+      sTime ? `[Inicio: ${sTime}]` : '',
+      eTime ? `[Fin: ${eTime}]` : '',
+      input.observations || ''
+    ].filter(Boolean).join(' ').trim();
+
+    const payload: Record<string, any> = {
+      id: crypto.randomUUID(),
+      date: input.date,
+      supervisor_id: supId,
+      id_supervisor: supId,
+      equipment_id: input.equipmentId,
+      operator_name: opName,
+      activity_id: input.activityId || input.activity_id || null,
+      location_id: input.locationId || null,
+      observations: combinedObservations,
+      status: input.status || 'EN_PROGRESO',
+      version: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await offlineStore.addOutboxItem({
+        id: payload.id,
+        type: 'MACHINERY_CREATE',
+        payload
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, data: payload, offline: true };
+    }
+
     try {
-      const supId = input.supervisorId || input.idSupervisor || 'SUP001';
-      const opName = input.operatorName || input.operatorId || 'Operador';
-      const sTime = input.startTime || new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
-      const eTime = input.endTime || input.end_time || '';
-
-      const combinedObservations = [
-        input.zoneSnapshot ? `[Zonas: ${input.zoneSnapshot}]` : '',
-        sTime ? `[Inicio: ${sTime}]` : '',
-        eTime ? `[Fin: ${eTime}]` : '',
-        input.observations || ''
-      ].filter(Boolean).join(' ').trim();
-
-      const payload: Record<string, any> = {
-        id: crypto.randomUUID(),
-        date: input.date,
-        supervisor_id: supId,
-        id_supervisor: supId,
-        equipment_id: input.equipmentId,
-        operator_name: opName,
-        activity_id: input.activityId || input.activity_id || null,
-        location_id: input.locationId || null,
-        observations: combinedObservations,
-        status: input.status || 'EN_PROGRESO',
-        version: 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
       const { data, error } = await supabase.from('machinery_operations').insert(payload).select().single();
       if (error) throw error;
       return { ok: true, data };
     } catch (e: any) {
-      console.error("createMachineryOperation error:", e);
-      return { ok: false, error: e.message };
+      console.warn("Fallo guardado de maquinaria en Supabase, guardando en Outbox:", e.message);
+      await offlineStore.addOutboxItem({
+        id: payload.id,
+        type: 'MACHINERY_CREATE',
+        payload
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, data: payload, offline: true };
     }
   }
 
   async updateMachineryOperation(id: string, input: any, expectedVersion?: number): Promise<Result> {
+    let existingZone = '';
+    let existingStart = '';
+    let existingEnd = '';
+    let existingObs = '';
+
+    if (input.observations) existingObs = input.observations;
+
+    const zonePart = input.zoneSnapshot !== undefined ? input.zoneSnapshot : existingZone;
+    const startPart = input.startTime !== undefined ? input.startTime : (input.start_time !== undefined ? input.start_time : existingStart);
+    const endPart = input.endTime !== undefined ? input.endTime : (input.end_time !== undefined ? input.end_time : existingEnd);
+    const userObsPart = input.observations !== undefined ? input.observations : existingObs;
+
+    const combinedObservations = [
+      zonePart ? `[Zonas: ${zonePart}]` : '',
+      startPart ? `[Inicio: ${startPart}]` : '',
+      endPart ? `[Fin: ${endPart}]` : '',
+      userObsPart || ''
+    ].filter(Boolean).join(' ').trim();
+
+    const payload: any = {
+      updated_at: new Date().toISOString(),
+      observations: combinedObservations
+    };
+
+    if (input.status !== undefined) payload.status = input.status;
+    if (input.date !== undefined) payload.date = input.date;
+    if (input.equipmentId !== undefined || input.equipment_id !== undefined) {
+      payload.equipment_id = input.equipmentId || input.equipment_id;
+    }
+    if (input.operatorName !== undefined || input.operator_name !== undefined || input.operatorId !== undefined) {
+      payload.operator_name = input.operatorName || input.operator_name || input.operatorId;
+    }
+    if (input.activityId !== undefined || input.activity_id !== undefined) {
+      payload.activity_id = input.activityId || input.activity_id;
+    }
+    if (input.locationId !== undefined || input.location_id !== undefined) {
+      payload.location_id = input.locationId || input.location_id;
+    }
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await offlineStore.addOutboxItem({
+        id,
+        type: 'MACHINERY_UPDATE',
+        payload: { id, ...payload }
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, offline: true };
+    }
+
     try {
-      // Fetch existing row to preserve metadata (zones, start time, end time, observations)
-      const { data: current, error: fetchErr } = await supabase
-        .from('machinery_operations')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (fetchErr) {
-        console.warn("Could not fetch machinery row before update:", fetchErr.message);
-      }
-
-      let existingZone = '';
-      let existingStart = '';
-      let existingEnd = '';
-      let existingObs = '';
-
-      if (current && current.observations) {
-        const obs = current.observations;
-        const matchZ = obs.match(/\[Zonas:\s*([^\]]+)\]/i);
-        if (matchZ) existingZone = matchZ[1];
-        const matchI = obs.match(/\[Inicio:\s*([^\]]+)\]/i);
-        if (matchI) existingStart = matchI[1];
-        const matchF = obs.match(/\[Fin:\s*([^\]]+)\]/i);
-        if (matchF) existingEnd = matchF[1];
-        existingObs = obs
-          .replace(/\[Zonas:\s*[^\]]+\]/gi, '')
-          .replace(/\[Inicio:\s*[^\]]+\]/gi, '')
-          .replace(/\[Fin:\s*[^\]]+\]/gi, '')
-          .trim();
-      }
-
-      const zonePart = input.zoneSnapshot !== undefined ? input.zoneSnapshot : existingZone;
-      const startPart = input.startTime !== undefined ? input.startTime : (input.start_time !== undefined ? input.start_time : existingStart);
-      const endPart = input.endTime !== undefined ? input.endTime : (input.end_time !== undefined ? input.end_time : existingEnd);
-      const userObsPart = input.observations !== undefined ? input.observations : existingObs;
-
-      const combinedObservations = [
-        zonePart ? `[Zonas: ${zonePart}]` : '',
-        startPart ? `[Inicio: ${startPart}]` : '',
-        endPart ? `[Fin: ${endPart}]` : '',
-        userObsPart || ''
-      ].filter(Boolean).join(' ').trim();
-
-      const payload: any = {
-        updated_at: new Date().toISOString(),
-        observations: combinedObservations
-      };
-
-      if (current && typeof current.version === 'number') {
-        payload.version = current.version + 1;
-      } else if (expectedVersion !== undefined && expectedVersion !== null) {
-        payload.version = (expectedVersion || 0) + 1;
-      }
-
-      if (input.status !== undefined) payload.status = input.status;
-      if (input.date !== undefined) payload.date = input.date;
-      if (input.equipmentId !== undefined || input.equipment_id !== undefined) {
-        payload.equipment_id = input.equipmentId || input.equipment_id;
-      }
-      if (input.operatorName !== undefined || input.operator_name !== undefined || input.operatorId !== undefined) {
-        payload.operator_name = input.operatorName || input.operator_name || input.operatorId;
-      }
-      if (input.activityId !== undefined || input.activity_id !== undefined) {
-        payload.activity_id = input.activityId || input.activity_id;
-      }
-      if (input.locationId !== undefined || input.location_id !== undefined) {
-        payload.location_id = input.locationId || input.location_id;
-      }
-
       const { error } = await supabase.from('machinery_operations').update(payload).eq('id', id);
       if (error) throw error;
-
       return { ok: true };
     } catch (e: any) {
-      console.error("updateMachineryOperation error:", e);
-      return { ok: false, error: e.message };
+      console.warn("Fallo update de maquinaria en Supabase, guardando en Outbox:", e.message);
+      await offlineStore.addOutboxItem({
+        id,
+        type: 'MACHINERY_UPDATE',
+        payload: { id, ...payload }
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, offline: true };
     }
   }
 
   async deleteMachineryOperation(id: string): Promise<Result> {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await offlineStore.addOutboxItem({
+        id,
+        type: 'MACHINERY_DELETE',
+        payload: { id }
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, offline: true };
+    }
+
     try {
       const { error } = await supabase.from('machinery_operations').delete().eq('id', id);
       if (error) throw error;
       return { ok: true };
     } catch (e: any) {
-      return { ok: false, error: e.message };
+      await offlineStore.addOutboxItem({
+        id,
+        type: 'MACHINERY_DELETE',
+        payload: { id }
+      });
+      syncManager.refreshPendingCount();
+      return { ok: true, offline: true };
     }
   }
 
   // -- CATALOGS --
   subscribeCatalogs(callback: (data: any) => void): Unsubscribe {
+    // 1. Cargar inmediatamente catálogos de IndexedDB si existen
+    offlineStore.getCatalogs().then(cached => {
+      if (cached) {
+        callback(cached);
+      }
+    });
+
     const fetchAllCatalogs = async () => {
       try {
         const [
@@ -640,7 +743,7 @@ class SupabaseRepository implements AgronomicRepository {
           nombreCompleto: p.nombre_completo || p.name,
         }));
 
-        callback({
+        const catalogsPayload = {
           users: mappedUsers,
           supervisors: supervisors || [],
           personnel: mappedPersonnel,
@@ -650,9 +753,14 @@ class SupabaseRepository implements AgronomicRepository {
           equipment: equipment || [],
           performanceReferences: mappedPerformance,
           personnelNovelties: mappedNovelties,
-        });
+        };
+
+        // Guardar copia local en IndexedDB para cuando no haya red
+        offlineStore.saveCatalogs(catalogsPayload);
+
+        callback(catalogsPayload);
       } catch (err) {
-        console.error("Error loading catalogs:", err);
+        console.warn("Error al cargar catálogos desde Supabase (usando datos locales):", err);
       }
     };
 

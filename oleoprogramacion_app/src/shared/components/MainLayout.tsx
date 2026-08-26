@@ -1,4 +1,6 @@
 import SyncIndicator from './SyncIndicator';
+import { SyncStatusBadge } from './SyncStatusBadge';
+import { InstallPrompt } from './InstallPrompt';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { Navigate, Outlet, Link, useLocation } from 'react-router-dom';
@@ -243,13 +245,17 @@ export default function MainLayout() {
           <h1 className="text-xl font-semibold text-text-main">
             {filteredNav.find(n => n.href === location.pathname)?.name || 'Oleoflores'}
           </h1>
-          <div className="text-sm text-gray-500">
-            {new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Bogota' })}
+          <div className="flex items-center gap-4">
+            <SyncStatusBadge />
+            <div className="text-sm text-gray-500">
+              {new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Bogota' })}
+            </div>
           </div>
         </header>
         
         <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-32 md:pb-6">
           <div className="max-w-7xl mx-auto">
+            <InstallPrompt />
             <Outlet />
           </div>
         </main>
