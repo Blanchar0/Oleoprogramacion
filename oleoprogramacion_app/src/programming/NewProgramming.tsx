@@ -6,7 +6,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, Button, Input, Label, cn } from '@/src/components/ui';
 import { Combobox } from '@/src/components/ui/combobox';
 import { Labor, Activity, Location, Personnel, Novedad, VoiceExtraction, ProgrammingPerformance, ActivityPerformanceReference, ResolvedField } from '../types';
-import { Mic, MicOff, Square, RefreshCcw, Check, X, AlertCircle, Play, Pause, FileText, CheckCircle2 } from 'lucide-react';
+import { Mic, MicOff, Square, RefreshCcw, Check, X, AlertCircle, Play, Pause, FileText, CheckCircle2, CalendarPlus } from 'lucide-react';
 import { resolveVoiceData } from './voiceResolver';
 import { isOperative } from '../dashboard/Dashboard';
 
@@ -755,227 +755,281 @@ export default function NewProgramming() {
 
           {/* Fallback to form for manual editing/completion, always visible unless hiding completely for strict flow, but user wants manual completion possible */}
           {(method === 'form' || voiceState === 'BORRADOR_LISTO') && (
-            <form onSubmit={handleSubmit} className="space-y-6 mt-6">
+            <form onSubmit={handleSubmit} className="space-y-6 mt-2">
               
               {voiceState === 'BORRADOR_LISTO' && (
                 <div className="text-sm font-semibold text-gray-500 uppercase mb-2 border-b pb-2">Completar Formulario Manual</div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <Label htmlFor="date">Fecha</Label>
-                  <Input 
-                    id="date" 
-                    type="date" 
-                    value={date} 
-                    onChange={(e) => setDate(e.target.value)}
-                    required 
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="supervisor">Supervisor</Label>
-                  <Input 
-                    id="supervisor" 
-                    value={user?.name || ''} 
-                    disabled 
-                    className="bg-gray-50"
-                  />
-                </div>
-              </div>
+              {/* Banner de Contexto en Vivo */}
+              {(() => {
+                const currentLabor = labors.find(l => l.id === laborId);
+                const currentAct = activities.find(a => a.id === activityId);
+                return (
+                  <div className="bg-gradient-to-r from-emerald-800 to-forest-950 text-white p-3.5 rounded-xl shadow-md">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                          <CalendarPlus size={22} className="text-white" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wider text-emerald-200 font-bold block">
+                            📌 Estás Programando:
+                          </span>
+                          <span className="text-base font-extrabold text-white block">
+                            {currentLabor?.name || 'Seleccione Labor'} {currentAct?.name ? `— ${currentAct.name}` : ''}
+                          </span>
+                          <div className="flex items-center gap-2 text-xs text-emerald-100 mt-0.5 flex-wrap font-medium">
+                            <span>👥 <strong className="text-white">{selectedPersonnel.length}</strong> {selectedPersonnel.length === 1 ? 'Persona' : 'Personas'}</span>
+                            <span>•</span>
+                            <span>📍 <strong className="text-white">{zone || 'Sin Zona'}</strong> {selectedLocations.length > 0 ? `(${selectedLocations.length} lotes)` : ''}</span>
+                            <span>•</span>
+                            <span>📅 <strong className="text-white">{date}</strong></span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="self-start sm:self-center">
+                        <span className={cn(
+                          "px-3 py-1 rounded-full text-xs font-bold",
+                          selectedPersonnel.length > 0 && selectedLocations.length > 0 && activityId
+                            ? "bg-lime-400 text-forest-950 shadow-xs"
+                            : "bg-white/20 text-white"
+                        )}>
+                          {selectedPersonnel.length > 0 && selectedLocations.length > 0 && activityId
+                            ? '✓ Listo para guardar'
+                            : 'Completando pasos...'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div>
-                  <Label htmlFor="labor">Labor</Label>
-                  <Combobox 
-                    options={labors.map(l => ({ value: l.id, label: l.name }))}
-                    value={laborId}
-                    onChange={setLaborId}
-                    placeholder="Seleccione una labor"
-                  />
-                </div>
-                
-                <div>
-                  <Label htmlFor="activity">Actividad</Label>
-                  <Combobox 
-                    options={activities.map(a => ({ value: a.id, label: a.name, description: a.unit }))}
-                    value={activityId}
-                    onChange={setActivityId}
-                    placeholder={!laborId ? 'Seleccione labor primero' : activities.length === 0 ? 'Sin actividades' : 'Seleccione una actividad'}
-                    disabled={!laborId || activities.length === 0}
-                  />
-                  {laborId && activities.length === 0 && (
-                    <p className="text-xs text-warning mt-1">No hay actividades en esta labor.</p>
+              {/* 1️⃣ PASO 1: Fecha y Supervisor */}
+              <div className="p-4 bg-blue-50/60 rounded-xl border border-blue-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-blue-950 flex items-center gap-2 text-sm">
+                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white inline-flex items-center justify-center text-xs font-black">1</span>
+                    Fecha y Supervisor
+                  </h3>
+                  {date && (
+                    <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <CheckCircle2 size={12} className="text-emerald-700" /> Listo
+                    </span>
                   )}
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="date" className="text-xs font-semibold text-blue-900">Fecha de Programación *</Label>
+                    <Input 
+                      id="date" 
+                      type="date" 
+                      value={date} 
+                      onChange={(e) => setDate(e.target.value)}
+                      required 
+                      className="bg-white font-bold text-sm h-10 border-blue-300"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="supervisor" className="text-xs font-semibold text-blue-900">Supervisor Asignado</Label>
+                    <Input 
+                      id="supervisor" 
+                      value={user?.name || ''} 
+                      disabled 
+                      className="bg-white/80 font-bold text-sm h-10 border-blue-200 text-gray-700"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="zone">Zona</Label>
-                  <Combobox 
-                    options={zones.map(z => ({ value: String(z), label: String(z) }))}
-                    value={zone}
-                    onChange={(newZone) => {
-                      setZone(newZone);
-                      setSelectedLocations([]);
-                    }}
-                    placeholder="Seleccione zona"
-                  />
+              {/* 2️⃣ PASO 2: Labor y Actividad */}
+              <div className={cn(
+                "p-4 rounded-xl border space-y-3 transition-all",
+                laborId && activityId ? "bg-emerald-50/60 border-emerald-200/80" : "bg-gray-50 border-gray-200"
+              )}>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-emerald-950 flex items-center gap-2 text-sm">
+                    <span className="w-6 h-6 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center text-xs font-black">2</span>
+                    ¿Qué labor van a realizar?
+                  </h3>
+                  {laborId && activityId ? (
+                    <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <CheckCircle2 size={12} className="text-emerald-700" /> Listo
+                    </span>
+                  ) : (
+                    <span className="text-xs text-emerald-800 font-semibold italic">Seleccione labor y actividad</span>
+                  )}
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="lotes" className="font-semibold text-sm">
-                      Lotes {zone ? `(${selectedLocations.length} seleccionados)` : ''}
-                    </Label>
-                    {zone && lotes.length > 0 && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedLocations(lotes.map(l => l.id))}
-                          className="text-[11px] font-bold text-forest-800 hover:text-forest-950 hover:underline cursor-pointer uppercase tracking-wider"
-                        >
-                          Seleccionar Todos
-                        </button>
-                        <span className="text-gray-300">|</span>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedLocations([])}
-                          className="text-[11px] font-bold text-gray-500 hover:text-red-700 hover:underline cursor-pointer uppercase tracking-wider"
-                        >
-                          Limpiar
-                        </button>
-                      </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="labor" className="text-xs font-semibold text-emerald-900">Labor *</Label>
+                    <Combobox 
+                      options={labors.map(l => ({ value: l.id, label: l.name }))}
+                      value={laborId}
+                      onChange={setLaborId}
+                      placeholder="Seleccione una labor..."
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="activity" className="text-xs font-semibold text-emerald-900">Actividad *</Label>
+                    <Combobox 
+                      options={activities.map(a => ({ value: a.id, label: a.name, description: a.unit }))}
+                      value={activityId}
+                      onChange={setActivityId}
+                      placeholder={!laborId ? 'Seleccione labor primero' : activities.length === 0 ? 'Sin actividades' : 'Seleccione una actividad...'}
+                      disabled={!laborId || activities.length === 0}
+                    />
+                    {laborId && activities.length === 0 && (
+                      <p className="text-xs text-warning-700 font-semibold mt-1">No hay actividades registradas en esta labor.</p>
                     )}
                   </div>
+                </div>
+              </div>
 
-                  {!zone ? (
-                    <div className="p-3 text-xs text-gray-500 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-center">
-                      Seleccione una zona primero para ver los lotes disponibles.
-                    </div>
-                  ) : lotes.length === 0 ? (
-                    <div className="p-3 text-xs text-warning-700 bg-amber-50 border border-amber-200 rounded-lg text-center font-medium">
-                      No hay lotes registrados para la zona seleccionada.
-                    </div>
+              {/* 3️⃣ PASO 3: Ubicación (Zona y Lotes) */}
+              <div className={cn(
+                "p-4 rounded-xl border space-y-3 transition-all",
+                zone && selectedLocations.length > 0 ? "bg-purple-50/60 border-purple-200/80" : "bg-gray-50 border-gray-200"
+              )}>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-purple-950 flex items-center gap-2 text-sm">
+                    <span className="w-6 h-6 rounded-full bg-purple-600 text-white inline-flex items-center justify-center text-xs font-black">3</span>
+                    ¿En qué lugar van a trabajar?
+                  </h3>
+                  {zone && selectedLocations.length > 0 ? (
+                    <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <CheckCircle2 size={12} className="text-emerald-700" /> {selectedLocations.length} Lote{selectedLocations.length > 1 ? 's' : ''}
+                    </span>
                   ) : (
-                    <div className="space-y-2">
-                      {lotes.length > 8 && (
-                        <Input
-                          placeholder="Buscar lote por código o nombre..."
-                          value={loteSearchTerm}
-                          onChange={(e) => setLoteSearchTerm(e.target.value)}
-                          className="text-xs h-8 bg-white"
-                        />
-                      )}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-44 overflow-y-auto p-2.5 bg-gray-50/80 border border-gray-200 rounded-lg">
-                        {filteredLotes.map(lote => {
-                          const isSelected = selectedLocations.includes(lote.id);
-                          return (
-                            <div
-                              key={lote.id}
-                              onClick={() => toggleLocation(lote.id)}
-                              className={cn(
-                                "flex items-center justify-between p-2 rounded-md border text-xs font-semibold cursor-pointer transition-all select-none shadow-2xs",
-                                isSelected
-                                  ? "bg-primary text-white border-primary-dark shadow-xs"
-                                  : "bg-white text-gray-700 border-gray-200 hover:border-primary/40 hover:bg-gray-100/80"
-                              )}
-                            >
-                              <span className="truncate mr-1.5">{lote.name}</span>
-                              <div className={cn(
-                                "w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors",
-                                isSelected ? "bg-white text-primary border-white" : "border-gray-300 bg-white"
-                              )}>
-                                {isSelected && <Check size={11} className="stroke-[3]" />}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {selectedLocations.length > 0 && (
-                        <div className="text-[11px] text-forest-800 font-medium flex items-center gap-1">
-                          <Check size={12} className="text-forest-700" />
-                          <span>{selectedLocations.length} lote{selectedLocations.length > 1 ? 's' : ''} seleccionado{selectedLocations.length > 1 ? 's' : ''} para esta programación.</span>
+                    <span className="text-xs text-purple-800 font-semibold italic">Pendiente zona y lotes</span>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="zone" className="text-xs font-semibold text-purple-900">Zona de Trabajo *</Label>
+                    <Combobox 
+                      options={zones.map(z => ({ value: String(z), label: String(z) }))}
+                      value={zone}
+                      onChange={(newZone) => {
+                        setZone(newZone);
+                        setSelectedLocations([]);
+                      }}
+                      placeholder="Seleccione zona..."
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="lotes" className="font-semibold text-xs text-purple-900">
+                        Lotes {zone ? `(${selectedLocations.length} seleccionados)` : ''} *
+                      </Label>
+                      {zone && lotes.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLocations(lotes.map(l => l.id))}
+                            className="text-[11px] font-bold text-purple-800 hover:text-purple-950 hover:underline cursor-pointer uppercase tracking-wider"
+                          >
+                            Seleccionar Todos
+                          </button>
+                          <span className="text-gray-300">|</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLocations([])}
+                            className="text-[11px] font-bold text-gray-500 hover:text-red-700 hover:underline cursor-pointer uppercase tracking-wider"
+                          >
+                            Limpiar
+                          </button>
                         </div>
                       )}
                     </div>
-                  )}
+
+                    {!zone ? (
+                      <div className="p-3 text-xs text-gray-500 bg-white border border-dashed border-gray-300 rounded-lg text-center">
+                        Seleccione una zona primero para desplegar los lotes disponibles.
+                      </div>
+                    ) : lotes.length === 0 ? (
+                      <div className="p-3 text-xs text-warning-700 bg-amber-50 border border-amber-200 rounded-lg text-center font-medium">
+                        No hay lotes registrados para la zona seleccionada.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {lotes.length > 8 && (
+                          <Input
+                            placeholder="Buscar lote por código o nombre..."
+                            value={loteSearchTerm}
+                            onChange={(e) => setLoteSearchTerm(e.target.value)}
+                            className="text-xs h-8 bg-white"
+                          />
+                        )}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-44 overflow-y-auto p-2.5 bg-white border border-purple-200 rounded-lg">
+                          {filteredLotes.map(lote => {
+                            const isSelected = selectedLocations.includes(lote.id);
+                            return (
+                              <div
+                                key={lote.id}
+                                onClick={() => toggleLocation(lote.id)}
+                                className={cn(
+                                  "flex items-center justify-between p-2 rounded-md border text-xs font-semibold cursor-pointer transition-all select-none shadow-2xs",
+                                  isSelected
+                                    ? "bg-purple-700 text-white border-purple-800 shadow-xs font-bold"
+                                    : "bg-gray-50 text-gray-700 border-gray-200 hover:border-purple-300 hover:bg-purple-50/50"
+                                )}
+                              >
+                                <span className="truncate mr-1.5">{lote.name}</span>
+                                <div className={cn(
+                                  "w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors",
+                                  isSelected ? "bg-white text-purple-700 border-white" : "border-gray-300 bg-white"
+                                )}>
+                                  {isSelected && <Check size={11} className="stroke-[3]" />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {selectedLocations.length > 0 && (
+                          <div className="text-[11px] text-purple-900 font-medium flex items-center gap-1">
+                            <Check size={12} className="text-purple-700" />
+                            <span>{selectedLocations.length} lote{selectedLocations.length > 1 ? 's' : ''} seleccionado{selectedLocations.length > 1 ? 's' : ''} para esta labor.</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-              
-              {/* Performance / Rendimiento (Only show if an activity is selected) */}
-              {activityId && (
-                <div className="border border-gray-200 rounded-lg p-4 bg-gray-50/50">
-                  <div className="flex justify-between items-center mb-4">
-                    <Label className="mb-0 text-base">Rendimiento Estimado ({performance.unit})</Label>
-                    <Button 
-                      type="button" 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => setIsEditingPerformance(!isEditingPerformance)}
-                      className="text-xs h-7 text-primary font-bold hover:bg-forest-100"
-                    >
-                      {isEditingPerformance ? 'Bloquear' : 'Modificar Rendimiento'}
-                    </Button>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="perfPerPerson" className="text-xs text-gray-500 uppercase">Por persona / día</Label>
-                      <Input
-                        id="perfPerPerson"
-                        type="number"
-                        step="0.01"
-                        disabled={!isEditingPerformance}
-                        value={performance.performancePerPersonDay !== null ? performance.performancePerPersonDay : ''}
-                        onChange={(e) => {
-                          const val = e.target.value === '' ? null : parseFloat(e.target.value);
-                          setPerformance(prev => ({
-                            ...prev,
-                            performancePerPersonDay: val,
-                            plannedQuantity: val !== null ? val * selectedPersonnel.length : null,
-                            wasManuallyEdited: true
-                          }));
-                        }}
-                        className={!isEditingPerformance ? "bg-gray-100 font-medium" : "font-medium border-primary"}
-                        placeholder="N/A"
-                      />
-                      {!isEditingPerformance && performance.referencePerformancePerPersonDay !== null && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Estándar: {performance.referencePerformancePerPersonDay} {performance.unit}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <Label htmlFor="totalPerf" className="text-xs text-gray-500 uppercase">Cantidad Total ({selectedPersonnel.length} personas)</Label>
-                      <Input
-                        id="totalPerf"
-                        type="number"
-                        disabled
-                        value={performance.plannedQuantity !== null ? performance.plannedQuantity.toFixed(2) : ''}
-                        className="bg-gray-100 font-medium"
-                        placeholder="N/A"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
 
-              {/* Personnel Selection */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50/50">
-                <div className="flex justify-between items-center mb-4">
-                  <Label className="mb-0 text-base">Personal Asignado ({selectedPersonnel.length}) / {filteredPersonnel.length} Resultados</Label>
+              {/* 4️⃣ PASO 4: Personal Asignado */}
+              <div className={cn(
+                "p-4 rounded-xl border space-y-3 transition-all",
+                selectedPersonnel.length > 0 ? "bg-amber-50/60 border-amber-200/80" : "bg-gray-50 border-gray-200"
+              )}>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-amber-950 flex items-center gap-2 text-sm">
+                    <span className="w-6 h-6 rounded-full bg-amber-600 text-white inline-flex items-center justify-center text-xs font-black">4</span>
+                    ¿Quiénes van a trabajar?
+                  </h3>
+                  {selectedPersonnel.length > 0 ? (
+                    <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <CheckCircle2 size={12} className="text-emerald-700" /> {selectedPersonnel.length} Personas
+                    </span>
+                  ) : (
+                    <span className="text-xs text-amber-800 font-semibold italic">0 Personas asignadas</span>
+                  )}
                 </div>
                 
                 <Input 
                   placeholder="Buscar por nombre o cédula..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="mb-4"
+                  className="bg-white h-9"
                 />
-                <div className="h-[40vh] md:h-64 overflow-y-auto border border-gray-200 rounded-md bg-white p-2">
+                <div className="h-[40vh] md:h-64 overflow-y-auto border border-amber-200/80 rounded-md bg-white p-2">
                   {filteredPersonnel.length === 0 ? (
-                    <div className="text-center text-sm text-gray-500 py-4">No se encontró personal</div>
+                    <div className="text-center text-sm text-gray-500 py-4">No se encontró personal disponible</div>
                   ) : (
                     <div className="space-y-1">
                       {filteredPersonnel.map(p => {
@@ -999,24 +1053,24 @@ export default function NewProgramming() {
                               isDisabled 
                                 ? "bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed"
                                 : isSelected 
-                                  ? "bg-primary/5 border-primary text-primary cursor-pointer" 
-                                  : "bg-white border-transparent hover:bg-gray-50 text-gray-700 hover:border-gray-200 cursor-pointer"
+                                  ? "bg-amber-100/90 border-amber-400 text-amber-950 font-semibold cursor-pointer shadow-2xs" 
+                                  : "bg-white border-gray-200 hover:bg-amber-50/50 text-gray-700 cursor-pointer"
                             )}
                           >
                             <div>
-                              <div className="font-medium text-sm">{p.name}</div>
-                              <div className="text-xs opacity-80">
+                              <div className="font-bold text-sm">{p.name}</div>
+                              <div className="text-xs text-gray-600">
                                 C.C. {p.documento} 
-                                {novedad && <span className="ml-2 font-semibold text-red-600">({novedad.tipo} hasta {novedad.fechaFin})</span>}
-                                {isProgrammed && <span className="ml-2 font-semibold text-red-600">(Ya programado)</span>}
-                                {isMachinery && <span className="ml-2 font-semibold text-red-600">(En maquinaria)</span>}
+                                {novedad && <span className="ml-2 font-bold text-red-600">({novedad.tipo} hasta {novedad.fechaFin})</span>}
+                                {isProgrammed && <span className="ml-2 font-bold text-red-600">(Ya programado)</span>}
+                                {isMachinery && <span className="ml-2 font-bold text-red-600">(En maquinaria)</span>}
                               </div>
                             </div>
                             <div className={cn(
                               "w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0",
-                              isDisabled ? "border-gray-300 bg-gray-200" : isSelected ? "border-primary bg-primary" : "border-gray-300"
+                              isDisabled ? "border-gray-300 bg-gray-200" : isSelected ? "border-amber-600 bg-amber-600" : "border-gray-300"
                             )}>
-                              {isSelected && <Check size={12} className="text-white" />}
+                              {isSelected && <Check size={12} className="text-white stroke-[3]" />}
                             </div>
                           </div>
                         )
@@ -1026,25 +1080,95 @@ export default function NewProgramming() {
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="obs">Observaciones (Opcional)</Label>
-                <Input 
-                  id="obs"
-                  value={observations}
-                  onChange={(e) => setObservations(e.target.value)}
-                  placeholder="Notas adicionales..."
-                />
+              {/* 5️⃣ PASO 5: Rendimiento Estimado y Observaciones */}
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm">
+                    <span className="w-6 h-6 rounded-full bg-gray-700 text-white inline-flex items-center justify-center text-xs font-black">5</span>
+                    Rendimiento y Observaciones
+                  </h3>
+                </div>
+
+                {/* Rendimiento (Only show if an activity is selected) */}
+                {activityId && (
+                  <div className="border border-gray-200 rounded-lg p-3 bg-white space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label className="mb-0 text-xs font-bold text-gray-800">Rendimiento Estimado ({performance.unit})</Label>
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setIsEditingPerformance(!isEditingPerformance)}
+                        className="text-xs h-7 text-forest-800 font-bold hover:bg-forest-100"
+                      >
+                        {isEditingPerformance ? 'Bloquear' : 'Modificar Rendimiento'}
+                      </Button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="perfPerPerson" className="text-[11px] text-gray-500 uppercase font-semibold">Por persona / día</Label>
+                        <Input
+                          id="perfPerPerson"
+                          type="number"
+                          step="0.01"
+                          disabled={!isEditingPerformance}
+                          value={performance.performancePerPersonDay !== null ? performance.performancePerPersonDay : ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                            setPerformance(prev => ({
+                              ...prev,
+                              performancePerPersonDay: val,
+                              plannedQuantity: val !== null ? val * selectedPersonnel.length : null,
+                              wasManuallyEdited: true
+                            }));
+                          }}
+                          className={!isEditingPerformance ? "bg-gray-100 font-bold text-sm" : "font-bold text-sm border-forest-600"}
+                          placeholder="N/A"
+                        />
+                        {!isEditingPerformance && performance.referencePerformancePerPersonDay !== null && (
+                          <p className="text-[11px] text-gray-500 mt-1">
+                            Estándar: {performance.referencePerformancePerPersonDay} {performance.unit}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <Label htmlFor="totalPerf" className="text-[11px] text-gray-500 uppercase font-semibold">Cantidad Total ({selectedPersonnel.length} personas)</Label>
+                        <Input
+                          id="totalPerf"
+                          type="number"
+                          disabled
+                          value={performance.plannedQuantity !== null ? performance.plannedQuantity.toFixed(2) : ''}
+                          className="bg-gray-100 font-bold text-sm text-forest-900"
+                          placeholder="N/A"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <Label htmlFor="obs" className="text-xs font-semibold text-gray-700">Observaciones (Opcional)</Label>
+                  <Input 
+                    id="obs"
+                    value={observations}
+                    onChange={(e) => setObservations(e.target.value)}
+                    placeholder="Notas adicionales de la labor..."
+                    className="bg-white"
+                  />
+                </div>
               </div>
 
-              {/* Mobile sticky button container */}
-              <div className="fixed md:static bottom-16 md:bottom-auto left-0 right-0 bg-white md:bg-transparent border-t md:border-t-0 border-gray-200 p-4 md:p-0 z-10 flex justify-end">
+              {/* Botón de Guardado Prominente */}
+              <div className="pt-2">
                 <Button 
                   type="submit" 
                   size="lg" 
                   disabled={loading || !laborId || (activities.length > 0 && !activityId) || !zone || selectedLocations.length === 0 || selectedPersonnel.length === 0} 
-                  className="w-full md:w-auto min-h-[48px] px-8 shadow-md"
+                  className="w-full h-14 text-base font-black bg-forest-900 hover:bg-forest-950 text-white shadow-xl rounded-xl flex items-center justify-center gap-2"
                 >
-                  {loading ? 'Procesando...' : isEditing ? 'Guardar Cambios' : 'Crear Pendiente'}
+                  <CheckCircle2 size={22} className="text-lime-400 stroke-[3]" />
+                  {loading ? 'Procesando...' : isEditing ? 'Guardar Cambios de Programación' : 'Crear Pendiente de Programación'}
                 </Button>
               </div>
 

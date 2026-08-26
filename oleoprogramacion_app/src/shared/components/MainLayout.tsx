@@ -65,21 +65,93 @@ export default function MainLayout() {
   }, [isEnlargedSupervisor]);
 
   const navigation = [
-    { name: 'Dashboard', shortName: 'Dashboard', href: '/', icon: Home, roles: ['ADMIN', 'DIRECTIVO'] },
-    { name: 'Nueva Programación', shortName: 'Nueva Prog.', href: '/programming/new', icon: CalendarPlus, roles: ['SUPERVISOR'] },
-    { name: 'Pendientes', shortName: 'Pendientes', href: '/programming/pending', icon: CheckSquare, roles: ['SUPERVISOR'] },
-    { name: 'Programación General', shortName: 'Prog. General', href: '/programming/all', icon: Clock, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
-    { name: 'Inasistencias', shortName: 'Inasistencias', href: '/absences', icon: UserX, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
-    { name: 'Novedades', shortName: 'Novedades', href: '/novedades', icon: CalendarDays, roles: ['ADMIN', 'DIRECTIVO'] },
-    { name: 'Maquinaria', shortName: 'Maquinaria', href: '/machinery', icon: Tractor, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
-    { name: 'Catálogos', shortName: 'Catálogos', href: '/admin/catalogs', icon: Settings, roles: ['ADMIN'] },
+    { 
+      name: 'Dashboard', 
+      shortName: 'Dashboard', 
+      href: '/', 
+      icon: Home, 
+      roles: ['ADMIN', 'DIRECTIVO'],
+      activeBg: 'bg-forest-900 text-white shadow-md',
+      activeText: 'text-forest-950 font-bold',
+      iconColor: 'text-forest-800'
+    },
+    { 
+      name: 'Nueva Programación', 
+      shortName: 'Nueva Prog.', 
+      href: '/programming/new', 
+      icon: CalendarPlus, 
+      roles: ['SUPERVISOR'],
+      activeBg: 'bg-emerald-600 text-white shadow-md',
+      activeText: 'text-emerald-950 font-bold',
+      iconColor: 'text-emerald-700'
+    },
+    { 
+      name: 'Pendientes', 
+      shortName: 'Pendientes', 
+      href: '/programming/pending', 
+      icon: CheckSquare, 
+      roles: ['SUPERVISOR'],
+      activeBg: 'bg-amber-600 text-white shadow-md',
+      activeText: 'text-amber-950 font-bold',
+      iconColor: 'text-amber-700'
+    },
+    { 
+      name: 'Programación General', 
+      shortName: 'Prog. General', 
+      href: '/programming/all', 
+      icon: Clock, 
+      roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'],
+      activeBg: 'bg-blue-600 text-white shadow-md',
+      activeText: 'text-blue-950 font-bold',
+      iconColor: 'text-blue-700'
+    },
+    { 
+      name: 'Inasistencias', 
+      shortName: 'Inasistencias', 
+      href: '/absences', 
+      icon: UserX, 
+      roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'],
+      activeBg: 'bg-red-600 text-white shadow-md',
+      activeText: 'text-red-950 font-bold',
+      iconColor: 'text-red-700'
+    },
+    { 
+      name: 'Novedades', 
+      shortName: 'Novedades', 
+      href: '/novedades', 
+      icon: CalendarDays, 
+      roles: ['ADMIN', 'DIRECTIVO'],
+      activeBg: 'bg-orange-600 text-white shadow-md',
+      activeText: 'text-orange-950 font-bold',
+      iconColor: 'text-orange-700'
+    },
+    { 
+      name: 'Maquinaria', 
+      shortName: 'Maquinaria', 
+      href: '/machinery', 
+      icon: Tractor, 
+      roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'],
+      activeBg: 'bg-purple-600 text-white shadow-md',
+      activeText: 'text-purple-950 font-bold',
+      iconColor: 'text-purple-700'
+    },
+    { 
+      name: 'Catálogos', 
+      shortName: 'Catálogos', 
+      href: '/admin/catalogs', 
+      icon: Settings, 
+      roles: ['ADMIN'],
+      activeBg: 'bg-teal-700 text-white shadow-md',
+      activeText: 'text-teal-950 font-bold',
+      iconColor: 'text-teal-700'
+    },
   ];
 
   const filteredNav = navigation.filter(item => item.roles.includes(user.role));
   const homePath = user.role === 'SUPERVISOR' ? '/programming/all' : '/';
 
   return (
-    <div className="min-h-screen bg-bg-light flex flex-col md:flex-row pb-16 md:pb-0">
+    <div className="min-h-screen bg-bg-light flex flex-col md:flex-row pb-20 md:pb-0">
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between bg-primary text-white p-3.5 px-4 shadow-sm">
         <div className="flex items-center gap-3">
@@ -176,15 +248,15 @@ export default function MainLayout() {
           </div>
         </header>
         
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 md:pb-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">
           <div className="max-w-7xl mx-auto">
             <Outlet />
           </div>
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation - All sections compressed without "Más" button */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200/80 z-50 flex items-stretch h-16 safe-bottom shadow-lg px-1">
+      {/* Mobile Bottom Navigation - High Contrast, Large Icons with Distinct Strong Colors */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t-2 border-gray-300 z-50 flex items-stretch h-18 safe-bottom shadow-2xl px-1">
         {filteredNav.map((item) => {
           const isActive = location.pathname === item.href || 
                           (item.href !== '/' && location.pathname.startsWith(item.href));
@@ -193,16 +265,30 @@ export default function MainLayout() {
               key={item.name}
               to={item.href}
               className={cn(
-                "flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 transition-all text-center rounded-lg my-1 mx-0.5",
+                "flex-1 min-w-0 flex flex-col items-center justify-center py-1.5 px-0.5 transition-all text-center rounded-xl my-1 mx-0.5",
                 isActive 
-                  ? "text-forest-900 font-bold bg-forest-50/80 border border-forest-200/60 shadow-2xs" 
-                  : "text-gray-500 hover:text-forest-800 hover:bg-gray-50"
+                  ? "bg-gray-100/90 shadow-inner" 
+                  : "hover:bg-gray-50 active:scale-95"
               )}
             >
-              <item.icon size={18} className={cn("shrink-0 mb-0.5", isActive ? "stroke-[2.5px] text-forest-900" : "text-gray-500")} />
+              {/* Icon Container with Solid Vibrant Color Badge when active */}
+              <div className={cn(
+                "w-11 h-8 rounded-lg flex items-center justify-center transition-all",
+                isActive 
+                  ? item.activeBg 
+                  : cn("bg-gray-100/80", item.iconColor)
+              )}>
+                <item.icon 
+                  size={22} 
+                  className={cn(
+                    "shrink-0",
+                    isActive ? "text-white stroke-[2.5px]" : "stroke-[2.2px]"
+                  )} 
+                />
+              </div>
               <span className={cn(
-                "text-[9px] sm:text-[10px] tracking-tight leading-none truncate w-full text-center block",
-                isActive ? "font-bold text-forest-950" : "font-medium text-gray-600"
+                "text-[10px] tracking-tight leading-none truncate w-full text-center block mt-1",
+                isActive ? item.activeText : "font-semibold text-gray-600"
               )}>
                 {item.shortName || item.name}
               </span>

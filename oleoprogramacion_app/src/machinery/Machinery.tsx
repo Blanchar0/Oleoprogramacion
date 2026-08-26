@@ -362,168 +362,238 @@ export default function Machinery() {
       <div className={cn("grid gap-6", isDirectivo ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-3")}>
         {/* Formulario solo para NO Directivos */}
         {!isDirectivo && (
-          <Card className="lg:col-span-1 h-fit shadow-xs border-forest-900/10">
-            <CardHeader className="pb-3 border-b border-gray-100 bg-gradient-to-r from-forest-50/50 to-transparent">
-              <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
-                <Tractor size={18} className="text-forest-700" /> Nueva Operación
+          <Card className="lg:col-span-1 h-fit shadow-md border-forest-900/10">
+            <CardHeader className="pb-3 border-b border-gray-100 bg-gradient-to-r from-purple-50/80 to-transparent">
+              <CardTitle className="text-base font-bold text-forest-950 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Tractor size={20} className="text-purple-700" /> Nueva Operación
+                </span>
+                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full font-bold">
+                  3 Pasos
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
+              {/* Banner de Contexto en Vivo */}
+              {(() => {
+                const currentEq = tractors.find((t: any) => t.id === equipmentId);
+                const currentOp = operatorOptions.find((p: any) => p.id === operatorId);
+                const currentLabor = labors.find((l: any) => l.id === (laborId || machineryLabor?.id));
+                const currentAct = activities.find((a: any) => a.id === activityId);
+                return (
+                  <div className="bg-gradient-to-r from-purple-800 to-indigo-950 text-white p-3 rounded-xl shadow-xs mb-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                        <Tractor size={18} className="text-white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] uppercase tracking-wider text-purple-200 font-bold block">
+                          📌 Estás Programando:
+                        </span>
+                        <span className="text-sm font-extrabold text-white truncate block">
+                          {currentEq?.code ? `${currentEq.code} - ${currentEq.name}` : (currentEq?.name || 'Seleccione Equipo...')}
+                        </span>
+                        <div className="flex items-center gap-1.5 text-[11px] text-purple-100 mt-0.5 flex-wrap">
+                          <span>👤 <strong>{currentOp?.name || 'Sin Operador'}</strong></span>
+                          <span>•</span>
+                          <span>🌿 <strong>{currentAct?.name || currentLabor?.name || 'Labor'}</strong></span>
+                          <span>•</span>
+                          <span>📍 <strong>{selectedZones.length} Zonas</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <form onSubmit={handleStart} className="space-y-4">
                 {error && <div className="text-sm text-negative bg-negative/10 p-2.5 rounded-md">{error}</div>}
                 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label>Fecha *</Label>
-                    <Input type="date" value={date} onChange={e => setDate(e.target.value)} required />
-                  </div>
-                  <div>
-                    <Label className="flex items-center gap-1">
-                      <Clock size={13} className="text-forest-700" /> Hora Inicio *
+                {/* 1️⃣ PASO 1: Fecha y Horario */}
+                <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-bold text-blue-950 flex items-center gap-1.5 text-xs">
+                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white inline-flex items-center justify-center text-xs font-black">1</span>
+                      Fecha y Hora de Inicio *
                     </Label>
-                    <Input 
-                      type="time" 
-                      value={startTime} 
-                      onChange={e => setStartTime(e.target.value)} 
-                      required 
-                      className="font-medium"
+                    {date && startTime && (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                        <Check size={11} className="text-emerald-700 stroke-[3]" /> Listo
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[11px] text-blue-900 font-semibold">Fecha</Label>
+                      <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="bg-white font-bold text-sm h-9 border-blue-300" />
+                    </div>
+                    <div>
+                      <Label className="flex items-center gap-1 text-[11px] text-blue-900 font-semibold">
+                        <Clock size={12} className="text-blue-700" /> Hora Inicio
+                      </Label>
+                      <Input 
+                        type="time" 
+                        value={startTime} 
+                        onChange={e => setStartTime(e.target.value)} 
+                        required 
+                        className="font-bold text-sm h-9 bg-white border-blue-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2️⃣ PASO 2: Equipo y Tractorista */}
+                <div className={cn(
+                  "p-3 rounded-xl border space-y-2 transition-all",
+                  equipmentId && operatorId ? "bg-purple-50/60 border-purple-200/80" : "bg-gray-50 border-gray-200"
+                )}>
+                  <div className="flex items-center justify-between">
+                    <Label className="font-bold text-purple-950 flex items-center gap-1.5 text-xs">
+                      <span className="w-5 h-5 rounded-full bg-purple-600 text-white inline-flex items-center justify-center text-xs font-black">2</span>
+                      Tractor y Operador *
+                    </Label>
+                    {equipmentId && operatorId ? (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                        <Check size={11} className="text-emerald-700 stroke-[3]" /> Listo
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-purple-700 font-semibold italic">Pendiente</span>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] text-purple-900 font-semibold">Tractor / Equipo *</Label>
+                    <Combobox
+                      options={tractors.map((t: any) => ({
+                        value: t.id,
+                        label: t.code ? `${t.code} - ${t.name}` : t.name
+                      }))}
+                      value={equipmentId} 
+                      onChange={setEquipmentId} 
+                      placeholder="Seleccione tractor..."
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] text-purple-900 font-semibold">Operador (Tractorista) *</Label>
+                    <Combobox
+                      options={operatorOptions.map((p: any) => ({
+                        value: p.id,
+                        label: p.name || p.nombreCompleto
+                      }))}
+                      value={operatorId} 
+                      onChange={setOperatorId} 
+                      placeholder="Seleccione operador..."
                     />
                   </div>
                 </div>
 
-                <div>
-                  <Label>Tractor / Equipo *</Label>
-                  <Combobox
-                    options={tractors.map((t: any) => ({
-                      value: t.id,
-                      label: t.code ? `${t.code} - ${t.name}` : t.name
-                    }))}
-                    value={equipmentId} 
-                    onChange={setEquipmentId} 
-                    placeholder="Seleccione tractor..."
-                  />
-                </div>
-
-                <div>
-                  <Label>Operador (Tractorista) *</Label>
-                  <Combobox
-                    options={operatorOptions.map((p: any) => ({
-                      value: p.id,
-                      label: p.name || p.nombreCompleto
-                    }))}
-                    value={operatorId} 
-                    onChange={setOperatorId} 
-                    placeholder="Seleccione operador..."
-                  />
-                </div>
-
-                <div>
-                  <Label>Labor *</Label>
-                  <Combobox
-                    options={labors.map((l: any) => ({ value: l.id, label: l.name }))}
-                    value={laborId || machineryLabor?.id || ''}
-                    onChange={(val) => {
-                      setLaborId(val);
-                      setActivityId('');
-                    }}
-                    placeholder="Seleccione labor..."
-                  />
-                </div>
-
-                <div>
-                  <Label>Actividad *</Label>
-                  <Combobox
-                    options={activities.map((a: any) => ({ value: a.id, label: a.name }))}
-                    value={activityId}
-                    onChange={setActivityId}
-                    placeholder="Seleccione actividad de maquinaria..."
-                  />
-                </div>
-
-                {/* Selector Múltiple de Zonas */}
-                <div className="space-y-1.5">
+                {/* 3️⃣ PASO 3: Labor, Actividad y Zonas */}
+                <div className={cn(
+                  "p-3 rounded-xl border space-y-2 transition-all",
+                  activityId && selectedZones.length > 0 ? "bg-emerald-50/60 border-emerald-200/80" : "bg-gray-50 border-gray-200"
+                )}>
                   <div className="flex items-center justify-between">
-                    <Label className="flex items-center gap-1 text-xs">
-                      <MapPin size={13} className="text-forest-700" /> Zonas de Operación *
+                    <Label className="font-bold text-emerald-950 flex items-center gap-1.5 text-xs">
+                      <span className="w-5 h-5 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center text-xs font-black">3</span>
+                      Labor y Zonas de Operación *
                     </Label>
-                    <div className="flex items-center gap-2 text-[11px]">
-                      <button
-                        type="button"
-                        onClick={selectAllZones}
-                        className="text-forest-700 hover:text-forest-900 font-semibold underline"
-                      >
-                        Todas
-                      </button>
-                      <span className="text-gray-300">|</span>
-                      <button
-                        type="button"
-                        onClick={clearZones}
-                        className="text-gray-500 hover:text-gray-700 underline"
-                      >
-                        Limpiar
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Badges clicables de Zonas */}
-                  <div className="border border-gray-200 rounded-lg p-2.5 bg-gray-50/50 max-h-36 overflow-y-auto">
-                    {zones.length === 0 ? (
-                      <p className="text-xs text-gray-400">No hay zonas configuradas</p>
+                    {activityId && selectedZones.length > 0 ? (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                        <Check size={11} className="text-emerald-700 stroke-[3]" /> Listo
+                      </span>
                     ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {zones.map((z: string) => {
-                          const isSelected = selectedZones.includes(z);
-                          return (
-                            <button
-                              key={z}
-                              type="button"
-                              onClick={() => toggleZone(z)}
-                              className={cn(
-                                "text-xs font-semibold px-2.5 py-1 rounded-md transition-all flex items-center gap-1",
-                                isSelected
-                                  ? "bg-forest-900 text-white shadow-xs"
-                                  : "bg-white text-gray-700 border border-gray-200 hover:border-forest-700 hover:bg-forest-50/50"
-                              )}
-                            >
-                              {isSelected ? (
-                                <Check size={12} className="text-lime-400 stroke-[3]" />
-                              ) : (
-                                <MapPin size={12} className="text-gray-400" />
-                              )}
-                              <span>{z}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                      <span className="text-[10px] text-emerald-800 font-semibold italic">Pendiente</span>
                     )}
                   </div>
 
-                  {selectedZones.length > 0 ? (
-                    <div className="flex items-center gap-1.5 text-[11px] text-forest-800 bg-forest-50/80 px-2.5 py-1 rounded-md border border-forest-200">
-                      <Layers size={12} className="text-forest-700 shrink-0" />
-                      <span>
-                        <strong>{selectedZones.length}</strong> {selectedZones.length === 1 ? 'zona:' : 'zonas:'} <strong>{selectedZones.join(', ')}</strong>
-                      </span>
+                  <div>
+                    <Label className="text-[11px] text-emerald-900 font-semibold">Actividad *</Label>
+                    <Combobox
+                      options={activities.map((a: any) => ({ value: a.id, label: a.name }))}
+                      value={activityId}
+                      onChange={setActivityId}
+                      placeholder="Seleccione actividad de maquinaria..."
+                    />
+                  </div>
+
+                  {/* Selector Múltiple de Zonas */}
+                  <div className="space-y-1 pt-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="flex items-center gap-1 text-[11px] text-emerald-900 font-semibold">
+                        <MapPin size={12} className="text-emerald-700" /> Zonas de Trabajo ({selectedZones.length}) *
+                      </Label>
+                      <div className="flex items-center gap-2 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={selectAllZones}
+                          className="text-emerald-800 hover:text-emerald-950 font-bold underline"
+                        >
+                          Todas
+                        </button>
+                        <span className="text-gray-300">|</span>
+                        <button
+                          type="button"
+                          onClick={clearZones}
+                          className="text-gray-500 hover:text-red-700 underline font-semibold"
+                        >
+                          Limpiar
+                        </button>
+                      </div>
                     </div>
-                  ) : (
-                    <p className="text-[11px] text-gray-400 italic">
-                      Haga clic en las zonas donde operará la maquinaria
-                    </p>
-                  )}
+
+                    {/* Badges clicables de Zonas */}
+                    <div className="border border-emerald-200 rounded-lg p-2 bg-white max-h-32 overflow-y-auto">
+                      {zones.length === 0 ? (
+                        <p className="text-xs text-gray-400">No hay zonas configuradas</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {zones.map((z: string) => {
+                            const isSelected = selectedZones.includes(z);
+                            return (
+                              <button
+                                key={z}
+                                type="button"
+                                onClick={() => toggleZone(z)}
+                                className={cn(
+                                  "text-xs font-semibold px-2.5 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer",
+                                  isSelected
+                                    ? "bg-purple-900 text-white shadow-xs font-bold"
+                                    : "bg-gray-50 text-gray-700 border border-gray-200 hover:border-purple-600 hover:bg-purple-50/50"
+                                )}
+                              >
+                                {isSelected ? (
+                                  <Check size={12} className="text-lime-400 stroke-[3]" />
+                                ) : (
+                                  <MapPin size={12} className="text-gray-400" />
+                                )}
+                                <span>{z}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div>
-                  <Label htmlFor="machinery-obs">Observaciones (Opcional)</Label>
+                  <Label htmlFor="machinery-obs" className="text-xs font-semibold text-gray-700">Observaciones (Opcional)</Label>
                   <Input
                     id="machinery-obs"
                     value={observations}
                     onChange={(e) => setObservations(e.target.value)}
                     placeholder="Notas u observaciones de la operación..."
+                    className="bg-white"
                   />
                 </div>
 
-                <Button type="submit" disabled={loading} className="w-full shadow-md font-bold bg-forest-900 hover:bg-forest-950 text-white">
-                  <Play size={18} className="mr-2 fill-white" /> {loading ? 'Iniciando...' : 'Iniciar Operación'}
+                <Button 
+                  type="submit" 
+                  disabled={loading || !equipmentId || !operatorId || selectedZones.length === 0} 
+                  className="w-full h-13 shadow-xl font-black text-base bg-purple-900 hover:bg-purple-950 text-white rounded-xl flex items-center justify-center gap-2"
+                >
+                  <Play size={20} className="fill-white" /> {loading ? 'Iniciando...' : 'Iniciar Operación Mecanizada'}
                 </Button>
               </form>
             </CardContent>

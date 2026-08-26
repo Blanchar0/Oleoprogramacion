@@ -237,13 +237,40 @@ export default function Absences() {
       <div className={cn("grid gap-6", isDirectivo ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-3")}>
         {/* Formulario solo para NO Directivos (Supervisores / Admin) */}
         {!isDirectivo && (
-          <Card className="lg:col-span-1 h-fit shadow-xs border-forest-900/10">
-            <CardHeader className="pb-3 border-b border-gray-100 bg-gradient-to-r from-forest-50/50 to-transparent">
-              <CardTitle className="text-base font-bold text-gray-800 flex items-center gap-2">
-                <UserX size={18} className="text-forest-700" /> Registrar Inasistencia
+          <Card className="lg:col-span-1 h-fit shadow-md border-forest-900/10">
+            <CardHeader className="pb-3 border-b border-gray-100 bg-gradient-to-r from-red-50/80 to-transparent">
+              <CardTitle className="text-base font-bold text-gray-900 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <UserX size={20} className="text-red-600" /> Registrar Inasistencia
+                </span>
+                <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full font-bold">
+                  4 Pasos
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
+              {/* Banner de Contexto en Vivo */}
+              <div className="bg-gradient-to-r from-red-700 to-red-900 text-white p-3 rounded-xl shadow-xs mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                    <UserX size={18} className="text-white" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] uppercase tracking-wider text-red-200 font-bold block">
+                      📌 Estás reportando a:
+                    </span>
+                    <span className="text-sm font-extrabold text-white truncate block">
+                      {selectedPerson?.name || selectedPerson?.nombreCompleto || 'Seleccione una persona...'}
+                    </span>
+                    <div className="flex items-center gap-2 text-[11px] text-red-100 mt-0.5">
+                      <span>Motivo: <strong className="text-white">{reason}</strong></span>
+                      <span>•</span>
+                      <span>Fecha: <strong className="text-white">{date}</strong></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 {error && (
                   <div className="text-sm text-negative bg-negative/10 p-2.5 rounded-md flex items-center gap-2">
@@ -258,55 +285,145 @@ export default function Absences() {
                   </div>
                 )}
                 
-                <div>
-                  <Label>Fecha *</Label>
-                  <Input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+                {/* 1️⃣ PASO 1: Fecha */}
+                <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-bold text-blue-950 flex items-center gap-1.5 text-xs">
+                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white inline-flex items-center justify-center text-xs font-black">1</span>
+                      Fecha del Reporte *
+                    </Label>
+                    {date && (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                        <CheckCircle2 size={11} className="text-emerald-700" /> Listo
+                      </span>
+                    )}
+                  </div>
+                  <Input 
+                    type="date" 
+                    value={date} 
+                    onChange={e => setDate(e.target.value)} 
+                    required 
+                    className="bg-white font-bold text-sm h-10 border-blue-300"
+                  />
                 </div>
                 
-                <div>
-                  <Label>Persona *</Label>
+                {/* 2️⃣ PASO 2: Persona */}
+                <div className={cn(
+                  "p-3 rounded-xl border space-y-1.5 transition-all",
+                  personnelId ? "bg-amber-50/60 border-amber-200/80" : "bg-gray-50 border-gray-200"
+                )}>
+                  <div className="flex items-center justify-between">
+                    <Label className="font-bold text-amber-950 flex items-center gap-1.5 text-xs">
+                      <span className="w-5 h-5 rounded-full bg-amber-600 text-white inline-flex items-center justify-center text-xs font-black">2</span>
+                      ¿Quién no asistió? *
+                    </Label>
+                    {personnelId ? (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                        <CheckCircle2 size={11} className="text-emerald-700" /> Listo
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-amber-700 font-semibold italic">Pendiente</span>
+                    )}
+                  </div>
                   <Combobox 
                     options={allPersonnel.map((p:any) => ({ value: p.id, label: p.name || p.nombreCompleto, description: p.jobTitle }))}
                     value={personnelId}
                     onChange={setPersonnelId}
-                    placeholder="Seleccione persona..."
+                    placeholder="Buscar y seleccionar persona..."
                   />
+
                   {/* Banner preventivo si ya está programada */}
                   {personnelId && hasConflict && (
-                    <div className="mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-xs flex items-start gap-2 animate-fadeIn">
-                      <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div className="mt-2 p-2.5 bg-amber-100 border border-amber-300 rounded-lg text-amber-950 text-xs flex items-start gap-2 animate-fadeIn">
+                      <AlertTriangle size={16} className="text-amber-700 shrink-0 mt-0.5" />
                       <div>
                         <p className="font-bold">
-                          La persona se encuentra programada en {conflictActivityNames || 'actividades de hoy'}
+                          La persona se encuentra programada en: {conflictActivityNames || 'actividades de hoy'}
                         </p>
-                        <p className="text-[11px] text-amber-800 mt-0.5">
-                          Al hacer clic en registrar, el sistema le consultará para eliminarla de la programación general.
+                        <p className="text-[11px] text-amber-900 mt-0.5">
+                          Al registrar la inasistencia, el sistema le ofrecerá retirarla de la programación general.
                         </p>
                       </div>
                     </div>
                   )}
                 </div>
 
-                <div>
-                  <Label>Motivo *</Label>
-                  <Combobox 
-                    options={reasons.map(r => ({ value: r, label: r }))}
-                    value={reason}
-                    onChange={setReason}
-                  />
+                {/* 3️⃣ PASO 3: Motivo con Botones Grandes de 1 Toque */}
+                <div className="p-3 bg-red-50/50 rounded-xl border border-red-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-bold text-red-950 flex items-center gap-1.5 text-xs">
+                      <span className="w-5 h-5 rounded-full bg-red-600 text-white inline-flex items-center justify-center text-xs font-black">3</span>
+                      Motivo de Inasistencia (1 Toque) *
+                    </Label>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                      <CheckCircle2 size={11} className="text-emerald-700" /> Seleccionado
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { val: 'Incapacidad', label: 'Incapacidad', icon: '🩹', color: 'border-blue-300 text-blue-950 bg-blue-50/80', active: 'bg-blue-600 text-white border-blue-700 shadow-xs' },
+                      { val: 'Calamidad doméstica', label: 'Calamidad', icon: '🏠', color: 'border-amber-300 text-amber-950 bg-amber-50/80', active: 'bg-amber-600 text-white border-amber-700 shadow-xs' },
+                      { val: 'Permiso autorizado', label: 'Permiso', icon: '⏱️', color: 'border-emerald-300 text-emerald-950 bg-emerald-50/80', active: 'bg-emerald-600 text-white border-emerald-700 shadow-xs' },
+                      { val: 'Ausencia injustificada', label: 'Injustificada', icon: '❌', color: 'border-red-300 text-red-950 bg-red-50/80', active: 'bg-red-600 text-white border-red-700 shadow-xs' },
+                      { val: 'Vacaciones', label: 'Vacaciones', icon: '🏖️', color: 'border-purple-300 text-purple-950 bg-purple-50/80', active: 'bg-purple-600 text-white border-purple-700 shadow-xs' },
+                      { val: 'Suspensión', label: 'Suspensión', icon: '⚠️', color: 'border-rose-300 text-rose-950 bg-rose-50/80', active: 'bg-rose-600 text-white border-rose-700 shadow-xs' },
+                    ].map(btn => {
+                      const isSelected = reason === btn.val;
+                      return (
+                        <button
+                          key={btn.val}
+                          type="button"
+                          onClick={() => setReason(btn.val)}
+                          className={cn(
+                            "p-2 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-all text-left cursor-pointer",
+                            isSelected ? btn.active : cn(btn.color, "hover:opacity-90")
+                          )}
+                        >
+                          <span className="text-base">{btn.icon}</span>
+                          <span className="truncate">{btn.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Opción Otro si no es de las 6 principales */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setReason('Otro')}
+                      className={cn(
+                        "w-full p-1.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+                        reason === 'Otro' ? "bg-gray-800 text-white border-gray-900" : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"
+                      )}
+                    >
+                      <span>📝</span>
+                      <span>Otro Motivo / No especificado</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div>
-                  <Label>Observaciones (Opcional)</Label>
+                {/* 4️⃣ PASO 4: Observaciones y Guardar */}
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+                  <Label className="font-bold text-gray-800 flex items-center gap-1.5 text-xs">
+                    <span className="w-5 h-5 rounded-full bg-gray-700 text-white inline-flex items-center justify-center text-xs font-black">4</span>
+                    Observaciones (Opcional)
+                  </Label>
                   <Input 
                     value={observations} 
                     onChange={e => setObservations(e.target.value)} 
-                    placeholder="Detalles de la inasistencia..." 
+                    placeholder="Detalles adicionales..." 
+                    className="bg-white"
                   />
                 </div>
 
-                <Button type="submit" disabled={loading} className="w-full font-bold bg-forest-900 hover:bg-forest-950 text-white">
-                  {loading ? 'Procesando...' : 'Registrar Inasistencia'}
+                <Button 
+                  type="submit" 
+                  disabled={loading || !personnelId} 
+                  className="w-full h-12 text-base font-extrabold bg-red-700 hover:bg-red-800 text-white shadow-lg rounded-xl flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 size={20} />
+                  {loading ? 'Procesando...' : 'Confirmar y Registrar Inasistencia'}
                 </Button>
               </form>
             </CardContent>
