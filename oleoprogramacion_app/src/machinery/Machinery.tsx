@@ -106,6 +106,12 @@ export default function Machinery() {
   const [editError, setEditError] = useState('');
   const [editLoading, setEditLoading] = useState(false);
 
+  // Estados para Modales In-App de Detener, Cancelar y Eliminar
+  const [stoppingOp, setStoppingOp] = useState<{ op: any; endTime: string } | null>(null);
+  const [cancellingOp, setCancellingOp] = useState<any | null>(null);
+  const [deletingOpId, setDeletingOpId] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
   const isDirectivo = user?.role === 'DIRECTIVO';
 
   // Suscribirse a TODAS las operaciones de la fecha sin filtrar por supervisor
@@ -148,65 +154,32 @@ export default function Machinery() {
     if (!person) return false;
     const cargo = (person.jobTitle || person.laborCargo || person.cargo || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const cuadrilla = (person.cuadrilla || person.zona || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const tipo = (person.tipoPersonal || person.tipo_personal || person.type || '').toUpperCase();
-    
-    return cargo.includes('TRACTOR') || 
-           cargo.includes('OPERADOR') || 
-           cargo.includes('MAQUINARIA') ||
-           cuadrilla.includes('TRACTOR') || 
-           cuadrilla.includes('OPERADOR') ||
-           tipo.includes('TRACTOR');
+    return cargo.includes('TRACTOR') || cargo.includes('MAQUIN') || cargo.includes('OPERADOR') ||
+           cuadrilla.includes('TRACTOR') || cuadrilla.includes('MAQUIN');
   };
 
-  const tractoristas = (catalogs.personnel || [])
-    .filter((p: any) => p.active && isTractorista(p))
-    .sort((a: any, b: any) => (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true }));
-
-  const operatorOptions = tractoristas.length > 0
-    ? tractoristas
-    : (catalogs.personnel || []).filter((p: any) => p.active).sort((a: any, b: any) => (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true }));
-
-  const tractors = (catalogs.equipment || [])
-    .filter((e: any) => e.type === 'TRACTOR')
-    .sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true }));
-
-  // Labor: Solo labor MAQUINARIA seleccionada por defecto
   const machineryLabor = (catalogs.labors || []).find((l: any) => 
-    l.active && l.name.toUpperCase().trim() === 'MAQUINARIA'
-  ) || (catalogs.labors || []).find((l: any) => 
-    l.active && l.name.toUpperCase().includes('MAQUINARIA')
+    (l.name || '').toUpperCase().includes('MAQUINARIA')
   );
 
-  const labors = machineryLabor 
-    ? [machineryLabor]
-    : (catalogs.labors || []).filter((l: any) => l.active).sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+  const tractors = (catalogs.equipment || []).filter((e: any) => e.active);
+  const operatorOptions = (catalogs.personnel || []).filter((p: any) => p.active);
+  const labors = (catalogs.labors || []).filter((l: any) => l.active);
 
-  // Auto-seleccionar por defecto la labor MAQUINARIA
-  useEffect(() => {
-    if (machineryLabor && (!laborId || laborId !== machineryLabor.id)) {
-      setLaborId(machineryLabor.id);
-    }
-  }, [machineryLabor, laborId]);
+  const effectiveLaborForActivities = editLaborId || laborId || (machineryLabor ? machineryLabor.id : '');
+  const activities = (catalogs.activities || []).filter((a: any) => 
+    a.active && (!effectiveLaborForActivities || a.laborId === effectiveLaborForActivities)
+  );
 
-  const activeLaborId = laborId || machineryLabor?.id;
-
-  const allActivities = (catalogs.activities || [])
-    .filter((a: any) => a.active)
-    .sort((a: any, b: any) => a.name.localeCompare(b.name, 'es', { numeric: true }));
-
-  // Actividades filtradas por la labor de maquinaria
-  const activities = activeLaborId
-    ? allActivities.filter((a: any) => a.laborId === activeLaborId)
-    : allActivities;
-
-  // Lista única de Zonas configuradas en el sistema
-  const zones = Array.from(
-    new Set(
-      (catalogs.locations || [])
-        .map((l: any) => (l.zone || '').trim())
-        .filter(Boolean)
-    )
-  ).sort((a: any, b: any) => String(a).localeCompare(String(b), 'es', { numeric: true }));
+  const rawZones: string[] = Array.from(new Set<string>(
+    (catalogs.locations || [])
+      .map((loc: any) => loc.zone)
+      .filter((z: any): z is string => typeof z === 'string' && z.trim().length > 0)
+  ));
+  if (!rawZones.some(z => z.toUpperCase().trim() === 'ALMACEN')) {
+    rawZones.push('ALMACEN');
+  }
+  const zones: string[] = rawZones.sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
 
   const toggleZone = (z: string) => {
     setSelectedZones(prev => 
@@ -272,28 +245,45 @@ export default function Machinery() {
     }
   };
 
-  const handleStop = async (id: string, currentVersion?: number) => {
-    const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
-    if (window.confirm(`¿Detener operación mecanizada a las ${nowTime}? Podrá editar el horario en cualquier momento.`)) {
-      await repository.updateMachineryOperation(id, {
-        status: 'FINALIZADA',
-        endTime: nowTime
-      }, currentVersion);
+  const handleConfirmStop = async () => {
+    if (!stoppingOp) return;
+    setActionLoading(true);
+    const cleanEndTime = normalizeTimeForInput(stoppingOp.endTime);
+    const res = await repository.updateMachineryOperation(stoppingOp.op.id, {
+      status: 'FINALIZADA',
+      endTime: cleanEndTime
+    }, stoppingOp.op.version);
+    setActionLoading(false);
+    if (res.ok) {
+      setStoppingOp(null);
+    } else {
+      alert(res.error || 'Error al detener operación');
     }
   };
 
-  const handleCancel = async (id: string, currentVersion?: number) => {
-    if (window.confirm('¿Cancelar operación mecanizada?')) {
-      await repository.updateMachineryOperation(id, { status: 'CANCELADA' }, currentVersion);
+  const handleConfirmCancel = async () => {
+    if (!cancellingOp) return;
+    setActionLoading(true);
+    const res = await repository.updateMachineryOperation(cancellingOp.id, {
+      status: 'CANCELADA'
+    }, cancellingOp.version);
+    setActionLoading(false);
+    if (res.ok) {
+      setCancellingOp(null);
+    } else {
+      alert(res.error || 'Error al cancelar operación');
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('¿Está seguro de eliminar esta operación de maquinaria? Esta acción no se puede deshacer.')) {
-      const res = await repository.deleteMachineryOperation(id);
-      if (!res.ok) {
-        alert(res.error || 'Error al eliminar');
-      }
+  const handleConfirmDelete = async () => {
+    if (!deletingOpId) return;
+    setActionLoading(true);
+    const res = await repository.deleteMachineryOperation(deletingOpId);
+    setActionLoading(false);
+    if (res.ok) {
+      setDeletingOpId(null);
+    } else {
+      alert(res.error || 'Error al eliminar');
     }
   };
 
@@ -722,16 +712,19 @@ export default function Machinery() {
                                 <Button 
                                   size="sm" 
                                   variant="outline" 
-                                  className="text-red-700 border border-red-300 hover:bg-red-50 text-xs h-7 px-2.5 font-bold" 
-                                  onClick={() => handleCancel(m.id, m.version)}
+                                  className="text-red-700 border border-red-300 hover:bg-red-50 text-xs h-7 px-2.5 font-bold cursor-pointer" 
+                                  onClick={() => setCancellingOp(m)}
                                   title="Cancelar operación"
                                 >
                                   Cancelar
                                 </Button>
                                 <Button 
                                   size="sm" 
-                                  className="bg-forest-900 hover:bg-forest-950 text-white text-xs h-7 px-3 font-bold flex items-center gap-1" 
-                                  onClick={() => handleStop(m.id, m.version)}
+                                  className="bg-forest-900 hover:bg-forest-950 text-white text-xs h-7 px-3 font-bold flex items-center gap-1 cursor-pointer" 
+                                  onClick={() => {
+                                    const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+                                    setStoppingOp({ op: m, endTime: nowTime });
+                                  }}
                                   title="Detener operación y registrar hora de fin"
                                 >
                                   <Square size={12} className="fill-white" /> Detener
@@ -742,7 +735,7 @@ export default function Machinery() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="text-gray-700 border-gray-300 hover:bg-gray-100 text-xs h-7 px-2.5 font-medium flex items-center gap-1"
+                              className="text-gray-700 border-gray-300 hover:bg-gray-100 text-xs h-7 px-2.5 font-medium flex items-center gap-1 cursor-pointer"
                               onClick={() => openEdit(m)}
                               title="Editar operación"
                             >
@@ -752,8 +745,8 @@ export default function Machinery() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="text-red-600 border-red-200 hover:bg-red-50 text-xs h-7 w-7 p-0 flex items-center justify-center"
-                              onClick={() => handleDelete(m.id)}
+                              className="text-red-600 border-red-200 hover:bg-red-50 text-xs h-7 w-7 p-0 flex items-center justify-center cursor-pointer"
+                              onClick={() => setDeletingOpId(m.id)}
                               title="Eliminar operación"
                             >
                               <Trash2 size={13} />
@@ -935,6 +928,104 @@ export default function Machinery() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal In-App para Detener / Finalizar Operación */}
+      <Dialog open={!!stoppingOp} onOpenChange={(open) => !open && setStoppingOp(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-forest-950 font-bold">
+              <Square size={18} className="text-red-600 fill-red-600" /> Detener Operación Mecanizada
+            </DialogTitle>
+          </DialogHeader>
+          {stoppingOp && (
+            <div className="space-y-4 pt-2">
+              <p className="text-sm text-gray-700">
+                ¿Desea registrar la finalización de la labor para el operador <strong className="text-forest-950">{stoppingOp.op.operatorName}</strong>?
+              </p>
+              <div>
+                <Label className="text-xs font-black uppercase text-gray-800 tracking-wide">HORA DE FINALIZACIÓN *</Label>
+                <Input 
+                  type="time" 
+                  value={stoppingOp.endTime} 
+                  onChange={e => setStoppingOp(prev => prev ? { ...prev, endTime: e.target.value } : null)} 
+                  className="bg-white font-bold text-base h-11 border-gray-300 mt-1"
+                  required
+                />
+              </div>
+              <DialogFooter className="gap-2 pt-2">
+                <Button variant="outline" onClick={() => setStoppingOp(null)} disabled={actionLoading}>
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={handleConfirmStop} 
+                  disabled={actionLoading || !stoppingOp.endTime}
+                  className="bg-red-700 hover:bg-red-800 text-white font-bold cursor-pointer"
+                >
+                  {actionLoading ? 'Finalizando...' : 'Confirmar y Detener'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal In-App para Cancelar Operación */}
+      <Dialog open={!!cancellingOp} onOpenChange={(open) => !open && setCancellingOp(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700 font-bold">
+              <AlertCircle size={18} /> Cancelar Operación Mecanizada
+            </DialogTitle>
+          </DialogHeader>
+          {cancellingOp && (
+            <div className="space-y-4 pt-2">
+              <p className="text-sm text-gray-700">
+                ¿Está seguro de marcar como <strong className="text-red-700 uppercase">CANCELADA</strong> la operación del operador <strong>{cancellingOp.operatorName}</strong>?
+              </p>
+              <DialogFooter className="gap-2 pt-2">
+                <Button variant="outline" onClick={() => setCancellingOp(null)} disabled={actionLoading}>
+                  Volver
+                </Button>
+                <Button 
+                  onClick={handleConfirmCancel} 
+                  disabled={actionLoading}
+                  className="bg-red-700 hover:bg-red-800 text-white font-bold cursor-pointer"
+                >
+                  {actionLoading ? 'Cancelando...' : 'Confirmar Cancelación'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal In-App para Eliminar Operación */}
+      <Dialog open={!!deletingOpId} onOpenChange={(open) => !open && setDeletingOpId(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700 font-bold">
+              <Trash2 size={18} /> Eliminar Operación
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-gray-700">
+              ¿Está seguro de depurar permanentemente este registro de maquinaria? Esta acción no se puede deshacer.
+            </p>
+            <DialogFooter className="gap-2 pt-2">
+              <Button variant="outline" onClick={() => setDeletingOpId(null)} disabled={actionLoading}>
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleConfirmDelete} 
+                disabled={actionLoading}
+                className="bg-red-700 hover:bg-red-800 text-white font-bold cursor-pointer"
+              >
+                {actionLoading ? 'Eliminando...' : 'Eliminar Registro'}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

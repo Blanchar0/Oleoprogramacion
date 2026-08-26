@@ -5,8 +5,8 @@ import { useCatalogs } from '../shared/useCatalogs';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, Button, Input, Label, cn } from '@/src/components/ui';
 import { Combobox } from '@/src/components/ui/combobox';
-import { Labor, Activity, Location, Personnel, Novedad, VoiceExtraction, ProgrammingPerformance, ActivityPerformanceReference, ResolvedField } from '../types';
-import { Mic, MicOff, Square, RefreshCcw, Check, X, AlertCircle, Play, Pause, FileText, CheckCircle2, CalendarPlus } from 'lucide-react';
+import { Mic, MicOff, Square, RefreshCcw, Check, X, AlertCircle, Play, Pause, FileText, CheckCircle2, CalendarPlus, TrendingUp, Pencil } from 'lucide-react';
+import { ProgrammingPerformance } from '../types';
 import { resolveVoiceData } from './voiceResolver';
 import { isOperative } from '../dashboard/Dashboard';
 
@@ -39,10 +39,14 @@ export default function NewProgramming() {
     .sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
   const allActivities = (catalogs.activities || []).filter(a => a.active).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
   const locations = (catalogs.locations || []).filter(l => l.active).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
-  const allPersonnel = (catalogs.personnel || []).filter(p => p.active && isOperative(p)).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+  const allPersonnel = (catalogs.personnel || []).filter(p => p.active && isOperative(p)).sort((a,b) => (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true }));
   const allNovedades = (catalogs.personnelNovelties || []) || [];
   
-  const zones = Array.from(new Set(locations.map(l => l.zone))).sort((a,b) => String(a).localeCompare(String(b), 'es', { numeric: true }));
+  const rawZones = Array.from(new Set(locations.map(l => l.zone).filter(Boolean)));
+  if (!rawZones.some(z => String(z).toUpperCase().trim() === 'ALMACEN')) {
+    rawZones.push('ALMACEN');
+  }
+  const zones = rawZones.sort((a,b) => String(a).localeCompare(String(b), 'es', { numeric: true }));
   
   const getNextDateString = (dateStr?: string): string => {
     if (!dateStr) {
@@ -256,6 +260,11 @@ export default function NewProgramming() {
   const lotes = zone ? locations.filter(l => l.zone === zone).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true })) : [];
   const filteredLotes = lotes.filter(l => l.name.toLowerCase().includes(loteSearchTerm.toLowerCase()));
 
+  const selectedLaborObj = (catalogs.labors || []).find((l: any) => l.id === laborId);
+  const isLaborOtros = (selectedLaborObj?.name || '').toUpperCase().trim().includes('OTRO');
+  const isZoneAlmacen = (zone || '').toUpperCase().trim() === 'ALMACEN';
+  const isNoLotRequired = isZoneAlmacen || isLaborOtros;
+
   const toggleLocation = (id: string) => {
     setSelectedLocations(prev =>
       prev.includes(id) ? prev.filter(lId => lId !== id) : [...prev, id]
@@ -298,23 +307,11 @@ export default function NewProgramming() {
     if (laborId) {
       const currentValid = (catalogs.activities || []).find(a => a.active && a.id === activityId && a.laborId === laborId);
       if (!currentValid && activityId !== '') {
-        setActivityId(''); 
+        setActivityId('');
       }
-    } else {
-      if (activityId !== '') setActivityId('');
     }
-  }, [laborId]);
+  }, [laborId, catalogs.activities]);
 
-  useEffect(() => {
-    if (zone) {
-      const validLoteIds = locations.filter(l => l.zone === zone).map(l => l.id);
-      setSelectedLocations(prev => prev.filter(id => validLoteIds.includes(id)));
-    } else {
-      setSelectedLocations([]);
-    }
-  }, [zone]);
-
-  // Cleanup audio
   useEffect(() => {
     return () => {
       cleanupAudio();
@@ -358,13 +355,12 @@ export default function NewProgramming() {
         setVoiceState('CONFIRMACION_REPRODUCCION');
       };
 
-      mediaRecorder.start(250); // Slice chunks every 250ms
-      setVoiceState('GRABANDO');
+      mediaRecorder.start(250);
       setRecordingTime(0);
+      setVoiceState('GRABANDO');
 
-      // Start timer
       timerRef.current = window.setInterval(() => {
-        setRecordingTime((prev) => {
+        setRecordingTime(prev => {
           if (prev >= 60) {
             stopRecording();
             return 60;
@@ -374,60 +370,52 @@ export default function NewProgramming() {
       }, 1000);
 
     } catch (err: any) {
-      console.error(err);
       setVoiceState('ERROR_RECUPERABLE');
-      setVoiceError('No se pudo acceder al micrófono. Por favor verifica los permisos.');
+      setVoiceError('No se pudo acceder al micrófono. Por favor verifique los permisos.');
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
     }
-    if (timerRef.current) clearInterval(timerRef.current);
-  };
-
-  const retryRecording = () => {
-    cleanupAudio();
-    startRecording();
-  };
-
-  const cancelRecording = () => {
-    cleanupAudio();
-    setVoiceState('LISTO');
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
   };
 
   const togglePlayback = () => {
-    if (!audioElementRef.current) return;
+    if (!audioUrlRef.current) return;
+    
+    if (!audioElementRef.current) {
+      audioElementRef.current = new Audio(audioUrlRef.current);
+      audioElementRef.current.onended = () => setIsPlaying(false);
+      audioElementRef.current.onerror = () => setIsPlaying(false);
+    }
+
     if (isPlaying) {
       audioElementRef.current.pause();
+      setIsPlaying(false);
     } else {
       audioElementRef.current.play();
+      setIsPlaying(true);
     }
-    setIsPlaying(!isPlaying);
   };
 
-  const submitAudio = async () => {
+  const processAudio = async () => {
     if (!audioBlobRef.current) return;
-    
-    // Validate size (10 MB)
-    if (audioBlobRef.current.size > 10 * 1024 * 1024) {
-      setVoiceState('ERROR_RECUPERABLE');
-      setVoiceError('El audio supera los 10MB permitidos.');
-      return;
-    }
 
-    setVoiceState('ENVIANDO_AUDIO');
+    setVoiceState('PROCESANDO_AUDIO');
     setVoiceError('');
 
     try {
-      // Convert Blob to Base64
       const base64Audio = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]); // remove data:audio/webm;base64,
+          const res = reader.result as string;
+          const base64 = res.split(',')[1];
+          resolve(base64);
         };
         reader.onerror = reject;
         reader.readAsDataURL(audioBlobRef.current!);
@@ -449,16 +437,13 @@ export default function NewProgramming() {
           const err = await response.json();
           if (err.error) errMessage = err.error;
         } catch {
-          // If the server returns HTML (e.g. Vercel 500 error page)
           errMessage = `Error HTTP ${response.status}: Vercel/Servidor no pudo procesar la solicitud.`;
         }
         throw new Error(errMessage);
       }
 
       setVoiceState('INTERPRETANDO');
-      const extraction: VoiceExtraction = await response.json();
-
-      setVoiceState('RESOLVIENDO_CATALOGOS');
+      const extraction = await response.json();
       
       const resolved = resolveVoiceData(extraction as any, catalogs, programmings, machineries);
       
@@ -498,18 +483,24 @@ export default function NewProgramming() {
       }
     }
 
-    const selectedLoteNames = selectedLocations
-      .map(id => locations.find(l => l.id === id)?.name || id)
-      .join(', ');
+    const selectedLoteNames = isNoLotRequired 
+      ? (isZoneAlmacen ? 'ALMACÉN' : 'GENERAL')
+      : selectedLocations
+          .map(id => locations.find(l => l.id === id)?.name || id)
+          .join(', ');
+
+    const finalLocationIds = isNoLotRequired ? [] : selectedLocations;
+    const finalLocationId = isNoLotRequired ? (isZoneAlmacen ? 'ALMACEN' : null) : (selectedLocations.join(',') || null);
+    const finalZoneSnapshot = isNoLotRequired ? zone : (selectedLocations.length > 0 ? `${zone} - ${selectedLoteNames}` : zone);
 
     if (isEditing) {
       const payload = {
         date,
         laborId,
         activityId,
-        locationId: selectedLocations.join(','),
-        locationIds: selectedLocations,
-        zoneSnapshot: `${zone} - ${selectedLoteNames}`,
+        locationId: finalLocationId,
+        locationIds: finalLocationIds,
+        zoneSnapshot: finalZoneSnapshot,
         loteSnapshot: selectedLoteNames,
         personnelIds: selectedPersonnel,
         observations,
@@ -532,9 +523,9 @@ export default function NewProgramming() {
       idSupervisor: user?.idSupervisor,
       laborId,
       activityId,
-      locationId: selectedLocations.join(','),
-      locationIds: selectedLocations,
-      zoneSnapshot: `${zone} - ${selectedLoteNames}`,
+      locationId: finalLocationId,
+      locationIds: finalLocationIds,
+      zoneSnapshot: finalZoneSnapshot,
       loteSnapshot: selectedLoteNames,
       personnelIds: selectedPersonnel,
       status: 'PENDIENTE',
@@ -570,10 +561,20 @@ export default function NewProgramming() {
     );
   };
 
-  const filteredPersonnel = allPersonnel.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.documento.includes(searchTerm)
-  );
+  const filteredPersonnel = allPersonnel
+    .filter(p => {
+      const name = (p.name || p.nombreCompleto || '').toLowerCase();
+      const doc = (p.documento || '').toString();
+      const q = searchTerm.toLowerCase();
+      return name.includes(q) || doc.includes(q);
+    })
+    .sort((a, b) => {
+      const aSelected = selectedPersonnel.includes(a.id);
+      const bSelected = selectedPersonnel.includes(b.id);
+      if (aSelected && !bSelected) return -1;
+      if (!aSelected && bSelected) return 1;
+      return (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true });
+    });
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -765,6 +766,7 @@ export default function NewProgramming() {
               {(() => {
                 const currentLabor = labors.find(l => l.id === laborId);
                 const currentAct = activities.find(a => a.id === activityId);
+                const isReady = selectedPersonnel.length > 0 && (isNoLotRequired ? !!zone : selectedLocations.length > 0) && (activities.length === 0 || !!activityId);
                 return (
                   <div className="bg-gradient-to-r from-emerald-800 to-forest-950 text-white p-3.5 rounded-xl shadow-md">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -782,7 +784,7 @@ export default function NewProgramming() {
                           <div className="flex items-center gap-2 text-xs text-emerald-100 mt-0.5 flex-wrap font-medium">
                             <span>👥 <strong className="text-white">{selectedPersonnel.length}</strong> {selectedPersonnel.length === 1 ? 'Persona' : 'Personas'}</span>
                             <span>•</span>
-                            <span>📍 <strong className="text-white">{zone || 'Sin Zona'}</strong> {selectedLocations.length > 0 ? `(${selectedLocations.length} lotes)` : ''}</span>
+                            <span>📍 <strong className="text-white">{zone || 'Sin Zona'}</strong> {!isNoLotRequired && selectedLocations.length > 0 ? `(${selectedLocations.length} lotes)` : ''}</span>
                             <span>•</span>
                             <span>📅 <strong className="text-white">{date}</strong></span>
                           </div>
@@ -791,11 +793,11 @@ export default function NewProgramming() {
                       <div className="self-start sm:self-center">
                         <span className={cn(
                           "px-3 py-1 rounded-full text-xs font-bold",
-                          selectedPersonnel.length > 0 && selectedLocations.length > 0 && activityId
+                          isReady
                             ? "bg-lime-400 text-forest-950 shadow-xs"
                             : "bg-white/20 text-white"
                         )}>
-                          {selectedPersonnel.length > 0 && selectedLocations.length > 0 && activityId
+                          {isReady
                             ? '✓ Listo para guardar'
                             : 'Completando pasos...'}
                         </span>
@@ -822,10 +824,10 @@ export default function NewProgramming() {
                   <div>
                     <Label htmlFor="date" className="text-xs font-black text-blue-950 uppercase tracking-wide">FECHA DE PROGRAMACIÓN *</Label>
                     <Input 
-                      id="date" 
                       type="date" 
+                      id="date" 
                       value={date} 
-                      onChange={(e) => setDate(e.target.value)}
+                      onChange={(e) => setDate(e.target.value)} 
                       required 
                       className="bg-white font-bold text-sm h-10 border-blue-300"
                     />
@@ -845,14 +847,14 @@ export default function NewProgramming() {
               {/* 2️⃣ PASO 2: Labor y Actividad */}
               <div className={cn(
                 "p-4 rounded-xl border space-y-3 transition-all",
-                laborId && activityId ? "bg-emerald-50/60 border-emerald-200/80" : "bg-gray-50 border-gray-200"
+                laborId && (activities.length === 0 || activityId) ? "bg-emerald-50/60 border-emerald-200/80" : "bg-gray-50 border-gray-200"
               )}>
                 <div className="flex items-center justify-between">
                   <h3 className="font-black text-emerald-950 flex items-center gap-2 text-sm uppercase tracking-wide">
                     <span className="w-6 h-6 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center text-xs font-black">2</span>
                     ¿QUÉ LABOR VAN A REALIZAR?
                   </h3>
-                  {laborId && activityId ? (
+                  {laborId && (activities.length === 0 || activityId) ? (
                     <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1 uppercase">
                       <CheckCircle2 size={12} className="text-emerald-700" /> LISTO
                     </span>
@@ -873,17 +875,14 @@ export default function NewProgramming() {
                   </div>
                   
                   <div>
-                    <Label htmlFor="activity" className="text-xs font-black text-emerald-950 uppercase tracking-wide">ACTIVIDAD *</Label>
+                    <Label htmlFor="activity" className="text-xs font-black text-emerald-950 uppercase tracking-wide">ACTIVIDAD {activities.length > 0 ? '*' : '(OPCIONAL)'}</Label>
                     <Combobox 
                       options={activities.map(a => ({ value: a.id, label: a.name, description: a.unit }))}
                       value={activityId}
                       onChange={setActivityId}
-                      placeholder={!laborId ? 'SELECCIONE LABOR PRIMERO' : activities.length === 0 ? 'SIN ACTIVIDADES' : 'SELECCIONE UNA ACTIVIDAD...'}
+                      placeholder={!laborId ? 'SELECCIONE LABOR PRIMERO' : activities.length === 0 ? 'SIN ACTIVIDADES ESPECÍFICAS' : 'SELECCIONE UNA ACTIVIDAD...'}
                       disabled={!laborId || activities.length === 0}
                     />
-                    {laborId && activities.length === 0 && (
-                      <p className="text-xs text-warning-700 font-bold mt-1 uppercase">No hay actividades registradas en esta labor.</p>
-                    )}
                   </div>
                 </div>
               </div>
@@ -891,19 +890,19 @@ export default function NewProgramming() {
               {/* 3️⃣ PASO 3: Ubicación (Zona y Lotes) */}
               <div className={cn(
                 "p-4 rounded-xl border space-y-3 transition-all",
-                zone && selectedLocations.length > 0 ? "bg-purple-50/60 border-purple-200/80" : "bg-gray-50 border-gray-200"
+                zone && (isNoLotRequired || selectedLocations.length > 0) ? "bg-purple-50/60 border-purple-200/80" : "bg-gray-50 border-gray-200"
               )}>
                 <div className="flex items-center justify-between">
                   <h3 className="font-black text-purple-950 flex items-center gap-2 text-sm uppercase tracking-wide">
                     <span className="w-6 h-6 rounded-full bg-purple-600 text-white inline-flex items-center justify-center text-xs font-black">3</span>
-                    ¿EN QUÉ LUGAR VAN A TRABAJAR? (ZONA Y LOTES)
+                    ¿EN QUÉ LUGAR VAN A TRABAJAR? {isNoLotRequired ? '(ZONA)' : '(ZONA Y LOTES)'}
                   </h3>
-                  {zone && selectedLocations.length > 0 ? (
+                  {zone && (isNoLotRequired || selectedLocations.length > 0) ? (
                     <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1 uppercase">
-                      <CheckCircle2 size={12} className="text-emerald-700" /> {selectedLocations.length} LOTE{selectedLocations.length > 1 ? 'S' : ''}
+                      <CheckCircle2 size={12} className="text-emerald-700" /> {isNoLotRequired ? `LISTO (${zone})` : `${selectedLocations.length} LOTE${selectedLocations.length > 1 ? 'S' : ''}`}
                     </span>
                   ) : (
-                    <span className="text-xs text-purple-800 font-bold italic uppercase">PENDIENTE ZONA Y LOTES</span>
+                    <span className="text-xs text-purple-800 font-bold italic uppercase">{isNoLotRequired ? 'SELECCIONE ZONA' : 'PENDIENTE ZONA Y LOTES'}</span>
                   )}
                 </div>
 
@@ -921,84 +920,95 @@ export default function NewProgramming() {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="lotes" className="font-black text-xs text-purple-950 uppercase tracking-wide">
-                        LOTES {zone ? `(${selectedLocations.length} SELECCIONADOS)` : ''} *
-                      </Label>
-                      {zone && lotes.length > 0 && (
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedLocations(lotes.map(l => l.id))}
-                            className="text-[11px] font-black text-purple-800 hover:text-purple-950 hover:underline cursor-pointer uppercase tracking-wider"
-                          >
-                            SELECCIONAR TODOS
-                          </button>
-                          <span className="text-gray-300">|</span>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedLocations([])}
-                            className="text-[11px] font-black text-gray-500 hover:text-red-700 hover:underline cursor-pointer uppercase tracking-wider"
-                          >
-                            LIMPIAR
-                          </button>
-                        </div>
-                      )}
+                  {isNoLotRequired ? (
+                    <div className="p-3 bg-purple-100/80 border border-purple-300 rounded-lg text-purple-950 text-xs flex items-center gap-2.5 font-bold uppercase animate-fadeIn">
+                      <CheckCircle2 size={18} className="text-purple-700 shrink-0" />
+                      <span>
+                        {isZoneAlmacen 
+                          ? 'SELECCIÓN DE LOTES OMITIDA PARA LA ZONA ALMACÉN (SOLO SE REGISTRA LA ZONA).' 
+                          : 'SELECCIÓN DE LOTES OMITIDA PARA LA LABOR OTROS (SOLO SE REGISTRA LA ZONA).'}
+                      </span>
                     </div>
-
-                    {!zone ? (
-                      <div className="p-3 text-xs text-gray-500 bg-white border border-dashed border-gray-300 rounded-lg text-center font-bold uppercase">
-                        Seleccione una zona primero para desplegar los lotes disponibles.
-                      </div>
-                    ) : lotes.length === 0 ? (
-                      <div className="p-3 text-xs text-warning-700 bg-amber-50 border border-amber-200 rounded-lg text-center font-bold uppercase">
-                        No hay lotes registrados para la zona seleccionada.
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {lotes.length > 8 && (
-                          <Input
-                            placeholder="Buscar lote por código o nombre..."
-                            value={loteSearchTerm}
-                            onChange={(e) => setLoteSearchTerm(e.target.value)}
-                            className="text-xs h-8 bg-white"
-                          />
-                        )}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-44 overflow-y-auto p-2.5 bg-white border border-purple-200 rounded-lg">
-                          {filteredLotes.map(lote => {
-                            const isSelected = selectedLocations.includes(lote.id);
-                            return (
-                              <div
-                                key={lote.id}
-                                onClick={() => toggleLocation(lote.id)}
-                                className={cn(
-                                  "flex items-center justify-between p-2 rounded-md border text-xs font-semibold cursor-pointer transition-all select-none shadow-2xs",
-                                  isSelected
-                                    ? "bg-purple-700 text-white border-purple-800 shadow-xs font-bold"
-                                    : "bg-gray-50 text-gray-700 border-gray-200 hover:border-purple-300 hover:bg-purple-50/50"
-                                )}
-                              >
-                                <span className="truncate mr-1.5">{lote.name}</span>
-                                <div className={cn(
-                                  "w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors",
-                                  isSelected ? "bg-white text-purple-700 border-white" : "border-gray-300 bg-white"
-                                )}>
-                                  {isSelected && <Check size={11} className="stroke-[3]" />}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        {selectedLocations.length > 0 && (
-                          <div className="text-[11px] text-purple-900 font-bold flex items-center gap-1 uppercase">
-                            <Check size={12} className="text-purple-700" />
-                            <span>{selectedLocations.length} LOTE{selectedLocations.length > 1 ? 'S' : ''} SELECCIONADO{selectedLocations.length > 1 ? 'S' : ''} PARA ESTA LABOR.</span>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="lotes" className="font-black text-xs text-purple-950 uppercase tracking-wide">
+                          LOTES {zone ? `(${selectedLocations.length} SELECCIONADOS)` : ''} *
+                        </Label>
+                        {zone && lotes.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLocations(lotes.map(l => l.id))}
+                              className="text-[11px] font-black text-purple-800 hover:text-purple-950 hover:underline cursor-pointer uppercase tracking-wider"
+                            >
+                              SELECCIONAR TODOS
+                            </button>
+                            <span className="text-gray-300">|</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLocations([])}
+                              className="text-[11px] font-black text-gray-500 hover:text-red-700 hover:underline cursor-pointer uppercase tracking-wider"
+                            >
+                              LIMPIAR
+                            </button>
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
+
+                      {!zone ? (
+                        <div className="p-3 text-xs text-gray-500 bg-white border border-dashed border-gray-300 rounded-lg text-center font-bold uppercase">
+                          Seleccione una zona primero para desplegar los lotes disponibles.
+                        </div>
+                      ) : lotes.length === 0 ? (
+                        <div className="p-3 text-xs text-warning-700 bg-amber-50 border border-amber-200 rounded-lg text-center font-bold uppercase">
+                          No hay lotes registrados para la zona seleccionada.
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {lotes.length > 8 && (
+                            <Input
+                              placeholder="Buscar lote por código o nombre..."
+                              value={loteSearchTerm}
+                              onChange={(e) => setLoteSearchTerm(e.target.value)}
+                              className="text-xs h-8 bg-white"
+                            />
+                          )}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-44 overflow-y-auto p-2.5 bg-white border border-purple-200 rounded-lg">
+                            {filteredLotes.map(lote => {
+                              const isSelected = selectedLocations.includes(lote.id);
+                              return (
+                                <div
+                                  key={lote.id}
+                                  onClick={() => toggleLocation(lote.id)}
+                                  className={cn(
+                                    "flex items-center justify-between p-2 rounded-md border text-xs font-semibold cursor-pointer transition-all select-none shadow-2xs",
+                                    isSelected
+                                      ? "bg-purple-700 text-white border-purple-800 shadow-xs font-bold"
+                                      : "bg-gray-50 text-gray-700 border-gray-200 hover:border-purple-300 hover:bg-purple-50/50"
+                                  )}
+                                >
+                                  <span className="truncate mr-1.5">{lote.name}</span>
+                                  <div className={cn(
+                                    "w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors",
+                                    isSelected ? "bg-white text-purple-700 border-white" : "border-gray-300 bg-white"
+                                  )}>
+                                    {isSelected && <Check size={11} className="stroke-[3]" />}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {selectedLocations.length > 0 && (
+                            <div className="text-[11px] text-purple-900 font-bold flex items-center gap-1 uppercase">
+                              <Check size={12} className="text-purple-700" />
+                              <span>{selectedLocations.length} LOTE{selectedLocations.length > 1 ? 'S' : ''} SELECCIONADO{selectedLocations.length > 1 ? 'S' : ''} PARA ESTA LABOR.</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1058,19 +1068,31 @@ export default function NewProgramming() {
                             )}
                           >
                             <div>
-                              <div className="font-bold text-sm uppercase">{p.name}</div>
-                              <div className="text-xs text-gray-600 font-medium">
-                                C.C. {p.documento} 
-                                {novedad && <span className="ml-2 font-bold text-red-600 uppercase">({novedad.tipo} hasta {novedad.fechaFin})</span>}
-                                {isProgrammed && <span className="ml-2 font-bold text-red-600 uppercase">(Ya programado)</span>}
-                                {isMachinery && <span className="ml-2 font-bold text-red-600 uppercase">(En maquinaria)</span>}
-                              </div>
+                              <div className="text-sm font-black uppercase text-gray-900">{p.name || p.nombreCompleto}</div>
+                              <div className="text-xs text-gray-500 font-medium">C.C. {p.documento}</div>
                             </div>
-                            <div className={cn(
-                              "w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0",
-                              isDisabled ? "border-gray-300 bg-gray-200" : isSelected ? "border-amber-600 bg-amber-600" : "border-gray-300"
-                            )}>
-                              {isSelected && <Check size={12} className="text-white stroke-[3]" />}
+                            <div className="flex items-center gap-2">
+                              {novedad && (
+                                <span className="text-[10px] bg-red-100 text-red-800 font-bold px-1.5 py-0.5 rounded uppercase">
+                                  {novedad.tipo}
+                                </span>
+                              )}
+                              {isProgrammed && (
+                                <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded uppercase">
+                                  PROGRAMADO
+                                </span>
+                              )}
+                              {isMachinery && (
+                                <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded uppercase">
+                                  MAQUINARIA
+                                </span>
+                              )}
+                              <div className={cn(
+                                "w-5 h-5 rounded-full border flex items-center justify-center transition-colors",
+                                isSelected ? "bg-amber-600 border-amber-600 text-white" : "border-gray-300 bg-white"
+                              )}>
+                                {isSelected && <Check size={12} className="stroke-[3]" />}
+                              </div>
                             </div>
                           </div>
                         )
@@ -1080,68 +1102,81 @@ export default function NewProgramming() {
                 </div>
               </div>
 
-              {/* 5️⃣ PASO 5: Rendimiento Estimado y Observaciones */}
+              {/* 5️⃣ PASO 5: Rendimiento y Observaciones */}
               <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-black text-gray-900 flex items-center gap-2 text-sm uppercase tracking-wide">
-                    <span className="w-6 h-6 rounded-full bg-gray-700 text-white inline-flex items-center justify-center text-xs font-black">5</span>
-                    RENDIMIENTO ESTIMADO Y OBSERVACIONES
-                  </h3>
-                </div>
+                <h3 className="font-black text-gray-800 flex items-center gap-2 text-sm uppercase tracking-wide">
+                  <span className="w-6 h-6 rounded-full bg-gray-700 text-white inline-flex items-center justify-center text-xs font-black">5</span>
+                  RENDIMIENTO ESPERADO Y DETALLES
+                </h3>
 
-                {/* Rendimiento (Only show if an activity is selected) */}
+                {/* Métricas de Rendimiento */}
                 {activityId && (
-                  <div className="border border-gray-200 rounded-lg p-3 bg-white space-y-2">
-                    <div className="flex justify-between items-center">
-                      <Label className="mb-0 text-xs font-black text-gray-800 uppercase tracking-wide">RENDIMIENTO ESTIMADO ({performance.unit})</Label>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => setIsEditingPerformance(!isEditingPerformance)}
-                        className="text-xs h-7 text-forest-900 font-bold uppercase tracking-wider"
-                      >
-                        {isEditingPerformance ? 'FIJAR RENDIMIENTO' : 'AJUSTAR MANUALMENTE'}
-                      </Button>
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-black text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+                        <TrendingUp size={14} className="text-forest-700" />
+                        RENDIMIENTO ESPERADO
+                      </Label>
+                      {!isEditingPerformance ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingPerformance(true)}
+                          className="text-[11px] font-black text-forest-700 hover:text-forest-900 hover:underline uppercase flex items-center gap-1 cursor-pointer"
+                        >
+                          <Pencil size={11} /> EDITAR VALOR
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingPerformance(false)}
+                          className="text-[11px] font-black text-emerald-700 hover:text-emerald-900 hover:underline uppercase flex items-center gap-1 cursor-pointer"
+                        >
+                          <Check size={11} /> LISTO
+                        </button>
+                      )}
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label htmlFor="perfPerPerson" className="text-[11px] text-gray-500 uppercase font-black tracking-wide">Por Persona / Día</Label>
-                        <Input
-                          id="perfPerPerson"
-                          type="number"
-                          step="0.01"
-                          disabled={!isEditingPerformance}
-                          value={performance.performancePerPersonDay !== null ? performance.performancePerPersonDay : ''}
-                          onChange={(e) => {
-                            const val = e.target.value === '' ? null : parseFloat(e.target.value);
-                            setPerformance(prev => ({
-                              ...prev,
-                              performancePerPersonDay: val,
-                              plannedQuantity: val !== null ? val * selectedPersonnel.length : null,
-                              wasManuallyEdited: true
-                            }));
-                          }}
-                          className={!isEditingPerformance ? "bg-gray-100 font-bold text-sm" : "font-bold text-sm border-forest-600"}
-                          placeholder="N/A"
-                        />
-                        {!isEditingPerformance && performance.referencePerformancePerPersonDay !== null && (
-                          <p className="text-[11px] text-gray-500 mt-1 font-medium">
-                            Estándar: {performance.referencePerformancePerPersonDay} {performance.unit}
-                          </p>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100 text-center">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase block">Unidad</span>
+                        <span className="text-sm font-black text-gray-800 uppercase">{performance.unit}</span>
+                      </div>
+
+                      <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100 text-center">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase block">Rend. / Persona / Día</span>
+                        {isEditingPerformance ? (
+                          <Input
+                            type="number"
+                            step="any"
+                            value={performance.performancePerPersonDay ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                              const count = new Set(selectedPersonnel).size;
+                              setPerformance(prev => ({
+                                ...prev,
+                                performancePerPersonDay: val,
+                                plannedQuantity: val !== null ? val * count : null,
+                                wasManuallyEdited: true
+                              }));
+                            }}
+                            className="h-8 text-xs font-bold text-center mt-0.5 bg-white border-forest-400"
+                          />
+                        ) : (
+                          <span className="text-sm font-black text-forest-900">
+                            {performance.performancePerPersonDay !== null 
+                              ? `${performance.performancePerPersonDay} ${performance.unit}` 
+                              : 'No definido'}
+                          </span>
                         )}
                       </div>
-                      <div>
-                        <Label htmlFor="totalPerf" className="text-[11px] text-gray-500 uppercase font-black tracking-wide">Cantidad Total ({selectedPersonnel.length} personas)</Label>
-                        <Input
-                          id="totalPerf"
-                          type="number"
-                          disabled
-                          value={performance.plannedQuantity !== null ? performance.plannedQuantity.toFixed(2) : ''}
-                          className="bg-gray-100 font-bold text-sm text-forest-900"
-                          placeholder="N/A"
-                        />
+
+                      <div className="bg-forest-50 p-2.5 rounded-lg border border-forest-200 text-center col-span-2 sm:col-span-1">
+                        <span className="text-[10px] font-bold text-forest-700 uppercase block">Total Planificado</span>
+                        <span className="text-sm font-black text-forest-950">
+                          {performance.plannedQuantity !== null 
+                            ? `${performance.plannedQuantity.toLocaleString('es-CO')} ${performance.unit}` 
+                            : '—'}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1164,7 +1199,7 @@ export default function NewProgramming() {
                 <Button 
                   type="submit" 
                   size="lg" 
-                  disabled={loading || !laborId || (activities.length > 0 && !activityId) || !zone || selectedLocations.length === 0 || selectedPersonnel.length === 0} 
+                  disabled={loading || !laborId || (activities.length > 0 && !activityId) || !zone || (!isNoLotRequired && selectedLocations.length === 0) || selectedPersonnel.length === 0} 
                   className="w-full min-h-[50px] h-auto py-3 px-4 text-xs sm:text-sm font-black uppercase tracking-wide bg-forest-900 hover:bg-forest-950 text-white shadow-xl rounded-xl flex items-center justify-center gap-2 cursor-pointer text-center leading-snug whitespace-normal"
                 >
                   <CheckCircle2 size={20} className="text-lime-400 stroke-[3] shrink-0" />

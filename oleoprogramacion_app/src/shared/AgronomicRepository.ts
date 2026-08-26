@@ -179,7 +179,7 @@ class SupabaseRepository implements AgronomicRepository {
         if (current && typeof current.version === 'number') {
           currentVersion = current.version;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const payload: any = {
         updated_at: new Date().toISOString(),
@@ -333,7 +333,7 @@ class SupabaseRepository implements AgronomicRepository {
         if (current && typeof current.version === 'number') {
           currentVersion = current.version;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const payload: any = {
         updated_at: new Date().toISOString(),
@@ -411,7 +411,7 @@ class SupabaseRepository implements AgronomicRepository {
         if (!sTime && item.created_at) {
           try {
             sTime = new Date(item.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
-          } catch(e) {}
+          } catch (e) { }
         }
 
         return {
@@ -447,155 +447,122 @@ class SupabaseRepository implements AgronomicRepository {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(channel)
     };
   }
 
   async createMachineryOperation(input: any): Promise<Result> {
     try {
       const supId = input.supervisorId || input.idSupervisor || 'SUP001';
+      const opName = input.operatorName || input.operatorId || 'Operador';
+      const sTime = input.startTime || new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+      const eTime = input.endTime || input.end_time || '';
+
+      const combinedObservations = [
+        input.zoneSnapshot ? `[Zonas: ${input.zoneSnapshot}]` : '',
+        sTime ? `[Inicio: ${sTime}]` : '',
+        eTime ? `[Fin: ${eTime}]` : '',
+        input.observations || ''
+      ].filter(Boolean).join(' ').trim();
+
       const payload: Record<string, any> = {
         id: crypto.randomUUID(),
         date: input.date,
         supervisor_id: supId,
         id_supervisor: supId,
         equipment_id: input.equipmentId,
-        operator_id: input.operatorId || null,
-        operator_name: input.operatorName || null,
-        labor_id: input.laborId || input.labor_id || null,
+        operator_name: opName,
         activity_id: input.activityId || input.activity_id || null,
         location_id: input.locationId || null,
-        zone_snapshot: input.zoneSnapshot || null,
-        initial_hour_meter: input.initialHourMeter || null,
-        final_hour_meter: input.finalHourMeter || null,
-        effective_hours: input.effectiveHours || null,
-        observations: input.observations || '',
-        start_time: input.startTime || null,
+        observations: combinedObservations,
         status: input.status || 'EN_PROGRESO',
         version: 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
-      // Only include end_time if explicitly provided with a value
-      if (input.endTime || input.end_time) {
-        payload.end_time = input.endTime || input.end_time;
-      }
-
-      let { data, error } = await supabase.from('machinery_operations').insert(payload).select().single();
-
-      // Dynamic fallback if columns are missing from the schema cache (pre-migration)
-      if (error && error.message && (error.message.includes('schema cache') || error.message.includes('column'))) {
-        console.warn("Machinery insert schema mismatch, attempting fallback with standard columns:", error.message);
-        const fallbackObservations = [
-          payload.zone_snapshot ? `[Zonas: ${payload.zone_snapshot}]` : '',
-          payload.start_time ? `[Inicio: ${payload.start_time}]` : '',
-          payload.observations || ''
-        ].filter(Boolean).join(' ').trim();
-
-        const fallbackPayload: Record<string, any> = {
-          id: payload.id,
-          date: payload.date,
-          supervisor_id: payload.supervisor_id,
-          id_supervisor: payload.id_supervisor,
-          equipment_id: payload.equipment_id,
-          operator_name: payload.operator_name || payload.operator_id,
-          activity_id: payload.activity_id,
-          location_id: payload.location_id,
-          start_time: payload.start_time,
-          observations: fallbackObservations,
-          status: payload.status,
-          version: 1,
-        };
-
-        const resFallback = await supabase.from('machinery_operations').insert(fallbackPayload).select().single();
-        if (resFallback.error) throw resFallback.error;
-        data = resFallback.data;
-        error = null;
-      }
-
+      const { data, error } = await supabase.from('machinery_operations').insert(payload).select().single();
       if (error) throw error;
       return { ok: true, data };
     } catch (e: any) {
+      console.error("createMachineryOperation error:", e);
       return { ok: false, error: e.message };
     }
   }
 
   async updateMachineryOperation(id: string, input: any, expectedVersion?: number): Promise<Result> {
     try {
-      let currentVersion: number | undefined = undefined;
-      try {
-        const { data: current } = await supabase
-          .from('machinery_operations')
-          .select('version')
-          .eq('id', id)
-          .single();
-        if (current && typeof current.version === 'number') {
-          currentVersion = current.version;
-        }
-      } catch (e) {}
+      // Fetch existing row to preserve metadata (zones, start time, end time, observations)
+      const { data: current, error: fetchErr } = await supabase
+        .from('machinery_operations')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchErr) {
+        console.warn("Could not fetch machinery row before update:", fetchErr.message);
+      }
+
+      let existingZone = '';
+      let existingStart = '';
+      let existingEnd = '';
+      let existingObs = '';
+
+      if (current && current.observations) {
+        const obs = current.observations;
+        const matchZ = obs.match(/\[Zonas:\s*([^\]]+)\]/i);
+        if (matchZ) existingZone = matchZ[1];
+        const matchI = obs.match(/\[Inicio:\s*([^\]]+)\]/i);
+        if (matchI) existingStart = matchI[1];
+        const matchF = obs.match(/\[Fin:\s*([^\]]+)\]/i);
+        if (matchF) existingEnd = matchF[1];
+        existingObs = obs
+          .replace(/\[Zonas:\s*[^\]]+\]/gi, '')
+          .replace(/\[Inicio:\s*[^\]]+\]/gi, '')
+          .replace(/\[Fin:\s*[^\]]+\]/gi, '')
+          .trim();
+      }
+
+      const zonePart = input.zoneSnapshot !== undefined ? input.zoneSnapshot : existingZone;
+      const startPart = input.startTime !== undefined ? input.startTime : (input.start_time !== undefined ? input.start_time : existingStart);
+      const endPart = input.endTime !== undefined ? input.endTime : (input.end_time !== undefined ? input.end_time : existingEnd);
+      const userObsPart = input.observations !== undefined ? input.observations : existingObs;
+
+      const combinedObservations = [
+        zonePart ? `[Zonas: ${zonePart}]` : '',
+        startPart ? `[Inicio: ${startPart}]` : '',
+        endPart ? `[Fin: ${endPart}]` : '',
+        userObsPart || ''
+      ].filter(Boolean).join(' ').trim();
 
       const payload: any = {
         updated_at: new Date().toISOString(),
+        observations: combinedObservations
       };
-      if (currentVersion !== undefined) {
-        payload.version = currentVersion + 1;
+
+      if (current && typeof current.version === 'number') {
+        payload.version = current.version + 1;
       } else if (expectedVersion !== undefined && expectedVersion !== null) {
         payload.version = (expectedVersion || 0) + 1;
       }
 
+      if (input.status !== undefined) payload.status = input.status;
       if (input.date !== undefined) payload.date = input.date;
       if (input.equipmentId !== undefined || input.equipment_id !== undefined) {
         payload.equipment_id = input.equipmentId || input.equipment_id;
       }
-      if (input.operatorId !== undefined || input.operator_id !== undefined) {
-        payload.operator_id = input.operatorId || input.operator_id;
-      }
-      if (input.operatorName !== undefined || input.operator_name !== undefined) {
-        payload.operator_name = input.operatorName || input.operator_name;
-      }
-      if (input.laborId !== undefined || input.labor_id !== undefined) {
-        payload.labor_id = input.laborId || input.labor_id;
+      if (input.operatorName !== undefined || input.operator_name !== undefined || input.operatorId !== undefined) {
+        payload.operator_name = input.operatorName || input.operator_name || input.operatorId;
       }
       if (input.activityId !== undefined || input.activity_id !== undefined) {
         payload.activity_id = input.activityId || input.activity_id;
       }
-      if (input.zoneSnapshot !== undefined || input.zone_snapshot !== undefined) {
-        payload.zone_snapshot = input.zoneSnapshot || input.zone_snapshot;
+      if (input.locationId !== undefined || input.location_id !== undefined) {
+        payload.location_id = input.locationId || input.location_id;
       }
-      if (input.startTime !== undefined || input.start_time !== undefined) {
-        payload.start_time = input.startTime || input.start_time;
-      }
-      if (input.endTime !== undefined || input.end_time !== undefined) {
-        payload.end_time = input.endTime || input.end_time;
-      }
-      if (input.observations !== undefined) payload.observations = input.observations;
-      if (input.status !== undefined) payload.status = input.status;
 
-      let { error } = await supabase.from('machinery_operations').update(payload).eq('id', id);
-
-      // Fallback if schema mismatch occurs on remote instance
-      if (error) {
-        console.warn("Machinery update schema mismatch, attempting fallback update:", error.message);
-        const fallbackPayload: any = {
-          updated_at: new Date().toISOString(),
-        };
-        if (payload.version) fallbackPayload.version = payload.version;
-        if (payload.status) fallbackPayload.status = payload.status;
-        if (payload.date) fallbackPayload.date = payload.date;
-        if (payload.equipment_id) fallbackPayload.equipment_id = payload.equipment_id;
-        if (payload.operator_name) fallbackPayload.operator_name = payload.operator_name;
-        if (payload.activity_id) fallbackPayload.activity_id = payload.activity_id;
-        if (payload.start_time) fallbackPayload.start_time = payload.start_time;
-        if (payload.end_time) fallbackPayload.end_time = payload.end_time;
-
-        const fallbackObs = payload.zone_snapshot
-          ? `[Zonas: ${payload.zone_snapshot}] ${payload.observations || ''}`.trim()
-          : payload.observations;
-        if (fallbackObs !== undefined) fallbackPayload.observations = fallbackObs;
-
-        const resFallback = await supabase.from('machinery_operations').update(fallbackPayload).eq('id', id);
-        if (resFallback.error) throw resFallback.error;
-        error = null;
-      }
+      const { error } = await supabase.from('machinery_operations').update(payload).eq('id', id);
+      if (error) throw error;
 
       return { ok: true };
     } catch (e: any) {
@@ -758,7 +725,7 @@ class SupabaseRepository implements AgronomicRepository {
   async createPersonnel(input: any): Promise<Result> {
     try {
       const payload = {
-        id: input.id || `PER-${input.documento || crypto.randomUUID().slice(0,8)}`,
+        id: input.id || `PER-${input.documento || crypto.randomUUID().slice(0, 8)}`,
         name: input.name || input.nombreCompleto,
         documento: input.documento,
         type: input.type || input.tipoPersonal || 'CAMPO',
