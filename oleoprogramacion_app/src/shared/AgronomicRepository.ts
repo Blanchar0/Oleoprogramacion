@@ -169,33 +169,35 @@ class SupabaseRepository implements AgronomicRepository {
 
   async updateProgramming(id: string, input: any, expectedVersion?: number): Promise<Result> {
     try {
-      let nextVersion = expectedVersion !== undefined && expectedVersion !== null ? expectedVersion + 1 : undefined;
-
-      if (expectedVersion !== undefined && expectedVersion !== null) {
-        // Optimistic concurrency check
-        const { data: current, error: fetchErr } = await supabase
+      let currentVersion: number | undefined = undefined;
+      try {
+        const { data: current } = await supabase
           .from('programming')
           .select('version')
           .eq('id', id)
           .single();
-
-        if (fetchErr) throw fetchErr;
-        if (current.version !== expectedVersion) {
-          throw new Error("CONFLICT");
+        if (current && typeof current.version === 'number') {
+          currentVersion = current.version;
         }
-      }
+      } catch (e) {}
 
       const payload: any = {
         updated_at: new Date().toISOString(),
       };
 
-      if (nextVersion !== undefined) payload.version = nextVersion;
+      if (currentVersion !== undefined) {
+        payload.version = currentVersion + 1;
+      } else if (expectedVersion !== undefined && expectedVersion !== null) {
+        payload.version = (expectedVersion || 0) + 1;
+      }
+
       if (input.date !== undefined) payload.date = input.date;
       if (input.idSupervisor !== undefined || input.supervisorId !== undefined) {
         payload.id_supervisor = input.idSupervisor || input.supervisorId;
         payload.supervisor_id = input.supervisorId || input.idSupervisor;
       }
       if (input.laborId !== undefined) payload.labor_id = input.laborId;
+      if (input.activityId !== undefined) payload.activity_id = input.activityId;
       if (input.locationIds !== undefined) {
         payload.location_id = Array.isArray(input.locationIds) ? input.locationIds.join(',') : input.locationIds;
       } else if (input.locationId !== undefined) {
@@ -211,11 +213,29 @@ class SupabaseRepository implements AgronomicRepository {
       if (input.status !== undefined) payload.status = input.status;
       if (input.needsReview !== undefined) payload.needs_review = input.needsReview;
 
-      const { error } = await supabase.from('programming').update(payload).eq('id', id);
-      if (error) throw error;
+      let { error } = await supabase.from('programming').update(payload).eq('id', id);
+      if (error) {
+        console.warn("Programming update standard payload failed, attempting fallback:", error.message);
+        const fallbackPayload: any = {
+          updated_at: new Date().toISOString(),
+          date: payload.date,
+          id_supervisor: payload.id_supervisor,
+          labor_id: payload.labor_id,
+          activity_id: payload.activity_id,
+          location_id: payload.location_id,
+          zone_snapshot: payload.zone_snapshot,
+          personnel_ids: payload.personnel_ids,
+          status: payload.status,
+          observations: payload.observations,
+        };
+        const resFallback = await supabase.from('programming').update(fallbackPayload).eq('id', id);
+        if (resFallback.error) throw resFallback.error;
+        error = null;
+      }
 
       return { ok: true };
     } catch (e: any) {
+      console.error("updateProgramming error:", e);
       return { ok: false, error: e.message };
     }
   }
@@ -301,30 +321,38 @@ class SupabaseRepository implements AgronomicRepository {
     }
   }
 
-  async updateAbsence(id: string, input: any, expectedVersion: number): Promise<Result> {
+  async updateAbsence(id: string, input: any, expectedVersion?: number): Promise<Result> {
     try {
-      const { data: current, error: fetchErr } = await supabase
-        .from('absences')
-        .select('version')
-        .eq('id', id)
-        .single();
-
-      if (fetchErr) throw fetchErr;
-      if (current.version !== expectedVersion) {
-        throw new Error("CONFLICT");
-      }
+      let currentVersion: number | undefined = undefined;
+      try {
+        const { data: current } = await supabase
+          .from('absences')
+          .select('version')
+          .eq('id', id)
+          .single();
+        if (current && typeof current.version === 'number') {
+          currentVersion = current.version;
+        }
+      } catch (e) {}
 
       const payload: any = {
-        version: expectedVersion + 1,
         updated_at: new Date().toISOString(),
       };
+      if (currentVersion !== undefined) {
+        payload.version = currentVersion + 1;
+      } else if (expectedVersion !== undefined && expectedVersion !== null) {
+        payload.version = (expectedVersion || 0) + 1;
+      }
+
       if (input.status !== undefined) payload.status = input.status;
       if (input.observations !== undefined) payload.observations = input.observations;
+      if (input.reason !== undefined) payload.reason = input.reason;
 
       const { error } = await supabase.from('absences').update(payload).eq('id', id);
       if (error) throw error;
       return { ok: true };
     } catch (e: any) {
+      console.error("updateAbsence error:", e);
       return { ok: false, error: e.message };
     }
   }
@@ -493,61 +521,75 @@ class SupabaseRepository implements AgronomicRepository {
 
   async updateMachineryOperation(id: string, input: any, expectedVersion?: number): Promise<Result> {
     try {
-      if (expectedVersion !== undefined) {
-        const { data: current, error: fetchErr } = await supabase
+      let currentVersion: number | undefined = undefined;
+      try {
+        const { data: current } = await supabase
           .from('machinery_operations')
           .select('version')
           .eq('id', id)
           .single();
-
-        if (fetchErr) throw fetchErr;
-        if (current && current.version !== expectedVersion) {
-          throw new Error("CONFLICT");
+        if (current && typeof current.version === 'number') {
+          currentVersion = current.version;
         }
-      }
+      } catch (e) {}
 
       const payload: any = {
         updated_at: new Date().toISOString(),
       };
-      if (expectedVersion !== undefined) payload.version = expectedVersion + 1;
+      if (currentVersion !== undefined) {
+        payload.version = currentVersion + 1;
+      } else if (expectedVersion !== undefined && expectedVersion !== null) {
+        payload.version = (expectedVersion || 0) + 1;
+      }
+
       if (input.date !== undefined) payload.date = input.date;
-      if (input.equipmentId !== undefined) payload.equipment_id = input.equipmentId;
-      if (input.equipment_id !== undefined) payload.equipment_id = input.equipment_id;
-      if (input.operatorId !== undefined) payload.operator_id = input.operatorId;
-      if (input.operator_id !== undefined) payload.operator_id = input.operator_id;
-      if (input.operatorName !== undefined) payload.operator_name = input.operatorName;
-      if (input.operator_name !== undefined) payload.operator_name = input.operator_name;
-      if (input.laborId !== undefined) payload.labor_id = input.laborId;
-      if (input.labor_id !== undefined) payload.labor_id = input.labor_id;
-      if (input.activityId !== undefined) payload.activity_id = input.activityId;
-      if (input.activity_id !== undefined) payload.activity_id = input.activity_id;
-      if (input.zoneSnapshot !== undefined) payload.zone_snapshot = input.zoneSnapshot;
-      if (input.zone_snapshot !== undefined) payload.zone_snapshot = input.zone_snapshot;
-      if (input.startTime !== undefined) payload.start_time = input.startTime;
-      if (input.start_time !== undefined) payload.start_time = input.start_time;
-      if (input.endTime !== undefined) payload.end_time = input.endTime;
-      if (input.end_time !== undefined) payload.end_time = input.end_time;
+      if (input.equipmentId !== undefined || input.equipment_id !== undefined) {
+        payload.equipment_id = input.equipmentId || input.equipment_id;
+      }
+      if (input.operatorId !== undefined || input.operator_id !== undefined) {
+        payload.operator_id = input.operatorId || input.operator_id;
+      }
+      if (input.operatorName !== undefined || input.operator_name !== undefined) {
+        payload.operator_name = input.operatorName || input.operator_name;
+      }
+      if (input.laborId !== undefined || input.labor_id !== undefined) {
+        payload.labor_id = input.laborId || input.labor_id;
+      }
+      if (input.activityId !== undefined || input.activity_id !== undefined) {
+        payload.activity_id = input.activityId || input.activity_id;
+      }
+      if (input.zoneSnapshot !== undefined || input.zone_snapshot !== undefined) {
+        payload.zone_snapshot = input.zoneSnapshot || input.zone_snapshot;
+      }
+      if (input.startTime !== undefined || input.start_time !== undefined) {
+        payload.start_time = input.startTime || input.start_time;
+      }
+      if (input.endTime !== undefined || input.end_time !== undefined) {
+        payload.end_time = input.endTime || input.end_time;
+      }
       if (input.observations !== undefined) payload.observations = input.observations;
       if (input.status !== undefined) payload.status = input.status;
 
       let { error } = await supabase.from('machinery_operations').update(payload).eq('id', id);
 
       // Fallback if schema mismatch occurs on remote instance
-      if (error && error.message && (error.message.includes('schema cache') || error.message.includes('column'))) {
+      if (error) {
         console.warn("Machinery update schema mismatch, attempting fallback update:", error.message);
         const fallbackPayload: any = {
           updated_at: new Date().toISOString(),
         };
-        if (expectedVersion !== undefined) fallbackPayload.version = expectedVersion + 1;
-        if (input.status !== undefined) fallbackPayload.status = input.status;
-        if (input.date !== undefined) fallbackPayload.date = input.date;
-        if (input.equipmentId || input.equipment_id) fallbackPayload.equipment_id = input.equipmentId || input.equipment_id;
-        if (input.operatorName || input.operator_name) fallbackPayload.operator_name = input.operatorName || input.operator_name;
-        if (input.activityId || input.activity_id) fallbackPayload.activity_id = input.activityId || input.activity_id;
+        if (payload.version) fallbackPayload.version = payload.version;
+        if (payload.status) fallbackPayload.status = payload.status;
+        if (payload.date) fallbackPayload.date = payload.date;
+        if (payload.equipment_id) fallbackPayload.equipment_id = payload.equipment_id;
+        if (payload.operator_name) fallbackPayload.operator_name = payload.operator_name;
+        if (payload.activity_id) fallbackPayload.activity_id = payload.activity_id;
+        if (payload.start_time) fallbackPayload.start_time = payload.start_time;
+        if (payload.end_time) fallbackPayload.end_time = payload.end_time;
 
-        const fallbackObs = (input.zoneSnapshot || input.zone_snapshot)
-          ? `[Zonas: ${input.zoneSnapshot || input.zone_snapshot}] ${input.observations || ''}`.trim()
-          : input.observations;
+        const fallbackObs = payload.zone_snapshot
+          ? `[Zonas: ${payload.zone_snapshot}] ${payload.observations || ''}`.trim()
+          : payload.observations;
         if (fallbackObs !== undefined) fallbackPayload.observations = fallbackObs;
 
         const resFallback = await supabase.from('machinery_operations').update(fallbackPayload).eq('id', id);
@@ -555,9 +597,9 @@ class SupabaseRepository implements AgronomicRepository {
         error = null;
       }
 
-      if (error) throw error;
       return { ok: true };
     } catch (e: any) {
+      console.error("updateMachineryOperation error:", e);
       return { ok: false, error: e.message };
     }
   }

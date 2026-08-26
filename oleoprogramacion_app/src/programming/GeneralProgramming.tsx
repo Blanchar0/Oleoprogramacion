@@ -35,11 +35,11 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
   const [absences, setAbsences] = useState<any[]>([]);
 
   useEffect(() => {
-    const filters: any = { date };
-    if (user?.role === 'SUPERVISOR') filters.supervisorId = user.idSupervisor;
-    const unsub1 = repository.subscribeProgramming(filters, setProgrammings);
-    const unsub2 = repository.subscribeMachinery(filters, setMachineries);
-    const unsub3 = repository.subscribeAbsences(filters, setAbsences);
+    const progFilters: any = { date };
+    if (user?.role === 'SUPERVISOR') progFilters.supervisorId = user.idSupervisor;
+    const unsub1 = repository.subscribeProgramming(progFilters, setProgrammings);
+    const unsub2 = repository.subscribeMachinery({ date }, setMachineries);
+    const unsub3 = repository.subscribeAbsences({ date }, setAbsences);
     return () => { unsub1(); unsub2(); unsub3(); };
   }, [date, user]);
 
@@ -49,7 +49,7 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
 
   const validProgrammings = programmings.filter(p => p.status === 'CONFIRMADA');
   const filteredProgrammings = user?.role === 'SUPERVISOR' ? validProgrammings.filter(p => p.idSupervisor === user.idSupervisor) : validProgrammings;
-  const filteredMachineries = user?.role === 'SUPERVISOR' ? machineries.filter(m => m.idSupervisor === user.idSupervisor) : machineries;
+  const filteredMachineries = machineries;
 
   const groupedProgrammings = useMemo(() => {
     const groups: Record<string, any[]> = {};

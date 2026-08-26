@@ -9,6 +9,24 @@ import {
 import { Combobox } from '@/src/components/ui/combobox';
 import { Play, Square, Tractor, Calendar, MapPin, Check, Layers, Clock, Pencil, Trash2, X, AlertCircle } from 'lucide-react';
 
+export function normalizeTimeForInput(timeStr?: string): string {
+  if (!timeStr) return '';
+  const trimmed = timeStr.trim();
+  if (/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(trimmed)) {
+    return trimmed.substring(0, 5);
+  }
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([aApP])\.?\s*[mM]?\.?$/i);
+  if (match) {
+    let hours = parseInt(match[1], 10);
+    const minutes = match[2];
+    const isPM = match[3].toLowerCase() === 'p';
+    if (isPM && hours < 12) hours += 12;
+    if (!isPM && hours === 12) hours = 0;
+    return `${hours.toString().padStart(2, '0')}:${minutes}`;
+  }
+  return trimmed;
+}
+
 export function getAutoEnd8hTime(startTime?: string): string {
   if (!startTime) return '17:00';
   const parts = startTime.split(':').map(Number);
@@ -285,8 +303,8 @@ export default function Machinery() {
     setEditOperatorId(op.operatorId || op.operator_id || '');
     setEditLaborId(op.laborId || op.labor_id || (machineryLabor ? machineryLabor.id : ''));
     setEditActivityId(op.activityId || op.activity_id || '');
-    setEditStartTime(op.startTime || op.start_time || '');
-    setEditEndTime(op.endTime || op.end_time || '');
+    setEditStartTime(normalizeTimeForInput(op.startTime || op.start_time || ''));
+    setEditEndTime(normalizeTimeForInput(op.endTime || op.end_time || ''));
     setEditStatus(op.status || 'EN_PROGRESO');
     setEditObservations(op.observations || '');
 
@@ -301,7 +319,11 @@ export default function Machinery() {
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editEquipmentId || !editOperatorId || !editLaborId || editSelectedZones.length === 0 || !editStartTime) {
+    const effectiveLaborId = editLaborId || (machineryLabor ? machineryLabor.id : null);
+    const cleanStartTime = normalizeTimeForInput(editStartTime);
+    const cleanEndTime = normalizeTimeForInput(editEndTime);
+
+    if (!editEquipmentId || !editOperatorId || !effectiveLaborId || editSelectedZones.length === 0 || !cleanStartTime) {
       setEditError('Complete los campos obligatorios (*) y seleccione al menos una zona');
       return;
     }
@@ -315,10 +337,10 @@ export default function Machinery() {
       equipmentId: editEquipmentId,
       operatorId: editOperatorId,
       operatorName: opName,
-      laborId: editLaborId || (machineryLabor ? machineryLabor.id : null),
+      laborId: effectiveLaborId,
       activityId: editActivityId || null,
-      startTime: editStartTime,
-      endTime: editEndTime || null,
+      startTime: cleanStartTime,
+      endTime: cleanEndTime || null,
       status: editStatus,
       zoneSnapshot: editSelectedZones.join(', '),
       observations: editObservations || '',
