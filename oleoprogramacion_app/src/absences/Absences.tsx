@@ -360,14 +360,14 @@ export default function Absences() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-2">
                     {[
-                      { val: 'Incapacidad', label: 'INCAPACIDAD', icon: '🩹', color: 'border-blue-300 text-blue-950 bg-blue-50/80', active: 'bg-blue-600 text-white border-blue-700 shadow-xs' },
-                      { val: 'Calamidad doméstica', label: 'CALAMIDAD DOMÉSTICA', icon: '🏠', color: 'border-amber-300 text-amber-950 bg-amber-50/80', active: 'bg-amber-600 text-white border-amber-700 shadow-xs' },
-                      { val: 'Permiso autorizado', label: 'PERMISO AUTORIZADO', icon: '⏱️', color: 'border-emerald-300 text-emerald-950 bg-emerald-50/80', active: 'bg-emerald-600 text-white border-emerald-700 shadow-xs' },
-                      { val: 'Ausencia injustificada', label: 'AUSENCIA INJUSTIFICADA', icon: '❌', color: 'border-red-300 text-red-950 bg-red-50/80', active: 'bg-red-600 text-white border-red-700 shadow-xs' },
-                      { val: 'Vacaciones', label: 'VACACIONES', icon: '🏖️', color: 'border-purple-300 text-purple-950 bg-purple-50/80', active: 'bg-purple-600 text-white border-purple-700 shadow-xs' },
-                      { val: 'Suspensión', label: 'SUSPENSIÓN LABORAL', icon: '⚠️', color: 'border-rose-300 text-rose-950 bg-rose-50/80', active: 'bg-rose-600 text-white border-rose-700 shadow-xs' },
+                      { val: 'Incapacidad', label: 'INCAPACIDAD', icon: '🩹', color: 'border-blue-200 text-blue-900 bg-white hover:bg-blue-50/80', active: 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-blue-400' },
+                      { val: 'Calamidad doméstica', label: 'CALAMIDAD DOMÉSTICA', icon: '🏠', color: 'border-amber-200 text-amber-900 bg-white hover:bg-amber-50/80', active: 'bg-amber-600 text-white border-amber-700 shadow-md ring-2 ring-amber-400' },
+                      { val: 'Permiso autorizado', label: 'PERMISO AUTORIZADO', icon: '⏱️', color: 'border-emerald-200 text-emerald-900 bg-white hover:bg-emerald-50/80', active: 'bg-emerald-600 text-white border-emerald-700 shadow-md ring-2 ring-emerald-400' },
+                      { val: 'Ausencia injustificada', label: 'AUSENCIA INJUSTIFICADA', icon: '❌', color: 'border-red-200 text-red-900 bg-white hover:bg-red-50/80', active: 'bg-red-600 text-white border-red-700 shadow-md ring-2 ring-red-400' },
+                      { val: 'Vacaciones', label: 'VACACIONES', icon: '🏖️', color: 'border-purple-200 text-purple-900 bg-white hover:bg-purple-50/80', active: 'bg-purple-600 text-white border-purple-700 shadow-md ring-2 ring-purple-400' },
+                      { val: 'Suspensión', label: 'SUSPENSIÓN LABORAL', icon: '⚠️', color: 'border-rose-200 text-rose-900 bg-white hover:bg-rose-50/80', active: 'bg-rose-600 text-white border-rose-700 shadow-md ring-2 ring-rose-400' },
                     ].map(btn => {
                       const isSelected = reason === btn.val;
                       return (
@@ -376,43 +376,31 @@ export default function Absences() {
                           type="button"
                           onClick={() => setReason(btn.val)}
                           className={cn(
-                            "w-full p-3 rounded-xl border text-xs sm:text-sm font-black uppercase flex items-center justify-between transition-all cursor-pointer",
-                            isSelected ? btn.active : cn(btn.color, "hover:opacity-90")
+                            "w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-black uppercase flex items-center justify-between transition-all cursor-pointer",
+                            isSelected ? btn.active : btn.color
                           )}
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="text-xl shrink-0">{btn.icon}</span>
-                            <span className="break-words font-black tracking-wide">{btn.label}</span>
+                            <span className="text-lg shrink-0">{btn.icon}</span>
+                            <span className="font-black tracking-wide leading-snug">{btn.label}</span>
                           </div>
-                          {isSelected && (
-                            <span className="w-5 h-5 rounded-full bg-white text-current flex items-center justify-center shrink-0">
-                              <Check size={13} className="text-current stroke-[3]" />
-                            </span>
-                          )}
                         </button>
                       );
                     })}
-                  </div>
 
-                  {/* Opción Otro si no es de las 6 principales */}
-                  <div className="pt-1">
+                    {/* Opción Otro si no es de las 6 principales */}
                     <button
                       type="button"
                       onClick={() => setReason('Otro')}
                       className={cn(
-                        "w-full p-3 rounded-xl border text-xs sm:text-sm font-black uppercase flex items-center justify-between transition-all cursor-pointer",
-                        reason === 'Otro' ? "bg-gray-800 text-white border-gray-900 shadow-xs" : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"
+                        "w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-black uppercase flex items-center justify-between transition-all cursor-pointer",
+                        reason === 'Otro' ? "bg-gray-800 text-white border-gray-900 shadow-md ring-2 ring-gray-400" : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"
                       )}
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="text-xl shrink-0">📝</span>
-                        <span className="font-black tracking-wide">OTRO MOTIVO / NO ESPECIFICADO</span>
+                        <span className="text-lg shrink-0">📝</span>
+                        <span className="font-black tracking-wide leading-snug">OTRO MOTIVO / NO ESPECIFICADO</span>
                       </div>
-                      {reason === 'Otro' && (
-                        <span className="w-5 h-5 rounded-full bg-white text-gray-900 flex items-center justify-center shrink-0">
-                          <Check size={13} className="text-gray-900 stroke-[3]" />
-                        </span>
-                      )}
                     </button>
                   </div>
                 </div>
@@ -435,10 +423,10 @@ export default function Absences() {
                   <Button 
                     type="submit" 
                     disabled={loading || !personnelId} 
-                    className="w-full h-14 text-sm sm:text-base font-black uppercase tracking-wide bg-red-700 hover:bg-red-800 text-white shadow-xl rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full min-h-[50px] h-auto py-3 px-4 text-xs sm:text-sm font-black uppercase tracking-wide bg-red-700 hover:bg-red-800 text-white shadow-xl rounded-xl flex items-center justify-center gap-2 cursor-pointer text-center leading-snug whitespace-normal"
                   >
-                    <CheckCircle2 size={22} className="shrink-0" />
-                    {loading ? 'PROCESANDO...' : 'CONFIRMAR Y REGISTRAR INASISTENCIA'}
+                    <CheckCircle2 size={20} className="shrink-0" />
+                    <span>{loading ? 'PROCESANDO...' : 'CONFIRMAR Y REGISTRAR INASISTENCIA'}</span>
                   </Button>
                 </div>
               </form>

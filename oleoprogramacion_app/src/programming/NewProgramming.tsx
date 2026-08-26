@@ -1165,10 +1165,10 @@ export default function NewProgramming() {
                   type="submit" 
                   size="lg" 
                   disabled={loading || !laborId || (activities.length > 0 && !activityId) || !zone || selectedLocations.length === 0 || selectedPersonnel.length === 0} 
-                  className="w-full h-14 text-sm sm:text-base font-black uppercase tracking-wide bg-forest-900 hover:bg-forest-950 text-white shadow-xl rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full min-h-[50px] h-auto py-3 px-4 text-xs sm:text-sm font-black uppercase tracking-wide bg-forest-900 hover:bg-forest-950 text-white shadow-xl rounded-xl flex items-center justify-center gap-2 cursor-pointer text-center leading-snug whitespace-normal"
                 >
-                  <CheckCircle2 size={22} className="text-lime-400 stroke-[3] shrink-0" />
-                  {loading ? 'PROCESANDO...' : isEditing ? 'GUARDAR CAMBIOS DE PROGRAMACIÓN' : 'CREAR PENDIENTE DE PROGRAMACIÓN'}
+                  <CheckCircle2 size={20} className="text-lime-400 stroke-[3] shrink-0" />
+                  <span>{loading ? 'PROCESANDO...' : isEditing ? 'GUARDAR CAMBIOS DE PROGRAMACIÓN' : 'CREAR PENDIENTE DE PROGRAMACIÓN'}</span>
                 </Button>
               </div>
 

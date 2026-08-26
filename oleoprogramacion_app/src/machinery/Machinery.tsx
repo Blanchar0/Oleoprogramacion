@@ -614,9 +614,10 @@ export default function Machinery() {
                   <Button 
                     type="submit" 
                     disabled={loading || !equipmentId || !operatorId || selectedZones.length === 0} 
-                    className="w-full h-14 shadow-xl font-black text-base uppercase tracking-wide bg-purple-900 hover:bg-purple-950 text-white rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full min-h-[50px] h-auto py-3 px-4 shadow-xl font-black text-xs sm:text-sm uppercase tracking-wide bg-purple-900 hover:bg-purple-950 text-white rounded-xl flex items-center justify-center gap-2 cursor-pointer text-center leading-snug whitespace-normal"
                   >
-                    <Play size={20} className="fill-white" /> {loading ? 'INICIANDO...' : 'INICIAR OPERACIÓN MECANIZADA'}
+                    <Play size={18} className="fill-white shrink-0" />
+                    <span>{loading ? 'INICIANDO...' : 'INICIAR OPERACIÓN MECANIZADA'}</span>
                   </Button>
                 </div>
               </form>
