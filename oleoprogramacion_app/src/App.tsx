@@ -231,12 +231,6 @@ function AppContent() {
                 </RoleGuard>
               } />
               
-              <Route path="/admin/audit" element={
-                <RoleGuard roles={['ADMIN']}>
-                  <Audit />
-                </RoleGuard>
-              } />
-              
               {/* Catch all */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

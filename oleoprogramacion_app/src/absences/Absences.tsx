@@ -33,10 +33,9 @@ export default function Absences() {
 
   useEffect(() => {
     const filters: any = { date };
-    if (user?.role === 'SUPERVISOR') filters.supervisorId = user.idSupervisor;
     const unsubAbsences = repository.subscribeAbsences(filters, setTodaysAbsences);
     return () => unsubAbsences();
-  }, [date, user]);
+  }, [date]);
 
   // Suscribirse a TODAS las programaciones y maquinarias de la fecha para detectar asignaciones
   useEffect(() => {

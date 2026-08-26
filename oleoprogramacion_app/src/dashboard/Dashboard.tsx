@@ -158,17 +158,17 @@ export default function Dashboard() {
 
   const DirectivoDashboard = () => {
     const stats = useMemo(() => {
-      // 1. Total Personas en Catálogo (178)
-      const totalPersonnelList = catalogs.personnel || [];
-      const totalPeople = totalPersonnelList.length > 0 ? totalPersonnelList.length : 178;
+      // 1. Total Personas en Catálogo (activas y existentes)
+      const totalPersonnelList = (catalogs.personnel || []).filter((p: any) => p.active !== false);
+      const totalPeople = totalPersonnelList.length;
 
       // 2. Personal Administrativo y de Supervisión (oficina + supervisores)
       const adminList = totalPersonnelList.filter((p: any) => !isOperative(p));
-      const adminTotal = adminList.length > 0 ? adminList.length : 9;
+      const adminTotal = adminList.length;
 
       // 3. Total Operativos Teóricos en nómina
-      const activeOperativesList = totalPersonnelList.filter((p: any) => p.active !== false && isOperative(p));
-      const operativesPayrollTotal = activeOperativesList.length > 0 ? activeOperativesList.length : Math.max(0, totalPeople - adminTotal);
+      const activeOperativesList = totalPersonnelList.filter((p: any) => isOperative(p));
+      const operativesPayrollTotal = activeOperativesList.length;
 
       // Novedades e inasistencias activas del día
       const activeNovedades = (catalogs.personnelNovelties || []).filter((n:any) => n.fechaInicio <= date && n.fechaFin >= date);
@@ -724,6 +724,6 @@ export default function Dashboard() {
     );
   };
 
-  return user?.role === 'DIRECTIVO' ? <DirectivoDashboard /> : <NormalDashboard />;
+  return <DirectivoDashboard />;
 }
 

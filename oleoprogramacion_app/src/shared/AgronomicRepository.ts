@@ -353,12 +353,31 @@ class SupabaseRepository implements AgronomicRepository {
         let obs = item.observations || '';
 
         // Extract metadata if it was stored in observations during schema fallback
-        if (!zoneSnap && obs.startsWith('[Zonas:')) {
-          const match = obs.match(/^\[Zonas:\s*([^\]]+)\]\s*(.*)$/);
-          if (match) {
-            zoneSnap = match[1];
-            obs = match[2];
+        if (obs) {
+          if (!zoneSnap && obs.includes('[Zonas:')) {
+            const matchZ = obs.match(/\[Zonas:\s*([^\]]+)\]/i);
+            if (matchZ) zoneSnap = matchZ[1];
           }
+          if (!sTime && obs.includes('[Inicio:')) {
+            const matchI = obs.match(/\[Inicio:\s*([^\]]+)\]/i);
+            if (matchI) sTime = matchI[1];
+          }
+          if (!eTime && obs.includes('[Fin:')) {
+            const matchF = obs.match(/\[Fin:\s*([^\]]+)\]/i);
+            if (matchF) eTime = matchF[1];
+          }
+          // Clean fallback tags from user-facing observations
+          obs = obs
+            .replace(/\[Zonas:\s*[^\]]+\]/gi, '')
+            .replace(/\[Inicio:\s*[^\]]+\]/gi, '')
+            .replace(/\[Fin:\s*[^\]]+\]/gi, '')
+            .trim();
+        }
+
+        if (!sTime && item.created_at) {
+          try {
+            sTime = new Date(item.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+          } catch(e) {}
         }
 
         return {
@@ -432,9 +451,11 @@ class SupabaseRepository implements AgronomicRepository {
       // Dynamic fallback if columns are missing from the schema cache (pre-migration)
       if (error && error.message && (error.message.includes('schema cache') || error.message.includes('column'))) {
         console.warn("Machinery insert schema mismatch, attempting fallback with standard columns:", error.message);
-        const fallbackObservations = payload.zone_snapshot
-          ? `[Zonas: ${payload.zone_snapshot}] ${payload.observations || ''}`.trim()
-          : (payload.observations || '');
+        const fallbackObservations = [
+          payload.zone_snapshot ? `[Zonas: ${payload.zone_snapshot}]` : '',
+          payload.start_time ? `[Inicio: ${payload.start_time}]` : '',
+          payload.observations || ''
+        ].filter(Boolean).join(' ').trim();
 
         const fallbackPayload: Record<string, any> = {
           id: payload.id,
@@ -445,6 +466,7 @@ class SupabaseRepository implements AgronomicRepository {
           operator_name: payload.operator_name || payload.operator_id,
           activity_id: payload.activity_id,
           location_id: payload.location_id,
+          start_time: payload.start_time,
           observations: fallbackObservations,
           status: payload.status,
           version: 1,
@@ -674,6 +696,16 @@ class SupabaseRepository implements AgronomicRepository {
     }
   }
 
+  async deleteUser(id: string): Promise<Result> {
+    try {
+      const { error } = await supabase.from('users').delete().eq('id', id);
+      if (error) throw error;
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
   // Personnel
   async createPersonnel(input: any): Promise<Result> {
     try {
@@ -714,6 +746,16 @@ class SupabaseRepository implements AgronomicRepository {
     }
   }
 
+  async deletePersonnel(id: string): Promise<Result> {
+    try {
+      const { error } = await supabase.from('personnel').delete().eq('id', id);
+      if (error) throw error;
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
   // Activities
   async createActivity(input: any): Promise<Result> {
     try {
@@ -748,6 +790,16 @@ class SupabaseRepository implements AgronomicRepository {
     }
   }
 
+  async deleteActivity(id: string): Promise<Result> {
+    try {
+      const { error } = await supabase.from('activities').delete().eq('id', id);
+      if (error) throw error;
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
   // Equipment
   async createEquipment(input: any): Promise<Result> {
     try {
@@ -775,6 +827,16 @@ class SupabaseRepository implements AgronomicRepository {
       const { data, error } = await supabase.from('equipment').update(payload).eq('id', id).select().single();
       if (error) throw error;
       return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async deleteEquipment(id: string): Promise<Result> {
+    try {
+      const { error } = await supabase.from('equipment').delete().eq('id', id);
+      if (error) throw error;
+      return { ok: true };
     } catch (e: any) {
       return { ok: false, error: e.message };
     }

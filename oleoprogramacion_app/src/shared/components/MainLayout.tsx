@@ -73,7 +73,6 @@ export default function MainLayout() {
     { name: 'Novedades', shortName: 'Novedades', href: '/novedades', icon: CalendarDays, roles: ['ADMIN', 'DIRECTIVO'] },
     { name: 'Maquinaria', shortName: 'Maquinaria', href: '/machinery', icon: Tractor, roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'] },
     { name: 'Catálogos', shortName: 'Catálogos', href: '/admin/catalogs', icon: Settings, roles: ['ADMIN'] },
-    { name: 'Auditoría', shortName: 'Auditoría', href: '/admin/audit', icon: Users, roles: ['ADMIN'] },
   ];
 
   const filteredNav = navigation.filter(item => item.roles.includes(user.role));

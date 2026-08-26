@@ -9,6 +9,30 @@ import {
 import { Combobox } from '@/src/components/ui/combobox';
 import { Play, Square, Tractor, Calendar, MapPin, Check, Layers, Clock, Pencil, Trash2, X, AlertCircle } from 'lucide-react';
 
+export function getAutoEnd8hTime(startTime?: string): string {
+  if (!startTime) return '17:00';
+  const parts = startTime.split(':').map(Number);
+  if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return '17:00';
+  let endHour = parts[0] + 8;
+  let endMin = parts[1];
+  if (endHour >= 24) endHour = endHour - 24;
+  return `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+}
+
+export function isOver8Hours(dateStr: string, startTime?: string): boolean {
+  if (!startTime || !dateStr) return false;
+  const parts = startTime.split(':').map(Number);
+  if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return false;
+  
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return false;
+  const startDate = new Date(y, m - 1, d, parts[0], parts[1], 0);
+  const now = new Date();
+  const diffMs = now.getTime() - startDate.getTime();
+  const diffHours = diffMs / (1000 * 60 * 60);
+  return diffHours >= 8;
+}
+
 export function calculateDuration(startTime?: string, endTime?: string): string | null {
   if (!startTime || !endTime) return null;
   const partsStart = startTime.split(':').map(Number);
@@ -66,12 +90,41 @@ export default function Machinery() {
 
   const isDirectivo = user?.role === 'DIRECTIVO';
 
+  // Suscribirse a TODAS las operaciones de la fecha sin filtrar por supervisor
   useEffect(() => {
     const filters: any = { date };
-    if (user?.role === 'SUPERVISOR') filters.supervisorId = user.idSupervisor;
-    const unsub = repository.subscribeMachinery(filters, setTodaysMachinery);
+    const unsub = repository.subscribeMachinery(filters, (items) => {
+      setTodaysMachinery(items);
+
+      // Auto-detención si se han cumplido 8 horas
+      items.forEach((m) => {
+        if (m.status === 'EN_PROGRESO' && m.startTime && isOver8Hours(m.date, m.startTime)) {
+          const autoEndTime = getAutoEnd8hTime(m.startTime);
+          repository.updateMachineryOperation(m.id, {
+            status: 'FINALIZADA',
+            endTime: autoEndTime,
+          }, m.version);
+        }
+      });
+    });
     return () => unsub();
-  }, [date, user]);
+  }, [date]);
+
+  // Chequeo periódico cada 60s para auto-detención a las 8 horas
+  useEffect(() => {
+    const interval = setInterval(() => {
+      todaysMachinery.forEach((m) => {
+        if (m.status === 'EN_PROGRESO' && m.startTime && isOver8Hours(m.date, m.startTime)) {
+          const autoEndTime = getAutoEnd8hTime(m.startTime);
+          repository.updateMachineryOperation(m.id, {
+            status: 'FINALIZADA',
+            endTime: autoEndTime,
+          }, m.version);
+        }
+      });
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [todaysMachinery]);
 
   const isTractorista = (person: any): boolean => {
     if (!person) return false;
@@ -248,15 +301,12 @@ export default function Machinery() {
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingOp) return;
-
-    if (!editEquipmentId || !editOperatorId || editSelectedZones.length === 0 || !editStartTime) {
+    if (!editEquipmentId || !editOperatorId || !editLaborId || editSelectedZones.length === 0 || !editStartTime) {
       setEditError('Complete los campos obligatorios (*) y seleccione al menos una zona');
       return;
     }
-
-    setEditLoading(true);
     setEditError('');
+    setEditLoading(true);
 
     const opObj = catalogs.personnel?.find((p: any) => p.id === editOperatorId);
     const opName = opObj?.name || opObj?.nombreCompleto || '';
@@ -390,37 +440,35 @@ export default function Machinery() {
                   />
                 </div>
 
-                {/* Selección múltiple de Zonas (Sin lotes) */}
+                {/* Selector Múltiple de Zonas */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <Label className="font-semibold text-gray-700 flex items-center gap-1.5">
-                      <MapPin size={14} className="text-forest-700" /> Zonas de Trabajo *
+                    <Label className="flex items-center gap-1 text-xs">
+                      <MapPin size={13} className="text-forest-700" /> Zonas de Operación *
                     </Label>
-                    <div className="flex items-center gap-2">
-                      {zones.length > 0 && selectedZones.length < zones.length && (
-                        <button
-                          type="button"
-                          onClick={selectAllZones}
-                          className="text-[11px] text-forest-700 hover:text-forest-900 font-medium hover:underline"
-                        >
-                          Todas
-                        </button>
-                      )}
-                      {selectedZones.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={clearZones}
-                          className="text-[11px] text-red-600 hover:text-red-800 font-medium hover:underline"
-                        >
-                          Limpiar
-                        </button>
-                      )}
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={selectAllZones}
+                        className="text-forest-700 hover:text-forest-900 font-semibold underline"
+                      >
+                        Todas
+                      </button>
+                      <span className="text-gray-300">|</span>
+                      <button
+                        type="button"
+                        onClick={clearZones}
+                        className="text-gray-500 hover:text-gray-700 underline"
+                      >
+                        Limpiar
+                      </button>
                     </div>
                   </div>
 
-                  <div className="p-2.5 bg-gray-50/90 rounded-xl border border-gray-200/80 min-h-[52px]">
+                  {/* Badges clicables de Zonas */}
+                  <div className="border border-gray-200 rounded-lg p-2.5 bg-gray-50/50 max-h-36 overflow-y-auto">
                     {zones.length === 0 ? (
-                      <span className="text-xs text-gray-400 italic">No hay zonas configuradas en el catálogo</span>
+                      <p className="text-xs text-gray-400">No hay zonas configuradas</p>
                     ) : (
                       <div className="flex flex-wrap gap-1.5">
                         {zones.map((z: string) => {
@@ -431,10 +479,10 @@ export default function Machinery() {
                               type="button"
                               onClick={() => toggleZone(z)}
                               className={cn(
-                                "px-2.5 py-1 text-xs rounded-lg font-medium transition-all flex items-center gap-1 border",
-                                isSelected 
-                                  ? "bg-forest-900 text-white border-forest-950 shadow-xs font-semibold" 
-                                  : "bg-white text-gray-700 border-gray-200 hover:bg-forest-50 hover:border-forest-300"
+                                "text-xs font-semibold px-2.5 py-1 rounded-md transition-all flex items-center gap-1",
+                                isSelected
+                                  ? "bg-forest-900 text-white shadow-xs"
+                                  : "bg-white text-gray-700 border border-gray-200 hover:border-forest-700 hover:bg-forest-50/50"
                               )}
                             >
                               {isSelected ? (
@@ -507,95 +555,105 @@ export default function Machinery() {
                   const duration = calculateDuration(m.startTime, m.endTime);
 
                   return (
-                    <div key={m.id} className="border border-gray-200/80 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white hover:border-gray-300 transition-colors shadow-xs">
-                      <div className="space-y-1">
-                        <div className="font-bold text-gray-900 text-base flex items-center gap-2">
-                          <Tractor size={18} className="text-forest-700" />
-                          {eq?.code ? `${eq.code} - ${eq.name}` : (eq?.name || 'Equipo')}
-                        </div>
-                        <div className="text-xs text-gray-700 font-medium">
-                          Operador: <span className="text-gray-900 font-semibold">{op?.name || m.operatorName || 'Sin asignar'}</span>
-                        </div>
-                        {(labor || act) && (
-                          <div className="text-xs text-forest-900 font-medium">
-                            Labor: <span className="font-bold text-forest-950">{labor?.name || 'Maquinaria'}</span>
-                            {act?.name && <span className="text-gray-600 font-normal"> — {act.name}</span>}
+                    <div key={m.id} className="border border-forest-900/15 rounded-xl p-4 bg-white shadow-xs hover:border-forest-900/30 transition-all space-y-3">
+                      {/* Header de la operación */}
+                      <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="p-2 bg-forest-50 text-forest-800 rounded-lg shrink-0">
+                            <Tractor size={20} className="text-forest-700" />
                           </div>
-                        )}
-                        <div className="text-xs text-gray-600 flex items-center gap-1.5 pt-0.5">
-                          <MapPin size={13} className="text-forest-700 shrink-0" />
-                          <span>Zonas: <strong className="text-gray-800">{m.zoneSnapshot || 'No especificada'}</strong></span>
-                        </div>
-                        {m.observations && (
-                          <div className="text-xs text-gray-600 bg-gray-50 px-2.5 py-1 rounded-md border border-gray-200/60 mt-1 max-w-md">
-                            <span className="font-semibold text-gray-700">Obs:</span> {m.observations}
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-gray-900 text-base leading-tight truncate">
+                              {eq?.code ? `${eq.code} - ${eq.name}` : (eq?.name || 'Equipo')}
+                            </h4>
+                            <p className="text-xs text-gray-600 font-medium mt-0.5">
+                              Operador: <span className="text-gray-900 font-semibold">{op?.name || m.operatorName || 'Sin asignar'}</span>
+                            </p>
                           </div>
-                        )}
-                        
-                        {/* Horario y Duración total */}
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <div className="text-xs font-mono text-gray-700 bg-gray-100 inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-gray-200">
-                            <Clock size={12} className="text-gray-500" />
-                            <span>Inicio: <strong>{m.startTime || '--:--'}</strong></span>
-                            {m.endTime && <span>| Fin: <strong>{m.endTime}</strong></span>}
-                          </div>
-                          {duration && (
-                            <span className="text-xs font-bold text-forest-900 bg-lime-100/90 border border-lime-300 px-2 py-0.5 rounded-full">
-                              ⏱️ Total: {duration}
-                            </span>
-                          )}
                         </div>
-                      </div>
 
-                      {/* Botones de Estado y Acciones */}
-                      <div className="flex sm:flex-col items-end gap-2 self-stretch sm:self-auto justify-between sm:justify-start">
                         <span className={cn(
-                          "px-2.5 py-1 text-xs rounded-full font-bold uppercase tracking-wider",
+                          "px-2.5 py-1 text-xs rounded-full font-bold uppercase tracking-wider shrink-0",
                           m.status === 'EN_PROGRESO' ? "bg-blue-100 text-blue-800 border border-blue-200" :
                             m.status === 'FINALIZADA' ? "bg-green-100 text-green-800 border border-green-200" : "bg-red-100 text-red-800 border border-red-200"
                         )}>
                           {m.status?.replace('_', ' ') || 'EN PROGRESO'}
                         </span>
+                      </div>
 
-                        <div className="flex items-center gap-1.5 mt-1">
-                          {/* Detener o Cancelar si está en progreso */}
-                          {!isDirectivo && m.status === 'EN_PROGRESO' && (
-                            <>
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                className="text-red-700 border border-red-300 hover:bg-red-50 text-xs h-7 px-2 font-bold" 
-                                onClick={() => handleCancel(m.id, m.version)}
-                                title="Cancelar operación"
-                              >
-                                Cancelar
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                className="bg-forest-900 hover:bg-forest-950 text-white text-xs h-7 px-2.5 font-bold flex items-center gap-1" 
-                                onClick={() => handleStop(m.id, m.version)}
-                                title="Detener operación y registrar hora de fin"
-                              >
-                                <Square size={12} className="fill-white" /> Detener
-                              </Button>
-                            </>
+                      {/* Detalles: Labor y Zonas */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <div className="flex items-center gap-1.5 text-forest-900 bg-forest-50/60 px-2.5 py-1.5 rounded-lg border border-forest-100">
+                          <span className="font-semibold text-gray-600">Labor:</span>
+                          <span className="font-bold text-forest-950 truncate">{labor?.name || 'Maquinaria'}</span>
+                          {act?.name && <span className="text-gray-600 font-medium truncate">— {act.name}</span>}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-gray-700 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-200/70">
+                          <MapPin size={13} className="text-forest-700 shrink-0" />
+                          <span className="font-semibold text-gray-600">Zonas:</span>
+                          <span className="font-bold text-gray-900 truncate">{m.zoneSnapshot || 'No especificada'}</span>
+                        </div>
+                      </div>
+
+                      {/* Observaciones si existen */}
+                      {m.observations && (
+                        <div className="text-xs text-gray-600 bg-gray-50/80 px-2.5 py-1.5 rounded-lg border border-gray-200/60">
+                          <strong className="text-gray-700">Obs:</strong> {m.observations}
+                        </div>
+                      )}
+
+                      {/* Footer: Horario a la izquierda, Acciones alineadas a la derecha */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                        {/* Horario */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="text-xs font-mono text-gray-700 bg-gray-100 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200">
+                            <Clock size={13} className="text-gray-500" />
+                            <span>Inicio: <strong>{m.startTime || '--:--'}</strong></span>
+                            {m.endTime && <span>| Fin: <strong>{m.endTime}</strong></span>}
+                          </div>
+                          {duration && (
+                            <span className="text-xs font-bold text-forest-900 bg-lime-100/90 border border-lime-300 px-2 py-0.5 rounded-full">
+                              ⏱️ {duration}
+                            </span>
                           )}
+                        </div>
 
-                          {/* Botón Editar */}
-                          {!isDirectivo && (
+                        {/* Botones de Acción */}
+                        {!isDirectivo && (
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            {m.status === 'EN_PROGRESO' && (
+                              <>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="text-red-700 border border-red-300 hover:bg-red-50 text-xs h-7 px-2.5 font-bold" 
+                                  onClick={() => handleCancel(m.id, m.version)}
+                                  title="Cancelar operación"
+                                >
+                                  Cancelar
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  className="bg-forest-900 hover:bg-forest-950 text-white text-xs h-7 px-3 font-bold flex items-center gap-1" 
+                                  onClick={() => handleStop(m.id, m.version)}
+                                  title="Detener operación y registrar hora de fin"
+                                >
+                                  <Square size={12} className="fill-white" /> Detener
+                                </Button>
+                              </>
+                            )}
+
                             <Button
                               size="sm"
                               variant="outline"
-                              className="text-gray-700 border-gray-300 hover:bg-gray-100 text-xs h-7 px-2 font-medium flex items-center gap-1"
+                              className="text-gray-700 border-gray-300 hover:bg-gray-100 text-xs h-7 px-2.5 font-medium flex items-center gap-1"
                               onClick={() => openEdit(m)}
                               title="Editar operación"
                             >
                               <Pencil size={12} /> Editar
                             </Button>
-                          )}
 
-                          {/* Botón Eliminar */}
-                          {!isDirectivo && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -605,8 +663,8 @@ export default function Machinery() {
                             >
                               <Trash2 size={13} />
                             </Button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -617,150 +675,171 @@ export default function Machinery() {
         </Card>
       </div>
 
-      {/* Modal de Edición de Operación */}
+      {/* Modal de Edición */}
       <Dialog open={!!editingOp} onOpenChange={(open) => !open && setEditingOp(null)}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-forest-950 flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-forest-950">
               <Pencil size={18} className="text-forest-700" /> Editar Operación de Maquinaria
             </DialogTitle>
           </DialogHeader>
 
-          {editError && (
-            <div className="text-sm text-negative bg-negative/10 p-2.5 rounded-md flex items-center gap-2">
-              <AlertCircle size={16} /> {editError}
-            </div>
-          )}
-
-          <form onSubmit={handleSaveEdit} className="space-y-4 py-2">
-            <div>
-              <Label>Tractor / Equipo *</Label>
-              <Combobox
-                options={tractors.map((t: any) => ({
-                  value: t.id,
-                  label: t.code ? `${t.code} - ${t.name}` : t.name
-                }))}
-                value={editEquipmentId} 
-                onChange={setEditEquipmentId} 
-                placeholder="Seleccione tractor..."
-              />
-            </div>
-
-            <div>
-              <Label>Operador (Tractorista) *</Label>
-              <Combobox
-                options={operatorOptions.map((p: any) => ({
-                  value: p.id,
-                  label: p.name || p.nombreCompleto
-                }))}
-                value={editOperatorId} 
-                onChange={setEditOperatorId} 
-                placeholder="Seleccione operador..."
-              />
-            </div>
-
-            <div>
-              <Label>Actividad *</Label>
-              <Combobox
-                options={activities.map((a: any) => ({ value: a.id, label: a.name }))}
-                value={editActivityId}
-                onChange={setEditActivityId}
-                placeholder="Seleccione actividad de maquinaria..."
-              />
-            </div>
-
-            {/* Horarios de Inicio y Fin */}
-            <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
-              <div>
-                <Label className="flex items-center gap-1 font-semibold text-gray-700">
-                  <Clock size={13} className="text-forest-700" /> Hora Inicio *
-                </Label>
-                <Input 
-                  type="time" 
-                  value={editStartTime} 
-                  onChange={e => setEditStartTime(e.target.value)} 
-                  required 
-                  className="font-medium bg-white"
-                />
-              </div>
-              <div>
-                <Label className="flex items-center gap-1 font-semibold text-gray-700">
-                  <Clock size={13} className="text-forest-700" /> Hora Fin
-                </Label>
-                <Input 
-                  type="time" 
-                  value={editEndTime} 
-                  onChange={e => setEditEndTime(e.target.value)} 
-                  className="font-medium bg-white"
-                />
-              </div>
-              {editStartTime && editEndTime && (
-                <div className="col-span-2 text-xs text-forest-800 font-bold bg-lime-100/90 border border-lime-300 p-2 rounded-lg text-center">
-                  ⏱️ Duración calculada: {calculateDuration(editStartTime, editEndTime)}
+          {editingOp && (
+            <form onSubmit={handleSaveEdit} className="space-y-4 pt-2">
+              {editError && (
+                <div className="text-sm text-negative bg-negative/10 p-2.5 rounded-md flex items-center gap-2">
+                  <AlertCircle size={16} />
+                  <span>{editError}</span>
                 </div>
               )}
-            </div>
 
-            {/* Estado */}
-            <div>
-              <Label>Estado de la Operación</Label>
-              <select
-                value={editStatus}
-                onChange={e => setEditStatus(e.target.value)}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500"
-              >
-                <option value="EN_PROGRESO">EN PROGRESO</option>
-                <option value="FINALIZADA">FINALIZADA</option>
-                <option value="CANCELADA">CANCELADA</option>
-              </select>
-            </div>
-
-            {/* Zonas de Trabajo */}
-            <div className="space-y-1.5">
-              <Label className="font-semibold text-gray-700 flex items-center gap-1.5">
-                <MapPin size={14} className="text-forest-700" /> Zonas de Trabajo *
-              </Label>
-              <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-200 flex flex-wrap gap-1.5">
-                {zones.map((z: string) => {
-                  const isSelected = editSelectedZones.includes(z);
-                  return (
-                    <button
-                      key={z}
-                      type="button"
-                      onClick={() => toggleEditZone(z)}
-                      className={cn(
-                        "px-2.5 py-1 text-xs rounded-lg font-medium transition-all flex items-center gap-1 border",
-                        isSelected 
-                          ? "bg-forest-900 text-white border-forest-950 shadow-xs font-semibold" 
-                          : "bg-white text-gray-700 border-gray-200 hover:bg-forest-50 hover:border-forest-300"
-                      )}
-                    >
-                      {isSelected ? <Check size={12} className="text-lime-400 stroke-[3]" /> : <MapPin size={12} className="text-gray-400" />}
-                      <span>{z}</span>
-                    </button>
-                  );
-                })}
+              <div>
+                <Label>Tractor / Equipo *</Label>
+                <Combobox
+                  options={tractors.map((t: any) => ({
+                    value: t.id,
+                    label: t.code ? `${t.code} - ${t.name}` : t.name
+                  }))}
+                  value={editEquipmentId}
+                  onChange={setEditEquipmentId}
+                  placeholder="Seleccione tractor..."
+                />
               </div>
-            </div>
 
-            <div>
-              <Label>Observaciones</Label>
-              <Input
-                value={editObservations}
-                onChange={e => setEditObservations(e.target.value)}
-                placeholder="Notas u observaciones..."
-              />
-            </div>
+              <div>
+                <Label>Operador (Tractorista) *</Label>
+                <Combobox
+                  options={operatorOptions.map((p: any) => ({
+                    value: p.id,
+                    label: p.name || p.nombreCompleto
+                  }))}
+                  value={editOperatorId}
+                  onChange={setEditOperatorId}
+                  placeholder="Seleccione operador..."
+                />
+              </div>
 
-            <DialogFooter className="pt-3 gap-2">
-              <Button type="button" variant="outline" onClick={() => setEditingOp(null)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={editLoading} className="bg-forest-900 hover:bg-forest-950 text-white font-bold">
-                {editLoading ? 'Guardando...' : 'Guardar Cambios'}
-              </Button>
-            </DialogFooter>
-          </form>
+              <div>
+                <Label>Labor *</Label>
+                <Combobox
+                  options={labors.map((l: any) => ({ value: l.id, label: l.name }))}
+                  value={editLaborId || machineryLabor?.id || ''}
+                  onChange={(val) => {
+                    setEditLaborId(val);
+                    setEditActivityId('');
+                  }}
+                  placeholder="Seleccione labor..."
+                />
+              </div>
+
+              <div>
+                <Label>Actividad</Label>
+                <Combobox
+                  options={(catalogs.activities || [])
+                    .filter((a: any) => a.active && (!editLaborId || a.laborId === editLaborId))
+                    .map((a: any) => ({ value: a.id, label: a.name }))}
+                  value={editActivityId}
+                  onChange={setEditActivityId}
+                  placeholder="Seleccione actividad..."
+                />
+              </div>
+
+              {/* Selector Múltiple de Zonas en Edición */}
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1 text-xs">
+                  <MapPin size={13} className="text-forest-700" /> Zonas de Operación *
+                </Label>
+                <div className="border border-gray-200 rounded-lg p-2.5 bg-gray-50/50 max-h-32 overflow-y-auto">
+                  <div className="flex flex-wrap gap-1.5">
+                    {zones.map((z: string) => {
+                      const isSelected = editSelectedZones.includes(z);
+                      return (
+                        <button
+                          key={z}
+                          type="button"
+                          onClick={() => toggleEditZone(z)}
+                          className={cn(
+                            "text-xs font-semibold px-2.5 py-1 rounded-md transition-all flex items-center gap-1",
+                            isSelected
+                              ? "bg-forest-900 text-white shadow-xs"
+                              : "bg-white text-gray-700 border border-gray-200 hover:border-forest-700 hover:bg-forest-50/50"
+                          )}
+                        >
+                          {isSelected ? (
+                            <Check size={12} className="text-lime-400 stroke-[3]" />
+                          ) : (
+                            <MapPin size={12} className="text-gray-400" />
+                          )}
+                          <span>{z}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Horarios y Estado */}
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label>Hora Inicio *</Label>
+                  <Input
+                    type="time"
+                    value={editStartTime}
+                    onChange={(e) => setEditStartTime(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label>Hora Fin</Label>
+                  <Input
+                    type="time"
+                    value={editEndTime}
+                    onChange={(e) => setEditEndTime(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Estado</Label>
+                  <Combobox
+                    options={[
+                      { value: 'EN_PROGRESO', label: 'En Progreso' },
+                      { value: 'FINALIZADA', label: 'Finalizada' },
+                      { value: 'CANCELADA', label: 'Cancelada' },
+                    ]}
+                    value={editStatus}
+                    onChange={setEditStatus}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-obs">Observaciones</Label>
+                <Input
+                  id="edit-obs"
+                  value={editObservations}
+                  onChange={(e) => setEditObservations(e.target.value)}
+                  placeholder="Detalles de la operación..."
+                />
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditingOp(null)}
+                  disabled={editLoading}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={editLoading}
+                  className="bg-forest-900 hover:bg-forest-950 text-white font-bold"
+                >
+                  {editLoading ? 'Guardando...' : 'Guardar Cambios'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

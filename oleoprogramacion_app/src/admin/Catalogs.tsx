@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, Button, Input, Dialog, Dialog
 import { useAuth } from '../auth/AuthContext';
 import { supabase } from '../shared/supabase';
 import { repository } from '../shared/AgronomicRepository';
-import { Plus, Edit2, TrendingUp } from 'lucide-react';
+import { Plus, Edit2, TrendingUp, Trash2 } from 'lucide-react';
 import { isOperative } from '../dashboard/Dashboard';
 
 export default function Catalogs() {
@@ -41,6 +41,32 @@ export default function Catalogs() {
     } catch (e) {
       console.error(e);
       alert("Error actualizando estado en Supabase");
+    }
+  };
+
+  const handleDelete = async (record: any, table: string) => {
+    const recordName = record.name || record.nombreCompleto || record.username || 'este registro';
+    if (window.confirm(`¿Estás seguro de eliminar definitivamente a "${recordName}" de la base de datos?\n\nEsta acción no se puede deshacer.`)) {
+      try {
+        let res;
+        if (table === 'personnel') res = await repository.deletePersonnel(record.id);
+        else if (table === 'users') res = await repository.deleteUser(record.id);
+        else if (table === 'activities') res = await repository.deleteActivity(record.id);
+        else if (table === 'equipment') res = await repository.deleteEquipment(record.id);
+        else if (table === 'performance_references') res = await repository.deletePerformanceReference(record.id);
+        else {
+          const { error } = await supabase.from(table).delete().eq('id', record.id);
+          if (error) throw error;
+          res = { ok: true };
+        }
+
+        if (!res.ok) {
+          alert('Error al eliminar: ' + (res.error || 'Desconocido'));
+        }
+      } catch (e: any) {
+        console.error(e);
+        alert('Error al eliminar de Supabase: ' + e.message);
+      }
     }
   };
 
@@ -201,17 +227,20 @@ export default function Catalogs() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <Button size="sm" variant="ghost" onClick={() => openModal(p)} className="mr-1 text-forest-900 hover:text-forest-950 hover:bg-forest-100 h-8 w-8 p-0" title="Editar">
-                            <Edit2 size={16} />
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => handleToggle(p.id, 'personnel', p.active)}
-                            className={cn("text-xs h-8 px-2.5 font-bold", p.active ? "text-red-700 border-2 border-red-300 hover:bg-red-50" : "text-emerald-700 border-2 border-emerald-300 hover:bg-emerald-50")}
-                          >
-                            {p.active ? 'Desactivar' : 'Activar'}
-                          </Button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button size="sm" variant="ghost" onClick={() => openModal(p)} className="text-forest-900 hover:text-forest-950 hover:bg-forest-100 h-8 w-8 p-0" title="Editar">
+                              <Edit2 size={16} />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => handleDelete(p, 'personnel')}
+                              className="text-xs h-8 px-2.5 font-bold text-red-700 border-2 border-red-300 hover:bg-red-50 hover:border-red-400 flex items-center gap-1"
+                              title="Eliminar permanentemente de la base de datos"
+                            >
+                              <Trash2 size={14} /> Eliminar
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );
