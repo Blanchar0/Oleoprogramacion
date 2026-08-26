@@ -1,12 +1,12 @@
 export interface Novedad {
   id: string;
-  tipo: 'INCAPACIDAD' | 'VACACIONES';
+  tipo: 'INCAPACIDAD' | 'VACACIONES' | 'LICENCIA' | 'SUSPENSION' | 'PERMISO NO REMUNERADO' | 'RENUNCIA' | 'TERMINACION_CONTRATO' | 'DESPIDO' | string;
   personaDocumento: string;
   personaNombreFuente: string;
   fechaInicio: string; // YYYY-MM-DD
-  fechaFin: string; // YYYY-MM-DD
-  zona: string;
-  estado: 'ACTIVA_EN_RANGO_DE_FECHAS';
+  fechaFin: string; // YYYY-MM-DD or N/A
+  zona?: string;
+  estado?: string;
 }
 
 export interface PersonnelImportConflict {

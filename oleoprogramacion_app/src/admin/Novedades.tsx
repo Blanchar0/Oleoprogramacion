@@ -5,6 +5,12 @@ import { repository } from '../shared/AgronomicRepository';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
 import { Novedad } from '../types';
 
+export const isTerminationNovelty = (tipo?: string) => {
+  if (!tipo) return false;
+  const t = tipo.toUpperCase().trim();
+  return t === 'RENUNCIA' || t === 'TERMINACION_CONTRATO' || t === 'DESPIDO' || t === 'RETIRO';
+};
+
 export default function Novedades() {
   const { catalogs, loading } = useCatalogs();
 
@@ -55,10 +61,20 @@ export default function Novedades() {
       formData.personaNombreFuente = person.name || person.nombreCompleto;
     }
 
+    const isTerm = isTerminationNovelty(formData.tipo);
+    if (isTerm) {
+      formData.fechaFin = 'N/A';
+    }
+
     if (editingRecord) {
       res = await repository.updateNovedad(editingRecord.id, formData);
     } else {
       res = await repository.createNovedad(formData);
+    }
+
+    // Desactivar automáticamente a la persona si es una novedad de retiro / despido / renuncia
+    if (isTerm && person) {
+      await repository.updatePersonnel(person.id, { active: false });
     }
 
     setSaving(false);
@@ -82,7 +98,7 @@ export default function Novedades() {
     <div className="max-w-6xl mx-auto space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-primary">Novedades de Personal</h2>
-        <p className="text-gray-500 text-sm mt-1">Gestión de ausencias prolongadas (Incapacidades, Vacaciones, Licencias)</p>
+        <p className="text-gray-500 text-sm mt-1">Gestión de ausencias prolongadas y retiros definitivos (Incapacidades, Vacaciones, Despidos, Renuncias)</p>
       </div>
 
       <Card>
@@ -120,20 +136,30 @@ export default function Novedades() {
                   .filter((n:any) => n.personaNombreFuente?.toLowerCase().includes(searchTerm.toLowerCase()) || n.personaDocumento?.includes(searchTerm))
                   .map((n:any) => {
                     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-                    const isActiveNow = n.fechaInicio <= today && n.fechaFin >= today;
-                    const isPast = n.fechaFin < today;
-                    const isFuture = n.fechaInicio > today;
+                    const isTerm = isTerminationNovelty(n.tipo);
+                    const isActiveNow = !isTerm && n.fechaInicio <= today && (n.fechaFin >= today || n.fechaFin === 'N/A');
+                    const isPast = !isTerm && n.fechaFin !== 'N/A' && n.fechaFin < today;
+                    const isFuture = !isTerm && n.fechaInicio > today;
 
                     return (
-                    <tr key={n.id} className="border-b border-gray-100">
+                    <tr key={n.id} className="border-b border-gray-100 hover:bg-gray-50/50">
                       <td className="px-4 py-3 font-medium">
                         {n.personaNombreFuente} <span className="text-xs text-gray-400">({n.personaDocumento})</span>
                       </td>
-                      <td className="px-4 py-3 font-semibold">{n.tipo}</td>
+                      <td className="px-4 py-3 font-semibold">
+                        <span className={`px-2 py-0.5 text-xs rounded-full font-bold ${
+                          isTerm ? 'bg-red-100 text-red-800 border border-red-300' :
+                          n.tipo === 'VACACIONES' ? 'bg-purple-100 text-purple-800' :
+                          n.tipo === 'INCAPACIDAD' ? 'bg-teal-100 text-teal-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {n.tipo}
+                        </span>
+                      </td>
                       <td className="px-4 py-3">{n.fechaInicio}</td>
-                      <td className="px-4 py-3">{n.fechaFin}</td>
+                      <td className="px-4 py-3">{isTerm ? 'N/A' : n.fechaFin}</td>
                       <td className="px-4 py-3">
-                        {isActiveNow && <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">En curso</span>}
+                        {isTerm && <span className="px-2 py-0.5 text-xs rounded-full bg-rose-100 text-rose-800 font-bold border border-rose-200">Retiro / Desactivado</span>}
+                        {isActiveNow && <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 font-semibold">En curso</span>}
                         {isPast && <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">Finalizada</span>}
                         {isFuture && <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">Programada</span>}
                       </td>
@@ -161,46 +187,91 @@ export default function Novedades() {
           <form onSubmit={handleSave} className="space-y-4">
             
             <div>
-              <Label>Empleado</Label>
+              <Label>Empleado *</Label>
               <Combobox 
                 options={activePersonnel.map((p:any) => ({ value: p.documento, label: `${p.name || p.nombreCompleto} (${p.documento})` }))}
                 value={formData.personaDocumento || ''}
                 onChange={v => setFormData({...formData, personaDocumento: v})}
-                placeholder="Seleccione empleado"
+                placeholder="Seleccione empleado..."
               />
             </div>
 
             <div>
-              <Label>Tipo de Novedad</Label>
+              <Label>Tipo de Novedad *</Label>
               <Combobox 
                 options={[
                   { value: 'VACACIONES', label: 'Vacaciones' },
-                  { value: 'INCAPACIDAD', label: 'Incapacidad' },
+                  { value: 'INCAPACIDAD', label: 'Incapacidad Médica' },
                   { value: 'LICENCIA', label: 'Licencia' },
                   { value: 'SUSPENSION', label: 'Suspensión' },
                   { value: 'PERMISO NO REMUNERADO', label: 'Permiso No Remunerado' },
+                  { value: 'RENUNCIA', label: 'Renuncia Voluntaria (Desactivación)' },
+                  { value: 'TERMINACION_CONTRATO', label: 'Terminación de Contrato (Desactivación)' },
+                  { value: 'DESPIDO', label: 'Despido / Liquidación (Desactivación)' },
                 ]}
                 value={formData.tipo || ''}
-                onChange={v => setFormData({...formData, tipo: v})}
-                placeholder="Seleccione tipo"
+                onChange={v => {
+                  const isTerm = isTerminationNovelty(v);
+                  setFormData({
+                    ...formData, 
+                    tipo: v,
+                    fechaFin: isTerm ? 'N/A' : (formData.fechaFin === 'N/A' ? formData.fechaInicio : formData.fechaFin)
+                  });
+                }}
+                placeholder="Seleccione tipo..."
               />
             </div>
 
+            {isTerminationNovelty(formData.tipo) && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-900 flex items-start gap-2">
+                <span className="text-base">⚠️</span>
+                <div>
+                  <p className="font-bold">Aviso de Retiro Definitivo</p>
+                  <p className="text-[11px] text-red-800 mt-0.5">
+                    Al registrar esta novedad, la persona se <strong>desactivará automáticamente</strong> del sistema para que no sea contada en programaciones ni catálogos activos, conservando su registro histórico.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Fecha Inicio</Label>
-                <Input type="date" required value={formData.fechaInicio || ''} onChange={e => setFormData({...formData, fechaInicio: e.target.value})} />
+                <Label>Fecha {isTerminationNovelty(formData.tipo) ? 'de Retiro / Salida' : 'Inicio'} *</Label>
+                <Input 
+                  type="date" 
+                  required 
+                  value={formData.fechaInicio || ''} 
+                  onChange={e => setFormData({...formData, fechaInicio: e.target.value})} 
+                />
               </div>
               <div>
-                <Label>Fecha Fin (Último día de novedad)</Label>
-                <Input type="date" required value={formData.fechaFin || ''} onChange={e => setFormData({...formData, fechaFin: e.target.value})} />
+                <Label>Fecha Fin (Último día)</Label>
+                {isTerminationNovelty(formData.tipo) ? (
+                  <Input 
+                    type="text" 
+                    disabled 
+                    value="N/A (Retiro Definitivo)" 
+                    className="bg-gray-100 font-bold text-gray-500 cursor-not-allowed"
+                  />
+                ) : (
+                  <Input 
+                    type="date" 
+                    required 
+                    value={formData.fechaFin || ''} 
+                    onChange={e => setFormData({...formData, fechaFin: e.target.value})} 
+                  />
+                )}
               </div>
             </div>
 
             <div className="flex justify-end gap-2 mt-6">
               <Button type="button" variant="outline" onClick={closeModal}>Cancelar</Button>
-              <Button type="submit" disabled={saving || !formData.personaDocumento || !formData.tipo || !formData.fechaInicio || !formData.fechaFin}>
-                {saving ? 'Guardando...' : 'Guardar'}
+              <Button 
+                type="submit" 
+                disabled={saving || !formData.personaDocumento || !formData.tipo || !formData.fechaInicio || (!isTerminationNovelty(formData.tipo) && !formData.fechaFin)}
+                className="bg-forest-900 hover:bg-forest-950 text-white font-bold"
+              >
+                {saving ? 'Guardando...' : 'Guardar Novedad'}
               </Button>
             </div>
           </form>

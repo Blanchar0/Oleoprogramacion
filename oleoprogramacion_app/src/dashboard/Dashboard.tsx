@@ -84,9 +84,20 @@ export default function Dashboard() {
   const filteredProgrammings = programmings.filter(p => p.status === 'CONFIRMADA');
   const filteredMachineries = machineries;
   const filteredAbsences = absences;
+  const isTerminationNovelty = (tipo?: string) => {
+    if (!tipo) return false;
+    const t = tipo.toUpperCase().trim();
+    return t === 'RENUNCIA' || t === 'TERMINACION_CONTRATO' || t === 'DESPIDO' || t === 'RETIRO';
+  };
 
   const NovedadesPanel = () => {
-    const activeNovedades = (catalogs.personnelNovelties || []).filter((n:any) => n.fechaInicio <= date && n.fechaFin >= date);
+    const activeNovedades = (catalogs.personnelNovelties || []).filter((n: any) => {
+      if (isTerminationNovelty(n.tipo)) {
+        return n.fechaInicio === date;
+      }
+      return n.fechaInicio <= date && (n.fechaFin >= date || n.fechaFin === 'N/A');
+    });
+
     if (activeNovedades.length === 0) return null;
 
     return (
@@ -103,22 +114,28 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {activeNovedades.map((n:any) => (
-              <div key={n.id} className="p-3 bg-white/90 backdrop-blur-sm rounded-xl border border-amber-200/60 shadow-xs flex justify-between items-center hover:border-amber-400 transition-colors">
-                <div>
-                  <p className="font-semibold text-sm text-gray-900">{n.personaNombreFuente}</p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className={`text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded ${
-                      n.tipo === 'INCAPACIDAD' ? 'bg-teal-100 text-teal-800' :
-                      n.tipo === 'VACACIONES' ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-800'
-                    }`}>
-                      {n.tipo}
-                    </span>
-                    <span className="text-xs text-gray-500">{n.fechaInicio} al {n.fechaFin}</span>
+            {activeNovedades.map((n: any) => {
+              const isTerm = isTerminationNovelty(n.tipo);
+              return (
+                <div key={n.id} className="p-3 bg-white/90 backdrop-blur-sm rounded-xl border border-amber-200/60 shadow-xs flex justify-between items-center hover:border-amber-400 transition-colors">
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900">{n.personaNombreFuente}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span className={`text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded ${
+                        isTerm ? 'bg-red-100 text-red-800 border border-red-200' :
+                        n.tipo === 'INCAPACIDAD' ? 'bg-teal-100 text-teal-800' :
+                        n.tipo === 'VACACIONES' ? 'bg-purple-100 text-purple-800' : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {n.tipo}
+                      </span>
+                      <span className="text-xs text-gray-500 font-medium">
+                        {isTerm ? `Fecha: ${n.fechaInicio} (Fin: N/A - Retiro)` : `${n.fechaInicio} al ${n.fechaFin}`}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>
@@ -138,15 +155,12 @@ export default function Dashboard() {
     
     const activeOperatives = catalogs.personnel.filter((p:any) => p.active && isOperative(p));
     const totalActive = activeOperatives.length;
-    const availableCount = Math.max(0, totalActive - absencesCount);
 
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-forest-950">Panel de Control Operativo</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-lime-100 text-lime-700 rounded-lg"><Users size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Personal Programado</p><h3 className="text-2xl font-bold text-forest-950">{uniquePersonnel.size} <span className="text-sm font-normal text-gray-500">/ {availableCount}</span></h3></div></CardContent></Card>
-          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-green-100 text-green-700 rounded-lg"><CheckCircle2 size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Progs. Activas</p><h3 className="text-2xl font-bold text-forest-950">{activeProgrammingsCount}</h3></div></CardContent></Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-forest-100 text-forest-700 rounded-lg"><Users size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Personal Programado</p><h3 className="text-2xl font-bold text-forest-950">{uniquePersonnel.size} <span className="text-sm font-normal text-gray-500">/ {totalActive}</span></h3></div></CardContent></Card>
+          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-emerald-100 text-emerald-700 rounded-lg"><CheckCircle2 size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Progs. Activas</p><h3 className="text-2xl font-bold text-forest-950">{activeProgrammingsCount}</h3></div></CardContent></Card>
           <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-amber-100 text-amber-700 rounded-lg"><CalendarX size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Ausencias (Día)</p><h3 className="text-2xl font-bold text-forest-950">{absencesCount}</h3></div></CardContent></Card>
           <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-blue-100 text-blue-700 rounded-lg"><Tractor size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Maquinaria Activa</p><h3 className="text-2xl font-bold text-forest-950">{machineryCount}</h3></div></CardContent></Card>
         </div>
@@ -171,7 +185,12 @@ export default function Dashboard() {
       const operativesPayrollTotal = activeOperativesList.length;
 
       // Novedades e inasistencias activas del día
-      const activeNovedades = (catalogs.personnelNovelties || []).filter((n:any) => n.fechaInicio <= date && n.fechaFin >= date);
+      const activeNovedades = (catalogs.personnelNovelties || []).filter((n: any) => {
+        if (isTerminationNovelty(n.tipo)) {
+          return n.fechaInicio === date;
+        }
+        return n.fechaInicio <= date && (n.fechaFin >= date || n.fechaFin === 'N/A');
+      });
 
       let inasistentesSet = new Set<string>();
       let permisosSet = new Set<string>();

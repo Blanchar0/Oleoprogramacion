@@ -234,11 +234,16 @@ export default function Catalogs() {
                             <Button 
                               size="sm" 
                               variant="outline" 
-                              onClick={() => handleDelete(p, 'personnel')}
-                              className="text-xs h-8 px-2.5 font-bold text-red-700 border-2 border-red-300 hover:bg-red-50 hover:border-red-400 flex items-center gap-1"
-                              title="Eliminar permanentemente de la base de datos"
+                              onClick={() => handleToggle(p.id, 'personnel', p.active)}
+                              className={cn(
+                                "text-xs h-8 px-2.5 font-bold",
+                                p.active 
+                                  ? "text-red-700 border-2 border-red-300 hover:bg-red-50 hover:border-red-400" 
+                                  : "text-emerald-700 border-2 border-emerald-300 hover:bg-emerald-50 hover:border-emerald-400"
+                              )}
+                              title={p.active ? "Desactivar empleado (conserva historial)" : "Activar empleado"}
                             >
-                              <Trash2 size={14} /> Eliminar
+                              {p.active ? 'Desactivar' : 'Activar'}
                             </Button>
                           </div>
                         </td>
