@@ -808,19 +808,19 @@ export default function NewProgramming() {
               {/* 1️⃣ PASO 1: Fecha y Supervisor */}
               <div className="p-4 bg-blue-50/60 rounded-xl border border-blue-200/80 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-blue-950 flex items-center gap-2 text-sm">
+                  <h3 className="font-black text-blue-950 flex items-center gap-2 text-sm uppercase tracking-wide">
                     <span className="w-6 h-6 rounded-full bg-blue-600 text-white inline-flex items-center justify-center text-xs font-black">1</span>
-                    Fecha y Supervisor
+                    FECHA Y SUPERVISOR
                   </h3>
                   {date && (
-                    <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
-                      <CheckCircle2 size={12} className="text-emerald-700" /> Listo
+                    <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1 uppercase">
+                      <CheckCircle2 size={12} className="text-emerald-700" /> LISTO
                     </span>
                   )}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor="date" className="text-xs font-semibold text-blue-900">Fecha de Programación *</Label>
+                    <Label htmlFor="date" className="text-xs font-black text-blue-950 uppercase tracking-wide">FECHA DE PROGRAMACIÓN *</Label>
                     <Input 
                       id="date" 
                       type="date" 
@@ -831,7 +831,7 @@ export default function NewProgramming() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="supervisor" className="text-xs font-semibold text-blue-900">Supervisor Asignado</Label>
+                    <Label htmlFor="supervisor" className="text-xs font-black text-blue-950 uppercase tracking-wide">SUPERVISOR ASIGNADO</Label>
                     <Input 
                       id="supervisor" 
                       value={user?.name || ''} 
@@ -848,41 +848,41 @@ export default function NewProgramming() {
                 laborId && activityId ? "bg-emerald-50/60 border-emerald-200/80" : "bg-gray-50 border-gray-200"
               )}>
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-emerald-950 flex items-center gap-2 text-sm">
+                  <h3 className="font-black text-emerald-950 flex items-center gap-2 text-sm uppercase tracking-wide">
                     <span className="w-6 h-6 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center text-xs font-black">2</span>
-                    ¿Qué labor van a realizar?
+                    ¿QUÉ LABOR VAN A REALIZAR?
                   </h3>
                   {laborId && activityId ? (
-                    <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
-                      <CheckCircle2 size={12} className="text-emerald-700" /> Listo
+                    <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1 uppercase">
+                      <CheckCircle2 size={12} className="text-emerald-700" /> LISTO
                     </span>
                   ) : (
-                    <span className="text-xs text-emerald-800 font-semibold italic">Seleccione labor y actividad</span>
+                    <span className="text-xs text-emerald-800 font-bold italic uppercase">SELECCIONE LABOR Y ACTIVIDAD</span>
                   )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor="labor" className="text-xs font-semibold text-emerald-900">Labor *</Label>
+                    <Label htmlFor="labor" className="text-xs font-black text-emerald-950 uppercase tracking-wide">LABOR *</Label>
                     <Combobox 
                       options={labors.map(l => ({ value: l.id, label: l.name }))}
                       value={laborId}
                       onChange={setLaborId}
-                      placeholder="Seleccione una labor..."
+                      placeholder="SELECCIONE UNA LABOR..."
                     />
                   </div>
                   
                   <div>
-                    <Label htmlFor="activity" className="text-xs font-semibold text-emerald-900">Actividad *</Label>
+                    <Label htmlFor="activity" className="text-xs font-black text-emerald-950 uppercase tracking-wide">ACTIVIDAD *</Label>
                     <Combobox 
                       options={activities.map(a => ({ value: a.id, label: a.name, description: a.unit }))}
                       value={activityId}
                       onChange={setActivityId}
-                      placeholder={!laborId ? 'Seleccione labor primero' : activities.length === 0 ? 'Sin actividades' : 'Seleccione una actividad...'}
+                      placeholder={!laborId ? 'SELECCIONE LABOR PRIMERO' : activities.length === 0 ? 'SIN ACTIVIDADES' : 'SELECCIONE UNA ACTIVIDAD...'}
                       disabled={!laborId || activities.length === 0}
                     />
                     {laborId && activities.length === 0 && (
-                      <p className="text-xs text-warning-700 font-semibold mt-1">No hay actividades registradas en esta labor.</p>
+                      <p className="text-xs text-warning-700 font-bold mt-1 uppercase">No hay actividades registradas en esta labor.</p>
                     )}
                   </div>
                 </div>
@@ -894,22 +894,22 @@ export default function NewProgramming() {
                 zone && selectedLocations.length > 0 ? "bg-purple-50/60 border-purple-200/80" : "bg-gray-50 border-gray-200"
               )}>
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-purple-950 flex items-center gap-2 text-sm">
+                  <h3 className="font-black text-purple-950 flex items-center gap-2 text-sm uppercase tracking-wide">
                     <span className="w-6 h-6 rounded-full bg-purple-600 text-white inline-flex items-center justify-center text-xs font-black">3</span>
-                    ¿En qué lugar van a trabajar?
+                    ¿EN QUÉ LUGAR VAN A TRABAJAR? (ZONA Y LOTES)
                   </h3>
                   {zone && selectedLocations.length > 0 ? (
-                    <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
-                      <CheckCircle2 size={12} className="text-emerald-700" /> {selectedLocations.length} Lote{selectedLocations.length > 1 ? 's' : ''}
+                    <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1 uppercase">
+                      <CheckCircle2 size={12} className="text-emerald-700" /> {selectedLocations.length} LOTE{selectedLocations.length > 1 ? 'S' : ''}
                     </span>
                   ) : (
-                    <span className="text-xs text-purple-800 font-semibold italic">Pendiente zona y lotes</span>
+                    <span className="text-xs text-purple-800 font-bold italic uppercase">PENDIENTE ZONA Y LOTES</span>
                   )}
                 </div>
 
                 <div className="space-y-3">
                   <div>
-                    <Label htmlFor="zone" className="text-xs font-semibold text-purple-900">Zona de Trabajo *</Label>
+                    <Label htmlFor="zone" className="text-xs font-black text-purple-950 uppercase tracking-wide">ZONA DE TRABAJO *</Label>
                     <Combobox 
                       options={zones.map(z => ({ value: String(z), label: String(z) }))}
                       value={zone}
@@ -917,42 +917,42 @@ export default function NewProgramming() {
                         setZone(newZone);
                         setSelectedLocations([]);
                       }}
-                      placeholder="Seleccione zona..."
+                      placeholder="SELECCIONE ZONA..."
                     />
                   </div>
 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="lotes" className="font-semibold text-xs text-purple-900">
-                        Lotes {zone ? `(${selectedLocations.length} seleccionados)` : ''} *
+                      <Label htmlFor="lotes" className="font-black text-xs text-purple-950 uppercase tracking-wide">
+                        LOTES {zone ? `(${selectedLocations.length} SELECCIONADOS)` : ''} *
                       </Label>
                       {zone && lotes.length > 0 && (
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => setSelectedLocations(lotes.map(l => l.id))}
-                            className="text-[11px] font-bold text-purple-800 hover:text-purple-950 hover:underline cursor-pointer uppercase tracking-wider"
+                            className="text-[11px] font-black text-purple-800 hover:text-purple-950 hover:underline cursor-pointer uppercase tracking-wider"
                           >
-                            Seleccionar Todos
+                            SELECCIONAR TODOS
                           </button>
                           <span className="text-gray-300">|</span>
                           <button
                             type="button"
                             onClick={() => setSelectedLocations([])}
-                            className="text-[11px] font-bold text-gray-500 hover:text-red-700 hover:underline cursor-pointer uppercase tracking-wider"
+                            className="text-[11px] font-black text-gray-500 hover:text-red-700 hover:underline cursor-pointer uppercase tracking-wider"
                           >
-                            Limpiar
+                            LIMPIAR
                           </button>
                         </div>
                       )}
                     </div>
 
                     {!zone ? (
-                      <div className="p-3 text-xs text-gray-500 bg-white border border-dashed border-gray-300 rounded-lg text-center">
+                      <div className="p-3 text-xs text-gray-500 bg-white border border-dashed border-gray-300 rounded-lg text-center font-bold uppercase">
                         Seleccione una zona primero para desplegar los lotes disponibles.
                       </div>
                     ) : lotes.length === 0 ? (
-                      <div className="p-3 text-xs text-warning-700 bg-amber-50 border border-amber-200 rounded-lg text-center font-medium">
+                      <div className="p-3 text-xs text-warning-700 bg-amber-50 border border-amber-200 rounded-lg text-center font-bold uppercase">
                         No hay lotes registrados para la zona seleccionada.
                       </div>
                     ) : (
@@ -991,9 +991,9 @@ export default function NewProgramming() {
                           })}
                         </div>
                         {selectedLocations.length > 0 && (
-                          <div className="text-[11px] text-purple-900 font-medium flex items-center gap-1">
+                          <div className="text-[11px] text-purple-900 font-bold flex items-center gap-1 uppercase">
                             <Check size={12} className="text-purple-700" />
-                            <span>{selectedLocations.length} lote{selectedLocations.length > 1 ? 's' : ''} seleccionado{selectedLocations.length > 1 ? 's' : ''} para esta labor.</span>
+                            <span>{selectedLocations.length} LOTE{selectedLocations.length > 1 ? 'S' : ''} SELECCIONADO{selectedLocations.length > 1 ? 'S' : ''} PARA ESTA LABOR.</span>
                           </div>
                         )}
                       </div>
@@ -1008,28 +1008,28 @@ export default function NewProgramming() {
                 selectedPersonnel.length > 0 ? "bg-amber-50/60 border-amber-200/80" : "bg-gray-50 border-gray-200"
               )}>
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-amber-950 flex items-center gap-2 text-sm">
+                  <h3 className="font-black text-amber-950 flex items-center gap-2 text-sm uppercase tracking-wide">
                     <span className="w-6 h-6 rounded-full bg-amber-600 text-white inline-flex items-center justify-center text-xs font-black">4</span>
-                    ¿Quiénes van a trabajar?
+                    ¿QUIÉNES VAN A TRABAJAR? (PERSONAL ASIGNADO)
                   </h3>
                   {selectedPersonnel.length > 0 ? (
-                    <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
-                      <CheckCircle2 size={12} className="text-emerald-700" /> {selectedPersonnel.length} Personas
+                    <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md flex items-center gap-1 uppercase">
+                      <CheckCircle2 size={12} className="text-emerald-700" /> {selectedPersonnel.length} PERSONAS
                     </span>
                   ) : (
-                    <span className="text-xs text-amber-800 font-semibold italic">0 Personas asignadas</span>
+                    <span className="text-xs text-amber-800 font-bold italic uppercase">0 PERSONAS ASIGNADAS</span>
                   )}
                 </div>
                 
                 <Input 
-                  placeholder="Buscar por nombre o cédula..." 
+                  placeholder="BUSCAR POR NOMBRE O CÉDULA..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="bg-white h-9"
+                  className="bg-white h-9 font-medium"
                 />
                 <div className="h-[40vh] md:h-64 overflow-y-auto border border-amber-200/80 rounded-md bg-white p-2">
                   {filteredPersonnel.length === 0 ? (
-                    <div className="text-center text-sm text-gray-500 py-4">No se encontró personal disponible</div>
+                    <div className="text-center text-sm text-gray-500 py-4 font-bold uppercase">No se encontró personal disponible</div>
                   ) : (
                     <div className="space-y-1">
                       {filteredPersonnel.map(p => {
@@ -1058,12 +1058,12 @@ export default function NewProgramming() {
                             )}
                           >
                             <div>
-                              <div className="font-bold text-sm">{p.name}</div>
-                              <div className="text-xs text-gray-600">
+                              <div className="font-bold text-sm uppercase">{p.name}</div>
+                              <div className="text-xs text-gray-600 font-medium">
                                 C.C. {p.documento} 
-                                {novedad && <span className="ml-2 font-bold text-red-600">({novedad.tipo} hasta {novedad.fechaFin})</span>}
-                                {isProgrammed && <span className="ml-2 font-bold text-red-600">(Ya programado)</span>}
-                                {isMachinery && <span className="ml-2 font-bold text-red-600">(En maquinaria)</span>}
+                                {novedad && <span className="ml-2 font-bold text-red-600 uppercase">({novedad.tipo} hasta {novedad.fechaFin})</span>}
+                                {isProgrammed && <span className="ml-2 font-bold text-red-600 uppercase">(Ya programado)</span>}
+                                {isMachinery && <span className="ml-2 font-bold text-red-600 uppercase">(En maquinaria)</span>}
                               </div>
                             </div>
                             <div className={cn(
@@ -1083,9 +1083,9 @@ export default function NewProgramming() {
               {/* 5️⃣ PASO 5: Rendimiento Estimado y Observaciones */}
               <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm">
+                  <h3 className="font-black text-gray-900 flex items-center gap-2 text-sm uppercase tracking-wide">
                     <span className="w-6 h-6 rounded-full bg-gray-700 text-white inline-flex items-center justify-center text-xs font-black">5</span>
-                    Rendimiento y Observaciones
+                    RENDIMIENTO ESTIMADO Y OBSERVACIONES
                   </h3>
                 </div>
 
@@ -1093,21 +1093,21 @@ export default function NewProgramming() {
                 {activityId && (
                   <div className="border border-gray-200 rounded-lg p-3 bg-white space-y-2">
                     <div className="flex justify-between items-center">
-                      <Label className="mb-0 text-xs font-bold text-gray-800">Rendimiento Estimado ({performance.unit})</Label>
+                      <Label className="mb-0 text-xs font-black text-gray-800 uppercase tracking-wide">RENDIMIENTO ESTIMADO ({performance.unit})</Label>
                       <Button 
                         type="button" 
                         variant="ghost" 
                         size="sm"
                         onClick={() => setIsEditingPerformance(!isEditingPerformance)}
-                        className="text-xs h-7 text-forest-800 font-bold hover:bg-forest-100"
+                        className="text-xs h-7 text-forest-900 font-bold uppercase tracking-wider"
                       >
-                        {isEditingPerformance ? 'Bloquear' : 'Modificar Rendimiento'}
+                        {isEditingPerformance ? 'FIJAR RENDIMIENTO' : 'AJUSTAR MANUALMENTE'}
                       </Button>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label htmlFor="perfPerPerson" className="text-[11px] text-gray-500 uppercase font-semibold">Por persona / día</Label>
+                        <Label htmlFor="perfPerPerson" className="text-[11px] text-gray-500 uppercase font-black tracking-wide">Por Persona / Día</Label>
                         <Input
                           id="perfPerPerson"
                           type="number"
@@ -1127,13 +1127,13 @@ export default function NewProgramming() {
                           placeholder="N/A"
                         />
                         {!isEditingPerformance && performance.referencePerformancePerPersonDay !== null && (
-                          <p className="text-[11px] text-gray-500 mt-1">
+                          <p className="text-[11px] text-gray-500 mt-1 font-medium">
                             Estándar: {performance.referencePerformancePerPersonDay} {performance.unit}
                           </p>
                         )}
                       </div>
                       <div>
-                        <Label htmlFor="totalPerf" className="text-[11px] text-gray-500 uppercase font-semibold">Cantidad Total ({selectedPersonnel.length} personas)</Label>
+                        <Label htmlFor="totalPerf" className="text-[11px] text-gray-500 uppercase font-black tracking-wide">Cantidad Total ({selectedPersonnel.length} personas)</Label>
                         <Input
                           id="totalPerf"
                           type="number"
@@ -1148,27 +1148,27 @@ export default function NewProgramming() {
                 )}
 
                 <div>
-                  <Label htmlFor="obs" className="text-xs font-semibold text-gray-700">Observaciones (Opcional)</Label>
+                  <Label htmlFor="obs" className="text-xs font-black text-gray-800 uppercase tracking-wide">OBSERVACIONES (OPCIONAL)</Label>
                   <Input 
                     id="obs"
                     value={observations}
                     onChange={(e) => setObservations(e.target.value)}
                     placeholder="Notas adicionales de la labor..."
-                    className="bg-white"
+                    className="bg-white font-medium"
                   />
                 </div>
               </div>
 
               {/* Botón de Guardado Prominente */}
-              <div className="pt-2">
+              <div className="pt-2 pb-6">
                 <Button 
                   type="submit" 
                   size="lg" 
                   disabled={loading || !laborId || (activities.length > 0 && !activityId) || !zone || selectedLocations.length === 0 || selectedPersonnel.length === 0} 
-                  className="w-full h-14 text-base font-black bg-forest-900 hover:bg-forest-950 text-white shadow-xl rounded-xl flex items-center justify-center gap-2"
+                  className="w-full h-14 text-sm sm:text-base font-black uppercase tracking-wide bg-forest-900 hover:bg-forest-950 text-white shadow-xl rounded-xl flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <CheckCircle2 size={22} className="text-lime-400 stroke-[3]" />
-                  {loading ? 'Procesando...' : isEditing ? 'Guardar Cambios de Programación' : 'Crear Pendiente de Programación'}
+                  <CheckCircle2 size={22} className="text-lime-400 stroke-[3] shrink-0" />
+                  {loading ? 'PROCESANDO...' : isEditing ? 'GUARDAR CAMBIOS DE PROGRAMACIÓN' : 'CREAR PENDIENTE DE PROGRAMACIÓN'}
                 </Button>
               </div>
 

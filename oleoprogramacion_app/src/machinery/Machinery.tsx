@@ -410,33 +410,33 @@ export default function Machinery() {
                 {error && <div className="text-sm text-negative bg-negative/10 p-2.5 rounded-md">{error}</div>}
                 
                 {/* 1️⃣ PASO 1: Fecha y Horario */}
-                <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200/80 space-y-2">
+                <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200/80 space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label className="font-bold text-blue-950 flex items-center gap-1.5 text-xs">
+                    <Label className="font-black text-blue-950 flex items-center gap-1.5 text-xs uppercase tracking-wide">
                       <span className="w-5 h-5 rounded-full bg-blue-600 text-white inline-flex items-center justify-center text-xs font-black">1</span>
-                      Fecha y Hora de Inicio *
+                      FECHA Y HORA DE INICIO *
                     </Label>
                     {date && startTime && (
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
-                        <Check size={11} className="text-emerald-700 stroke-[3]" /> Listo
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
+                        <Check size={11} className="text-emerald-700 stroke-[3]" /> LISTO
                       </span>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-[11px] text-blue-900 font-semibold">Fecha</Label>
-                      <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="bg-white font-bold text-sm h-9 border-blue-300" />
+                      <Label className="text-xs text-blue-950 font-black uppercase tracking-wide">FECHA *</Label>
+                      <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-white font-bold text-sm h-10 border-blue-300" />
                     </div>
                     <div>
-                      <Label className="flex items-center gap-1 text-[11px] text-blue-900 font-semibold">
-                        <Clock size={12} className="text-blue-700" /> Hora Inicio
+                      <Label className="flex items-center gap-1 text-xs text-blue-950 font-black uppercase tracking-wide">
+                        <Clock size={13} className="text-blue-700" /> HORA INICIO *
                       </Label>
                       <Input 
                         type="time" 
                         value={startTime} 
                         onChange={e => setStartTime(e.target.value)} 
                         required 
-                        className="font-bold text-sm h-9 bg-white border-blue-300"
+                        className="w-full font-bold text-sm h-10 bg-white border-blue-300"
                       />
                     </div>
                   </div>
@@ -444,25 +444,25 @@ export default function Machinery() {
 
                 {/* 2️⃣ PASO 2: Equipo y Tractorista */}
                 <div className={cn(
-                  "p-3 rounded-xl border space-y-2 transition-all",
+                  "p-3.5 rounded-xl border space-y-2 transition-all",
                   equipmentId && operatorId ? "bg-purple-50/60 border-purple-200/80" : "bg-gray-50 border-gray-200"
                 )}>
                   <div className="flex items-center justify-between">
-                    <Label className="font-bold text-purple-950 flex items-center gap-1.5 text-xs">
+                    <Label className="font-black text-purple-950 flex items-center gap-1.5 text-xs uppercase tracking-wide">
                       <span className="w-5 h-5 rounded-full bg-purple-600 text-white inline-flex items-center justify-center text-xs font-black">2</span>
-                      Tractor y Operador *
+                      TRACTOR Y OPERADOR *
                     </Label>
                     {equipmentId && operatorId ? (
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
-                        <Check size={11} className="text-emerald-700 stroke-[3]" /> Listo
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
+                        <Check size={11} className="text-emerald-700 stroke-[3]" /> LISTO
                       </span>
                     ) : (
-                      <span className="text-[10px] text-purple-700 font-semibold italic">Pendiente</span>
+                      <span className="text-[10px] text-purple-700 font-bold italic uppercase">PENDIENTE</span>
                     )}
                   </div>
 
                   <div>
-                    <Label className="text-[11px] text-purple-900 font-semibold">Tractor / Equipo *</Label>
+                    <Label className="text-[11px] text-purple-950 font-black uppercase tracking-wide">TRACTOR / EQUIPO *</Label>
                     <Combobox
                       options={tractors.map((t: any) => ({
                         value: t.id,
@@ -470,12 +470,12 @@ export default function Machinery() {
                       }))}
                       value={equipmentId} 
                       onChange={setEquipmentId} 
-                      placeholder="Seleccione tractor..."
+                      placeholder="SELECCIONE TRACTOR..."
                     />
                   </div>
 
                   <div>
-                    <Label className="text-[11px] text-purple-900 font-semibold">Operador (Tractorista) *</Label>
+                    <Label className="text-[11px] text-purple-950 font-black uppercase tracking-wide">OPERADOR (TRACTORISTA) *</Label>
                     <Combobox
                       options={operatorOptions.map((p: any) => ({
                         value: p.id,
@@ -483,61 +483,61 @@ export default function Machinery() {
                       }))}
                       value={operatorId} 
                       onChange={setOperatorId} 
-                      placeholder="Seleccione operador..."
+                      placeholder="SELECCIONE OPERADOR..."
                     />
                   </div>
                 </div>
 
                 {/* 3️⃣ PASO 3: Labor, Actividad y Zonas */}
                 <div className={cn(
-                  "p-3 rounded-xl border space-y-2 transition-all",
+                  "p-3.5 rounded-xl border space-y-2 transition-all",
                   activityId && selectedZones.length > 0 ? "bg-emerald-50/60 border-emerald-200/80" : "bg-gray-50 border-gray-200"
                 )}>
                   <div className="flex items-center justify-between">
-                    <Label className="font-bold text-emerald-950 flex items-center gap-1.5 text-xs">
+                    <Label className="font-black text-emerald-950 flex items-center gap-1.5 text-xs uppercase tracking-wide">
                       <span className="w-5 h-5 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center text-xs font-black">3</span>
-                      Labor y Zonas de Operación *
+                      LABOR Y ZONAS DE OPERACIÓN *
                     </Label>
                     {activityId && selectedZones.length > 0 ? (
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
-                        <Check size={11} className="text-emerald-700 stroke-[3]" /> Listo
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
+                        <Check size={11} className="text-emerald-700 stroke-[3]" /> LISTO
                       </span>
                     ) : (
-                      <span className="text-[10px] text-emerald-800 font-semibold italic">Pendiente</span>
+                      <span className="text-[10px] text-emerald-800 font-bold italic uppercase">PENDIENTE</span>
                     )}
                   </div>
 
                   <div>
-                    <Label className="text-[11px] text-emerald-900 font-semibold">Actividad *</Label>
+                    <Label className="text-[11px] text-emerald-950 font-black uppercase tracking-wide">ACTIVIDAD *</Label>
                     <Combobox
                       options={activities.map((a: any) => ({ value: a.id, label: a.name }))}
                       value={activityId}
                       onChange={setActivityId}
-                      placeholder="Seleccione actividad de maquinaria..."
+                      placeholder="SELECCIONE ACTIVIDAD DE MAQUINARIA..."
                     />
                   </div>
 
                   {/* Selector Múltiple de Zonas */}
                   <div className="space-y-1 pt-1">
                     <div className="flex items-center justify-between">
-                      <Label className="flex items-center gap-1 text-[11px] text-emerald-900 font-semibold">
-                        <MapPin size={12} className="text-emerald-700" /> Zonas de Trabajo ({selectedZones.length}) *
+                      <Label className="flex items-center gap-1 text-[11px] text-emerald-950 font-black uppercase tracking-wide">
+                        <MapPin size={12} className="text-emerald-700" /> ZONAS DE TRABAJO ({selectedZones.length}) *
                       </Label>
                       <div className="flex items-center gap-2 text-[11px]">
                         <button
                           type="button"
                           onClick={selectAllZones}
-                          className="text-emerald-800 hover:text-emerald-950 font-bold underline"
+                          className="text-emerald-800 hover:text-emerald-950 font-black uppercase tracking-wider underline cursor-pointer"
                         >
-                          Todas
+                          TODAS
                         </button>
                         <span className="text-gray-300">|</span>
                         <button
                           type="button"
                           onClick={clearZones}
-                          className="text-gray-500 hover:text-red-700 underline font-semibold"
+                          className="text-gray-500 hover:text-red-700 uppercase tracking-wider underline font-bold cursor-pointer"
                         >
-                          Limpiar
+                          LIMPIAR
                         </button>
                       </div>
                     </div>
@@ -545,7 +545,7 @@ export default function Machinery() {
                     {/* Badges clicables de Zonas */}
                     <div className="border border-emerald-200 rounded-lg p-2 bg-white max-h-32 overflow-y-auto">
                       {zones.length === 0 ? (
-                        <p className="text-xs text-gray-400">No hay zonas configuradas</p>
+                        <p className="text-xs text-gray-400 font-bold uppercase">No hay zonas configuradas</p>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
                           {zones.map((z: string) => {
@@ -556,9 +556,9 @@ export default function Machinery() {
                                 type="button"
                                 onClick={() => toggleZone(z)}
                                 className={cn(
-                                  "text-xs font-semibold px-2.5 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer",
+                                  "text-xs font-bold px-2.5 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer uppercase",
                                   isSelected
-                                    ? "bg-purple-900 text-white shadow-xs font-bold"
+                                    ? "bg-purple-900 text-white shadow-xs font-black"
                                     : "bg-gray-50 text-gray-700 border border-gray-200 hover:border-purple-600 hover:bg-purple-50/50"
                                 )}
                               >
@@ -578,23 +578,25 @@ export default function Machinery() {
                 </div>
 
                 <div>
-                  <Label htmlFor="machinery-obs" className="text-xs font-semibold text-gray-700">Observaciones (Opcional)</Label>
+                  <Label htmlFor="machinery-obs" className="text-xs font-black text-gray-800 uppercase tracking-wide">OBSERVACIONES (OPCIONAL)</Label>
                   <Input
                     id="machinery-obs"
                     value={observations}
                     onChange={(e) => setObservations(e.target.value)}
                     placeholder="Notas u observaciones de la operación..."
-                    className="bg-white"
+                    className="bg-white font-medium"
                   />
                 </div>
 
-                <Button 
-                  type="submit" 
-                  disabled={loading || !equipmentId || !operatorId || selectedZones.length === 0} 
-                  className="w-full h-13 shadow-xl font-black text-base bg-purple-900 hover:bg-purple-950 text-white rounded-xl flex items-center justify-center gap-2"
-                >
-                  <Play size={20} className="fill-white" /> {loading ? 'Iniciando...' : 'Iniciar Operación Mecanizada'}
-                </Button>
+                <div className="pt-2 pb-6">
+                  <Button 
+                    type="submit" 
+                    disabled={loading || !equipmentId || !operatorId || selectedZones.length === 0} 
+                    className="w-full h-14 shadow-xl font-black text-base uppercase tracking-wide bg-purple-900 hover:bg-purple-950 text-white rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Play size={20} className="fill-white" /> {loading ? 'INICIANDO...' : 'INICIAR OPERACIÓN MECANIZADA'}
+                  </Button>
+                </div>
               </form>
             </CardContent>
           </Card>

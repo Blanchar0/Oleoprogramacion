@@ -7,7 +7,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from '@/src/components/ui';
 import { Combobox } from '@/src/components/ui/combobox';
-import { Calendar, UserX, AlertCircle, AlertTriangle, CheckCircle2, Tractor, Briefcase, User, MapPin } from 'lucide-react';
+import { Calendar, UserX, AlertCircle, AlertTriangle, CheckCircle2, Tractor, Briefcase, User, MapPin, Check } from 'lucide-react';
 
 export default function Absences() {
   const { user } = useAuth();
@@ -286,15 +286,15 @@ export default function Absences() {
                 )}
                 
                 {/* 1️⃣ PASO 1: Fecha */}
-                <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200/80 space-y-1.5">
+                <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200/80 space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label className="font-bold text-blue-950 flex items-center gap-1.5 text-xs">
+                    <Label className="font-black text-blue-950 flex items-center gap-1.5 text-xs uppercase tracking-wide">
                       <span className="w-5 h-5 rounded-full bg-blue-600 text-white inline-flex items-center justify-center text-xs font-black">1</span>
-                      Fecha del Reporte *
+                      FECHA DEL REPORTE *
                     </Label>
                     {date && (
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
-                        <CheckCircle2 size={11} className="text-emerald-700" /> Listo
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
+                        <CheckCircle2 size={11} className="text-emerald-700" /> LISTO
                       </span>
                     )}
                   </div>
@@ -309,27 +309,27 @@ export default function Absences() {
                 
                 {/* 2️⃣ PASO 2: Persona */}
                 <div className={cn(
-                  "p-3 rounded-xl border space-y-1.5 transition-all",
+                  "p-3.5 rounded-xl border space-y-2 transition-all",
                   personnelId ? "bg-amber-50/60 border-amber-200/80" : "bg-gray-50 border-gray-200"
                 )}>
                   <div className="flex items-center justify-between">
-                    <Label className="font-bold text-amber-950 flex items-center gap-1.5 text-xs">
+                    <Label className="font-black text-amber-950 flex items-center gap-1.5 text-xs uppercase tracking-wide">
                       <span className="w-5 h-5 rounded-full bg-amber-600 text-white inline-flex items-center justify-center text-xs font-black">2</span>
-                      ¿Quién no asistió? *
+                      ¿QUIÉN NO ASISTIÓ? *
                     </Label>
                     {personnelId ? (
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
-                        <CheckCircle2 size={11} className="text-emerald-700" /> Listo
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
+                        <CheckCircle2 size={11} className="text-emerald-700" /> LISTO
                       </span>
                     ) : (
-                      <span className="text-[10px] text-amber-700 font-semibold italic">Pendiente</span>
+                      <span className="text-[10px] text-amber-700 font-bold italic uppercase">PENDIENTE</span>
                     )}
                   </div>
                   <Combobox 
                     options={allPersonnel.map((p:any) => ({ value: p.id, label: p.name || p.nombreCompleto, description: p.jobTitle }))}
                     value={personnelId}
                     onChange={setPersonnelId}
-                    placeholder="Buscar y seleccionar persona..."
+                    placeholder="BUSCAR Y SELECCIONAR PERSONA..."
                   />
 
                   {/* Banner preventivo si ya está programada */}
@@ -337,7 +337,7 @@ export default function Absences() {
                     <div className="mt-2 p-2.5 bg-amber-100 border border-amber-300 rounded-lg text-amber-950 text-xs flex items-start gap-2 animate-fadeIn">
                       <AlertTriangle size={16} className="text-amber-700 shrink-0 mt-0.5" />
                       <div>
-                        <p className="font-bold">
+                        <p className="font-bold uppercase">
                           La persona se encuentra programada en: {conflictActivityNames || 'actividades de hoy'}
                         </p>
                         <p className="text-[11px] text-amber-900 mt-0.5">
@@ -349,25 +349,25 @@ export default function Absences() {
                 </div>
 
                 {/* 3️⃣ PASO 3: Motivo con Botones Grandes de 1 Toque */}
-                <div className="p-3 bg-red-50/50 rounded-xl border border-red-200/80 space-y-2">
+                <div className="p-3.5 bg-red-50/50 rounded-xl border border-red-200/80 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <Label className="font-bold text-red-950 flex items-center gap-1.5 text-xs">
+                    <Label className="font-black text-red-950 flex items-center gap-1.5 text-xs uppercase tracking-wide">
                       <span className="w-5 h-5 rounded-full bg-red-600 text-white inline-flex items-center justify-center text-xs font-black">3</span>
-                      Motivo de Inasistencia (1 Toque) *
+                      MOTIVO DE INASISTENCIA (1 TOQUE) *
                     </Label>
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
-                      <CheckCircle2 size={11} className="text-emerald-700" /> Seleccionado
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
+                      <CheckCircle2 size={11} className="text-emerald-700" /> SELECCIONADO
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-1.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {[
-                      { val: 'Incapacidad', label: 'Incapacidad', icon: '🩹', color: 'border-blue-300 text-blue-950 bg-blue-50/80', active: 'bg-blue-600 text-white border-blue-700 shadow-xs' },
-                      { val: 'Calamidad doméstica', label: 'Calamidad', icon: '🏠', color: 'border-amber-300 text-amber-950 bg-amber-50/80', active: 'bg-amber-600 text-white border-amber-700 shadow-xs' },
-                      { val: 'Permiso autorizado', label: 'Permiso', icon: '⏱️', color: 'border-emerald-300 text-emerald-950 bg-emerald-50/80', active: 'bg-emerald-600 text-white border-emerald-700 shadow-xs' },
-                      { val: 'Ausencia injustificada', label: 'Injustificada', icon: '❌', color: 'border-red-300 text-red-950 bg-red-50/80', active: 'bg-red-600 text-white border-red-700 shadow-xs' },
-                      { val: 'Vacaciones', label: 'Vacaciones', icon: '🏖️', color: 'border-purple-300 text-purple-950 bg-purple-50/80', active: 'bg-purple-600 text-white border-purple-700 shadow-xs' },
-                      { val: 'Suspensión', label: 'Suspensión', icon: '⚠️', color: 'border-rose-300 text-rose-950 bg-rose-50/80', active: 'bg-rose-600 text-white border-rose-700 shadow-xs' },
+                      { val: 'Incapacidad', label: 'INCAPACIDAD', icon: '🩹', color: 'border-blue-300 text-blue-950 bg-blue-50/80', active: 'bg-blue-600 text-white border-blue-700 shadow-xs' },
+                      { val: 'Calamidad doméstica', label: 'CALAMIDAD DOMÉSTICA', icon: '🏠', color: 'border-amber-300 text-amber-950 bg-amber-50/80', active: 'bg-amber-600 text-white border-amber-700 shadow-xs' },
+                      { val: 'Permiso autorizado', label: 'PERMISO AUTORIZADO', icon: '⏱️', color: 'border-emerald-300 text-emerald-950 bg-emerald-50/80', active: 'bg-emerald-600 text-white border-emerald-700 shadow-xs' },
+                      { val: 'Ausencia injustificada', label: 'AUSENCIA INJUSTIFICADA', icon: '❌', color: 'border-red-300 text-red-950 bg-red-50/80', active: 'bg-red-600 text-white border-red-700 shadow-xs' },
+                      { val: 'Vacaciones', label: 'VACACIONES', icon: '🏖️', color: 'border-purple-300 text-purple-950 bg-purple-50/80', active: 'bg-purple-600 text-white border-purple-700 shadow-xs' },
+                      { val: 'Suspensión', label: 'SUSPENSIÓN LABORAL', icon: '⚠️', color: 'border-rose-300 text-rose-950 bg-rose-50/80', active: 'bg-rose-600 text-white border-rose-700 shadow-xs' },
                     ].map(btn => {
                       const isSelected = reason === btn.val;
                       return (
@@ -376,12 +376,19 @@ export default function Absences() {
                           type="button"
                           onClick={() => setReason(btn.val)}
                           className={cn(
-                            "p-2 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-all text-left cursor-pointer",
+                            "w-full p-3 rounded-xl border text-xs sm:text-sm font-black uppercase flex items-center justify-between transition-all cursor-pointer",
                             isSelected ? btn.active : cn(btn.color, "hover:opacity-90")
                           )}
                         >
-                          <span className="text-base">{btn.icon}</span>
-                          <span className="truncate">{btn.label}</span>
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="text-xl shrink-0">{btn.icon}</span>
+                            <span className="break-words font-black tracking-wide">{btn.label}</span>
+                          </div>
+                          {isSelected && (
+                            <span className="w-5 h-5 rounded-full bg-white text-current flex items-center justify-center shrink-0">
+                              <Check size={13} className="text-current stroke-[3]" />
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -393,38 +400,47 @@ export default function Absences() {
                       type="button"
                       onClick={() => setReason('Otro')}
                       className={cn(
-                        "w-full p-1.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer",
-                        reason === 'Otro' ? "bg-gray-800 text-white border-gray-900" : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"
+                        "w-full p-3 rounded-xl border text-xs sm:text-sm font-black uppercase flex items-center justify-between transition-all cursor-pointer",
+                        reason === 'Otro' ? "bg-gray-800 text-white border-gray-900 shadow-xs" : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"
                       )}
                     >
-                      <span>📝</span>
-                      <span>Otro Motivo / No especificado</span>
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl shrink-0">📝</span>
+                        <span className="font-black tracking-wide">OTRO MOTIVO / NO ESPECIFICADO</span>
+                      </div>
+                      {reason === 'Otro' && (
+                        <span className="w-5 h-5 rounded-full bg-white text-gray-900 flex items-center justify-center shrink-0">
+                          <Check size={13} className="text-gray-900 stroke-[3]" />
+                        </span>
+                      )}
                     </button>
                   </div>
                 </div>
 
                 {/* 4️⃣ PASO 4: Observaciones y Guardar */}
-                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
-                  <Label className="font-bold text-gray-800 flex items-center gap-1.5 text-xs">
+                <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+                  <Label className="font-black text-gray-800 flex items-center gap-1.5 text-xs uppercase tracking-wide">
                     <span className="w-5 h-5 rounded-full bg-gray-700 text-white inline-flex items-center justify-center text-xs font-black">4</span>
-                    Observaciones (Opcional)
+                    OBSERVACIONES (OPCIONAL)
                   </Label>
                   <Input 
                     value={observations} 
                     onChange={e => setObservations(e.target.value)} 
                     placeholder="Detalles adicionales..." 
-                    className="bg-white"
+                    className="bg-white font-medium"
                   />
                 </div>
 
-                <Button 
-                  type="submit" 
-                  disabled={loading || !personnelId} 
-                  className="w-full h-12 text-base font-extrabold bg-red-700 hover:bg-red-800 text-white shadow-lg rounded-xl flex items-center justify-center gap-2"
-                >
-                  <CheckCircle2 size={20} />
-                  {loading ? 'Procesando...' : 'Confirmar y Registrar Inasistencia'}
-                </Button>
+                <div className="pt-2 pb-6">
+                  <Button 
+                    type="submit" 
+                    disabled={loading || !personnelId} 
+                    className="w-full h-14 text-sm sm:text-base font-black uppercase tracking-wide bg-red-700 hover:bg-red-800 text-white shadow-xl rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <CheckCircle2 size={22} className="shrink-0" />
+                    {loading ? 'PROCESANDO...' : 'CONFIRMAR Y REGISTRAR INASISTENCIA'}
+                  </Button>
+                </div>
               </form>
             </CardContent>
           </Card>

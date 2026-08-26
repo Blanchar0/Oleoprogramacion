@@ -234,7 +234,13 @@ class SupabaseRepository implements AgronomicRepository {
   subscribeAbsences(filters: any, callback: (data: any[]) => void): Unsubscribe {
     const fetchData = async () => {
       let query = supabase.from('absences').select('*');
-      if (filters.date) query = query.eq('date', filters.date);
+      if (filters.date) {
+        query = query.eq('date', filters.date);
+      } else if (filters.startDate && filters.endDate) {
+        query = query.gte('date', filters.startDate).lte('date', filters.endDate);
+      } else if (filters.month) {
+        query = query.gte('date', `${filters.month}-01`).lte('date', `${filters.month}-31`);
+      }
       if (filters.supervisorId !== undefined && filters.supervisorId !== null) {
         query = query.eq('id_supervisor', filters.supervisorId);
       }

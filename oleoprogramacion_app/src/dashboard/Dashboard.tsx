@@ -68,7 +68,12 @@ export default function Dashboard() {
     if (user?.role === 'SUPERVISOR') filters.supervisorId = user.idSupervisor;
     const unsub1 = repository.subscribeProgramming(filters, setProgrammings);
     const unsub2 = repository.subscribeMachinery(filters, setMachineries);
-    const unsub3 = repository.subscribeAbsences(filters, setAbsences);
+    
+    // Suscripción de inasistencias del mes para que el filtro mensual incluya todos los días
+    const monthFilter: any = { month: date.substring(0, 7) };
+    if (user?.role === 'SUPERVISOR') monthFilter.supervisorId = user.idSupervisor;
+    const unsub3 = repository.subscribeAbsences(monthFilter, setAbsences);
+    
     return () => { unsub1(); unsub2(); unsub3(); };
   }, [date, user]);
 
@@ -83,11 +88,20 @@ export default function Dashboard() {
 
   const filteredProgrammings = programmings.filter(p => p.status === 'CONFIRMADA');
   const filteredMachineries = machineries;
-  const filteredAbsences = absences;
+  const filteredAbsences = absences.filter(a => a.date === date);
   const isTerminationNovelty = (tipo?: string) => {
     if (!tipo) return false;
     const t = tipo.toUpperCase().trim();
     return t === 'RENUNCIA' || t === 'TERMINACION_CONTRATO' || t === 'DESPIDO' || t === 'RETIRO';
+  };
+
+  const isUnjustified = (reason?: string) => {
+    if (!reason) return true;
+    const r = reason.trim().toLowerCase();
+    if (r.includes('incapacidad') || r.includes('vacacion') || r.includes('permiso') || r.includes('calamidad') || r.includes('licencia') || r.includes('suspensi')) {
+      return false;
+    }
+    return true;
   };
 
   const NovedadesPanel = () => {
@@ -332,30 +346,38 @@ export default function Dashboard() {
         fill: '#315D43'
       }));
 
-      // 5. Top Leaderboard de Inasistentes / Recurrencia
-      const absenceRecurrenceMap = new Map<string, { count: number; name: string; cargo: string; zone: string }>();
-      
+      // 5. Top Leaderboard de Inasistentes Injustificados y Recurrencia
       const selectedMonthPrefix = date.substring(0, 7); // YYYY-MM
+      const absenceRecurrenceMap = new Map<string, { 
+        count: number; 
+        name: string; 
+        doc: string; 
+        dates: string[];
+      }>();
       
-      filteredAbsences.forEach(a => {
-        if (a.status === 'REGISTRADA') {
-          if (absencesRange === 'day' && a.date !== date) return;
-          if (absencesRange === 'month' && !a.date.startsWith(selectedMonthPrefix)) return;
+      const sourceAbsences = absencesRange === 'day' 
+        ? absences.filter(a => a.date === date) 
+        : absences.filter(a => a.date.startsWith(selectedMonthPrefix));
 
-          const p = catalogs.personnel.find((per: any) => per.id === a.personnelId);
-          const name = p ? p.name : 'Personal Desconocido';
-          const cargo = p ? (p.jobTitle || 'Operario') : 'Operario';
-          const zone = p ? (p.cuadrilla || p.zona || 'Campo') : 'Campo';
-          const key = p ? p.id : a.personnelId;
+      sourceAbsences.forEach(a => {
+        if (a.status === 'REGISTRADA' && isUnjustified(a.reason)) {
+          const p = catalogs.personnel.find((per: any) => per.id === a.personnelId || per.documento === a.personnelDoc);
+          const name = p ? (p.name || p.nombreCompleto) : (a.personnelName || 'Personal');
+          const doc = p ? (p.documento || '') : (a.personnelDoc || '');
+          const key = p ? p.id : (a.personnelId || a.personnelDoc || name);
 
-          const current = absenceRecurrenceMap.get(key) || { count: 0, name, cargo, zone };
-          absenceRecurrenceMap.set(key, { ...current, count: current.count + 1 });
+          const current = absenceRecurrenceMap.get(key) || { count: 0, name, doc, dates: [] };
+          current.count += 1;
+          if (a.date && !current.dates.includes(a.date)) {
+            current.dates.push(a.date);
+          }
+          absenceRecurrenceMap.set(key, current);
         }
       });
 
       const topAbsentees = Array.from(absenceRecurrenceMap.values())
         .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
+        .slice(0, 10);
 
       return {
         totalPeople,
@@ -363,42 +385,51 @@ export default function Dashboard() {
         operativesPayrollTotal,
         adminTotal,
         absencesTotal: inasistentesSet.size,
-        incapacityTotal: incapacidadesSet.size,
-        vacationsTotal: vacacionesSet.size,
+        incapacidadesTotal: incapacidadesSet.size,
         permissionsTotal: permisosSet.size,
-        utilRate: utilRate.toFixed(1),
-        programmedCount,
+        vacationsTotal: vacacionesSet.size,
         availableOperativesCount,
         totalUnavailable,
-        activeMachineryCount,
-        totalEquipmentCount,
+        programmedCount,
+        utilRate: Number(utilRate.toFixed(1)),
         chartLabor,
-        chartBySup,
         chartAbsences,
         chartMachinery,
+        chartBySup,
+        activeMachineryCount,
+        totalEquipmentCount,
         topAbsentees
       };
-    }, [date, filteredProgrammings, filteredAbsences, filteredMachineries, catalogs, absencesRange]);
+    }, [catalogs, date, absencesRange, filteredProgrammings, filteredMachineries, filteredAbsences]);
 
     return (
-      <div className="space-y-6">
-        {/* Top Header Bar */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-forest-900/10 shadow-xs">
+      <div className="space-y-6 max-w-7xl mx-auto">
+        {/* Header with Title and Date Selector */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-forest-900 to-forest-950 p-5 rounded-2xl text-white shadow-lg border border-forest-800">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-forest-600 animate-pulse"></span>
-              <h2 className="text-2xl font-extrabold text-forest-950 tracking-tight">Dashboard Analítico</h2>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2 py-0.5 bg-lime-400 text-forest-950 rounded-md text-xs font-extrabold uppercase tracking-wider">
+                Panel Directivo & Táctico
+              </span>
+              <span className="text-xs text-forest-200">Oleoflores Agronómica</span>
             </div>
-            <p className="text-sm text-gray-500 mt-0.5">Tablero gerencial de inteligencia táctica y control agrónomo</p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              Tablero de Operaciones
+            </h2>
+            <p className="text-xs sm:text-sm text-forest-200 mt-0.5">
+              Control táctico de personal, rendimientos, maquinaria y ausentismo en campo
+            </p>
           </div>
-          <div className="flex items-center gap-3 self-stretch sm:self-auto">
-            <div className="flex items-center gap-2 bg-forest-50 px-3 py-1.5 rounded-xl border border-forest-100">
-              <Calendar size={16} className="text-forest-700" />
+
+          <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl border border-white/20 self-start sm:self-auto">
+            <Calendar size={18} className="text-lime-400 shrink-0" />
+            <div className="flex flex-col">
+              <span className="text-[10px] uppercase font-bold text-forest-200 tracking-wider">Fecha de Análisis</span>
               <Input 
                 type="date" 
                 value={date} 
                 onChange={e => setDate(e.target.value)} 
-                className="bg-transparent border-0 h-8 text-sm font-semibold text-forest-950 focus-visible:ring-0 p-0" 
+                className="bg-transparent border-0 h-8 text-sm font-semibold text-white focus-visible:ring-0 p-0" 
               />
             </div>
           </div>
@@ -449,31 +480,31 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Card 4: Personas Ausentes */}
+          {/* Card 4: Inasistencias del Día */}
           <Card className="border-red-200 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-red-50/40">
             <CardContent className="p-3.5">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-red-700 uppercase tracking-wider">Ausentes</span>
-                <div className="p-1.5 bg-red-100 text-red-700 rounded-lg">
+                <span className="text-[11px] font-bold text-red-800 uppercase tracking-wider">Inasistencias</span>
+                <div className="p-1.5 bg-red-100 text-red-800 rounded-lg">
                   <UserX size={16} />
                 </div>
               </div>
-              <h3 className="text-2xl font-extrabold text-red-700">{stats.absencesTotal}</h3>
-              <p className="text-[10px] text-red-600/80 mt-1 truncate">Inasistencia del día</p>
+              <h3 className="text-2xl font-extrabold text-red-950">{stats.absencesTotal}</h3>
+              <p className="text-[10px] text-red-700/80 mt-1 truncate">Sin justificar en el día</p>
             </CardContent>
           </Card>
 
-          {/* Card 5: Personas Incapacitadas */}
+          {/* Card 5: Incapacidades */}
           <Card className="border-teal-200 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-teal-50/40">
             <CardContent className="p-3.5">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-teal-800 uppercase tracking-wider">Incapacitados</span>
+                <span className="text-[11px] font-bold text-teal-800 uppercase tracking-wider">Incapacidades</span>
                 <div className="p-1.5 bg-teal-100 text-teal-800 rounded-lg">
                   <Stethoscope size={16} />
                 </div>
               </div>
-              <h3 className="text-2xl font-extrabold text-teal-900">{stats.incapacityTotal}</h3>
-              <p className="text-[10px] text-teal-700/80 mt-1 truncate">Licencia médica</p>
+              <h3 className="text-2xl font-extrabold text-teal-950">{stats.incapacidadesTotal}</h3>
+              <p className="text-[10px] text-teal-700/80 mt-1 truncate">Médica activa</p>
             </CardContent>
           </Card>
 
@@ -570,9 +601,8 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="pt-4">
               {stats.chartAbsences.length === 0 ? (
-                <div className="h-[260px] flex flex-col items-center justify-center text-sm text-gray-400 gap-2">
-                  <CheckCircle2 size={32} className="text-lime-500" />
-                  <span>No se registran ausencias ni novedas en esta fecha.</span>
+                <div className="h-[260px] flex items-center justify-center text-sm text-gray-400">
+                  No hay inasistencias ni novedades reportadas en esta fecha.
                 </div>
               ) : (
                 <div className="h-[260px]">
@@ -584,9 +614,7 @@ export default function Dashboard() {
                         nameKey="name" 
                         cx="50%" 
                         cy="50%" 
-                        innerRadius={50} 
                         outerRadius={80} 
-                        paddingAngle={4}
                         label={({ name, value }) => `${name}: ${value}`}
                       >
                         {stats.chartAbsences.map((entry, index) => (
@@ -594,8 +622,8 @@ export default function Dashboard() {
                         ))}
                       </Pie>
                       <Tooltip 
-                        formatter={(val: any) => [`${val} Persona(s)`, 'Total']}
-                        contentStyle={{ backgroundColor: '#0B2F24', color: '#fff', borderRadius: '8px', border: 'none' }}
+                        formatter={(val: any, name: any) => [`${val} Persona(s)`, name]}
+                        contentStyle={{ backgroundColor: '#123C2E', color: '#fff', borderRadius: '8px', border: 'none' }}
                       />
                       <Legend />
                     </PieChart>
@@ -678,14 +706,14 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Section 3: Leaderboard / Top de Inasistentes y Recurrencia */}
+        {/* Section 3: Leaderboard / Top de Inasistencias Injustificadas */}
         <Card className="border-forest-900/10 shadow-xs">
           <CardHeader className="pb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
               <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
-                <Award size={18} className="text-amber-500" /> Leaderboard: Top Inasistencias y Recurrencia
+                <Award size={18} className="text-amber-500" /> Leaderboard: Top Inasistencias Injustificadas
               </CardTitle>
-              <p className="text-xs text-gray-500 mt-0.5">Monitoreo de frecuencia de ausentismo para control directo</p>
+              <p className="text-xs text-gray-500 mt-0.5">Personal con ausencias sin justificación (acumulado {absencesRange === 'month' ? 'del mes actual' : 'del día'})</p>
             </div>
             <div className="flex bg-gray-200/80 p-1 rounded-xl text-xs font-bold uppercase tracking-wider">
               <button 
@@ -706,32 +734,54 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {stats.topAbsentees.length === 0 ? (
-              <div className="py-8 text-center text-sm text-gray-400">
-                No se registraron inasistencias recurrentes en este período.
+              <div className="py-8 text-center text-sm text-gray-400 font-medium">
+                No se registraron inasistencias injustificadas en este período ({absencesRange === 'month' ? 'Mes Actual' : date}).
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {stats.topAbsentees.map((item, idx) => (
-                  <div key={idx} className="p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200/80 shadow-2xs hover:border-forest-400 transition-all flex flex-col justify-between">
+                  <div key={idx} className="p-4 bg-gradient-to-br from-red-50/40 via-white to-white rounded-xl border border-red-200/70 shadow-2xs hover:border-red-400 transition-all flex flex-col justify-between">
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold ${
-                          idx === 0 ? 'bg-amber-400 text-amber-950' :
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${
+                          idx === 0 ? 'bg-amber-400 text-amber-950 shadow-xs' :
                           idx === 1 ? 'bg-slate-300 text-slate-900' :
                           idx === 2 ? 'bg-amber-700 text-white' : 'bg-gray-200 text-gray-700'
                         }`}>
                           #{idx + 1}
                         </span>
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-700 border border-red-200">
-                          {item.count} Ausencia{item.count > 1 ? 's' : ''}
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-red-100 text-red-800 border border-red-300">
+                          {item.count} {item.count === 1 ? 'Inasistencia' : 'Inasistencias'}
                         </span>
                       </div>
-                      <h4 className="font-bold text-sm text-gray-900 truncate" title={item.name}>{item.name}</h4>
-                      <p className="text-xs text-gray-500 truncate mt-0.5">{item.cargo}</p>
+                      
+                      <h4 className="font-extrabold text-sm text-gray-900 leading-snug break-words" title={item.name}>
+                        {item.name}
+                      </h4>
+                      {item.doc && (
+                        <p className="text-xs font-semibold text-gray-500 mt-0.5">C.C. {item.doc}</p>
+                      )}
                     </div>
-                    <div className="mt-3 pt-2 border-t border-gray-100 flex justify-between items-center text-[11px] text-gray-400">
-                      <span>{item.zone}</span>
-                      <ChevronRight size={14} />
+                    
+                    <div className="mt-3 pt-2.5 border-t border-red-100">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-red-950">Faltas sin justificar:</span>
+                        <span className="font-black text-red-700 text-sm">{item.count} {item.count === 1 ? 'vez' : 'veces'}</span>
+                      </div>
+                      {item.dates.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {item.dates.slice(0, 4).map(d => (
+                            <span key={d} className="px-1.5 py-0.5 rounded bg-red-50 text-red-800 border border-red-200 text-[10px] font-bold">
+                              {d.split('-').slice(1).reverse().join('/')}
+                            </span>
+                          ))}
+                          {item.dates.length > 4 && (
+                            <span className="text-[10px] text-gray-500 font-bold self-center">
+                              +{item.dates.length - 4} más
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -745,4 +795,3 @@ export default function Dashboard() {
 
   return <DirectivoDashboard />;
 }
-
