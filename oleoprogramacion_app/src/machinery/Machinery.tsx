@@ -179,6 +179,9 @@ export default function Machinery() {
   if (!rawZones.some(z => z.toUpperCase().trim() === 'ALMACEN')) {
     rawZones.push('ALMACEN');
   }
+  if (!rawZones.some(z => z.toUpperCase().trim() === 'LA DILIA')) {
+    rawZones.push('LA DILIA');
+  }
   const zones: string[] = rawZones.sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
 
   const toggleZone = (z: string) => {

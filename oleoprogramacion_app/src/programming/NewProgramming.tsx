@@ -46,6 +46,9 @@ export default function NewProgramming() {
   if (!rawZones.some(z => String(z).toUpperCase().trim() === 'ALMACEN')) {
     rawZones.push('ALMACEN');
   }
+  if (!rawZones.some(z => String(z).toUpperCase().trim() === 'LA DILIA')) {
+    rawZones.push('LA DILIA');
+  }
   const zones = rawZones.sort((a,b) => String(a).localeCompare(String(b), 'es', { numeric: true }));
   
   const getNextDateString = (dateStr?: string): string => {
@@ -263,7 +266,9 @@ export default function NewProgramming() {
   const selectedLaborObj = (catalogs.labors || []).find((l: any) => l.id === laborId);
   const isLaborOtros = (selectedLaborObj?.name || '').toUpperCase().trim().includes('OTRO');
   const isZoneAlmacen = (zone || '').toUpperCase().trim() === 'ALMACEN';
-  const isNoLotRequired = isZoneAlmacen || isLaborOtros;
+  const isZoneLaDilia = (zone || '').toUpperCase().trim() === 'LA DILIA';
+  const isZoneNoLot = isZoneAlmacen || isZoneLaDilia;
+  const isNoLotRequired = isZoneNoLot || isLaborOtros;
 
   const toggleLocation = (id: string) => {
     setSelectedLocations(prev =>
@@ -292,15 +297,26 @@ export default function NewProgramming() {
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Check pending
+  // Suscribirse a TODAS las programaciones y maquinarias de la fecha para detectar asignaciones de todos los supervisores
   useEffect(() => {
-    if (user?.supervisorId) {
+    if (!date) return;
+    const unsubProg = repository.subscribeProgramming({ date }, setProgrammings);
+    const unsubMach = repository.subscribeMachinery({ date }, setMachineries);
+    return () => {
+      unsubProg();
+      unsubMach();
+    };
+  }, [date]);
+
+  // Check pending (solo para nueva programación, no en modo edición)
+  useEffect(() => {
+    if (!isEditing && user?.supervisorId) {
       const hasPending = programmings.some(p => p.supervisorId === user.supervisorId && p.status === 'PENDIENTE');
       if (hasPending) {
         navigate('/programming/pending');
       }
     }
-  }, [user, navigate]);
+  }, [user, navigate, programmings, isEditing]);
 
   // Update dependencies
   useEffect(() => {
@@ -484,13 +500,13 @@ export default function NewProgramming() {
     }
 
     const selectedLoteNames = isNoLotRequired 
-      ? (isZoneAlmacen ? 'ALMACÉN' : 'GENERAL')
+      ? (isZoneAlmacen ? 'ALMACÉN' : (isZoneLaDilia ? 'LA DILIA' : 'GENERAL'))
       : selectedLocations
           .map(id => locations.find(l => l.id === id)?.name || id)
           .join(', ');
 
     const finalLocationIds = isNoLotRequired ? [] : selectedLocations;
-    const finalLocationId = isNoLotRequired ? (isZoneAlmacen ? 'ALMACEN' : null) : (selectedLocations.join(',') || null);
+    const finalLocationId = isNoLotRequired ? (isZoneAlmacen ? 'ALMACEN' : (isZoneLaDilia ? 'LA DILIA' : null)) : (selectedLocations.join(',') || null);
     const finalZoneSnapshot = isNoLotRequired ? zone : (selectedLocations.length > 0 ? `${zone} - ${selectedLoteNames}` : zone);
 
     if (isEditing) {
@@ -926,6 +942,8 @@ export default function NewProgramming() {
                       <span>
                         {isZoneAlmacen 
                           ? 'SELECCIÓN DE LOTES OMITIDA PARA LA ZONA ALMACÉN (SOLO SE REGISTRA LA ZONA).' 
+                          : isZoneLaDilia
+                          ? 'SELECCIÓN DE LOTES OMITIDA PARA LA ZONA LA DILIA (SOLO SE REGISTRA LA ZONA).'
                           : 'SELECCIÓN DE LOTES OMITIDA PARA LA LABOR OTROS (SOLO SE REGISTRA LA ZONA).'}
                       </span>
                     </div>
@@ -1045,19 +1063,40 @@ export default function NewProgramming() {
                       {filteredPersonnel.map(p => {
                         const isSelected = selectedPersonnel.includes(p.id);
                         const novedad = (catalogs.personnelNovelties || []).find((n:any) => n.personaDocumento === p.documento && n.fechaInicio <= date && n.fechaFin >= date);
-                        const isProgrammed = programmings.some(prog => 
-                           prog.date === date && prog.status === 'CONFIRMADA' && prog.personnelIds.includes(p.id)
-                        );
-                        const isMachinery = machineries.some(m => 
-                           m.date === date && m.operatorId === p.id && m.status !== 'CANCELADA'
-                        );
                         
-                        const isDisabled = !!novedad || isProgrammed || isMachinery;
+                        // Buscar si la persona está programada en OTRA programación de la fecha (excluyendo la que se está editando)
+                        const otherProg = programmings.find(prog => 
+                           prog.date === date && 
+                           prog.status !== 'CANCELADA' && 
+                           (!isEditing || prog.id !== editRecord?.id) &&
+                           Array.isArray(prog.personnelIds) && 
+                           prog.personnelIds.some((pId: any) => String(pId) === String(p.id) || String(pId) === String(p.documento))
+                        );
+                        const isProgrammed = !!otherProg;
+
+                        let supervisorName = '';
+                        if (otherProg) {
+                          const supId = otherProg.supervisorId || otherProg.idSupervisor;
+                          const supObj = (catalogs.supervisors || []).find((s: any) => s.id === supId) || 
+                                         (catalogs.users || []).find((u: any) => u.idSupervisor === supId || u.supervisorId === supId || u.id === supId);
+                          supervisorName = supObj ? (supObj.name || supObj.nombre || supObj.username) : supId;
+                        }
+
+                        const machObj = machineries.find(m => 
+                           m.date === date && 
+                           m.status !== 'CANCELADA' && 
+                           (m.operatorId === p.id || m.operatorName === p.name || m.operatorName === p.nombreCompleto)
+                        );
+                        const isMachinery = !!machObj;
+                        
+                        // Solo está deshabilitado para nueva selección si tiene novedad, o está en otra programación o maquinaria
+                        // Pero si ya está seleccionado en esta programación (isSelected), SIEMPRE se permite hacer clic para deseleccionar
+                        const isDisabled = !isSelected && (!!novedad || isProgrammed || isMachinery);
                         
                         return (
                           <div 
                             key={p.id}
-                            onClick={() => { if (!isDisabled) togglePersonnel(p.id); }}
+                            onClick={() => { if (isSelected || !isDisabled) togglePersonnel(p.id); }}
                             className={cn(
                               "flex items-center justify-between p-3 rounded-md transition-colors border min-h-[44px]",
                               isDisabled 
@@ -1078,13 +1117,13 @@ export default function NewProgramming() {
                                 </span>
                               )}
                               {isProgrammed && (
-                                <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded uppercase">
-                                  PROGRAMADO
+                                <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded uppercase" title={`Programado por ${supervisorName || 'otro supervisor'}`}>
+                                  PROGRAMADO ({supervisorName ? supervisorName.toUpperCase() : 'OTRO SUP.'})
                                 </span>
                               )}
                               {isMachinery && (
-                                <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded uppercase">
-                                  MAQUINARIA
+                                <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded uppercase" title={`En maquinaria con operador ${machObj?.operatorName || ''}`}>
+                                  MAQUINARIA ({machObj?.operatorName ? machObj.operatorName.toUpperCase() : 'OPERADOR'})
                                 </span>
                               )}
                               <div className={cn(

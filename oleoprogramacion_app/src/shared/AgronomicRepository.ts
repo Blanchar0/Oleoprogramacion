@@ -833,7 +833,7 @@ class SupabaseRepository implements AgronomicRepository {
   async createPersonnel(input: any): Promise<Result> {
     try {
       const payload = {
-        id: input.id || `PER-${input.documento || crypto.randomUUID().slice(0, 8)}`,
+        id: input.id || crypto.randomUUID(),
         name: input.name || input.nombreCompleto,
         documento: input.documento,
         type: input.type || input.tipoPersonal || 'CAMPO',
