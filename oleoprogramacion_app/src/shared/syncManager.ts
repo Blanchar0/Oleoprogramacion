@@ -130,7 +130,12 @@ class SyncManager {
         return true;
       }
       case 'ABSENCE_CREATE': {
-        const { error } = await supabase.from('absences').insert(payload);
+        const sanitized = {
+          ...payload,
+          supervisor_id: payload.supervisor_id || payload.id_supervisor || 'ADMIN',
+          id_supervisor: payload.id_supervisor || payload.supervisor_id || 'ADMIN',
+        };
+        const { error } = await supabase.from('absences').insert(sanitized);
         if (error) throw error;
         return true;
       }

@@ -330,11 +330,12 @@ class SupabaseRepository implements AgronomicRepository {
   }
 
   async createAbsence(input: any): Promise<Result> {
+    const supId = input.supervisorId || input.idSupervisor || 'ADMIN';
     const payload = {
       id: crypto.randomUUID(),
       date: input.date,
-      supervisor_id: input.supervisorId || input.idSupervisor,
-      id_supervisor: input.idSupervisor || input.supervisorId,
+      supervisor_id: supId,
+      id_supervisor: supId,
       personnel_id: input.personnelId,
       personnel_doc: input.personnelDoc,
       personnel_name: input.personnelName,
