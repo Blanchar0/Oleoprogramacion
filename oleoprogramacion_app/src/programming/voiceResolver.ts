@@ -1,4 +1,5 @@
 import { isOperative } from '../dashboard/Dashboard';
+import { matchPerson } from '../shared/AgronomicRepository';
 
 const normalizeString = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -26,7 +27,8 @@ export function resolveVoiceData(
   extraction: ExtractedData, 
   catalogs: any,
   programmings: any[],
-  machineries: any[]
+  machineries: any[],
+  absences: any[] = []
 ) {
   const { labors = [], activities = [], locations = [], personnel = [], personnelNovelties = [] } = catalogs;
   const operativePersonnel = personnel.filter((p: any) => isOperative(p));
@@ -84,20 +86,37 @@ export function resolveVoiceData(
   };
   const resolvedLot = resolveLot();
 
-  const checkAvailability = (pId: string, doc: string, name: string): string | null => {
+  const checkAvailability = (person: any, name: string): string | null => {
     const activeNovedad = personnelNovelties.find((n:any) => 
-      n.personaDocumento === doc && n.fechaInicio <= dateText && n.fechaFin >= dateText
+      (matchPerson(person, n.personaDocumento) || matchPerson(person, n.personaId) || matchPerson(person, n.personaNombre)) &&
+      n.fechaInicio <= dateText && (n.fechaFin >= dateText || n.fechaFin === 'N/A')
     );
-    if (activeNovedad) return `"${name}" tiene ${activeNovedad.tipo} hasta ${activeNovedad.fechaFin}`;
+    if (activeNovedad) return `"${name}" tiene ${activeNovedad.tipo} hasta ${activeNovedad.fechaFin || 'la fecha'}`;
 
-    const isProgrammed = programmings.some(prog => prog.date === dateText && prog.status === 'CONFIRMADA' && (prog.personnelIds || []).includes(pId));
+    const activeAbsence = (absences || []).find((a: any) => 
+      a.date === dateText && 
+      a.status !== 'CANCELADA' && 
+      (matchPerson(person, a.personnelId) || matchPerson(person, a.personnelDoc) || matchPerson(person, a.personnelName))
+    );
+    if (activeAbsence) return `"${name}" tiene inasistencia reportada (${activeAbsence.reason || 'Ausente'})`;
+
+    const isProgrammed = programmings.some(prog => 
+      prog.date === dateText && 
+      prog.status !== 'CANCELADA' && 
+      Array.isArray(prog.personnelIds) && 
+      prog.personnelIds.some((pId: any) => matchPerson(person, pId))
+    );
     if (isProgrammed) return `"${name}" ya está programado para el ${dateText}`;
 
-    const isMachinery = machineries.some(m => m.date === dateText && m.operatorId === pId && m.status !== 'CANCELADA');
+    const isMachinery = machineries.some(m => 
+      m.date === dateText && 
+      m.status !== 'CANCELADA' && 
+      (matchPerson(person, m.operatorId) || matchPerson(person, m.operatorName) || matchPerson(person, m.operator_id))
+    );
     if (isMachinery) return `"${name}" está asignado a maquinaria el ${dateText}`;
 
     return null;
-  }
+  };
 
   const resolvePersonnel = (): ResolvedField<string[]> => {
     if (!extraction.personnelTexts || extraction.personnelTexts.length === 0) {
@@ -113,7 +132,7 @@ export function resolveVoiceData(
       const norm = normalizeString(name);
       const exactMatches = operativePersonnel.filter((p:any) => normalizeString(p.name) === norm);
       if (exactMatches.length === 1) {
-        const unavailabilityMsg = checkAvailability(exactMatches[0].id, exactMatches[0].documento, name);
+        const unavailabilityMsg = checkAvailability(exactMatches[0], name);
         if (unavailabilityMsg) {
           hasUnavailable = true;
           messages.push(unavailabilityMsg);
@@ -124,7 +143,7 @@ export function resolveVoiceData(
       }
       const partialMatches = operativePersonnel.filter((p:any) => normalizeString(p.name).includes(norm));
       if (partialMatches.length === 1) {
-        const unavailabilityMsg = checkAvailability(partialMatches[0].id, partialMatches[0].documento, name);
+        const unavailabilityMsg = checkAvailability(partialMatches[0], name);
         if (unavailabilityMsg) {
           hasUnavailable = true;
           messages.push(unavailabilityMsg);

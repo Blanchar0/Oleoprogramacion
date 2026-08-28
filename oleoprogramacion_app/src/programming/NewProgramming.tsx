@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { repository } from '../shared/AgronomicRepository';
+import { repository, matchPerson } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, Button, Input, Label, cn } from '@/src/components/ui';
@@ -188,15 +188,6 @@ export default function NewProgramming() {
       });
     }
   }, [catalogs, cloneTemplate, editRecord]);
-  
-  useEffect(() => {
-    const filters: any = { date };
-    if (user?.role === 'SUPERVISOR') filters.supervisorId = user.idSupervisor;
-    const unsub1 = repository.subscribeProgramming(filters, setProgrammings);
-    const unsub2 = repository.subscribeMachinery(filters, setMachineries);
-    const unsub3 = repository.subscribeAbsences(filters, setAbsences);
-    return () => { unsub1(); unsub2(); unsub3(); };
-  }, [date, user]);
 
   const [performance, setPerformance] = useState<ProgrammingPerformance>({
     unit: 'Sin referencia',
@@ -297,21 +288,24 @@ export default function NewProgramming() {
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Suscribirse a TODAS las programaciones y maquinarias de la fecha para detectar asignaciones de todos los supervisores
+  // Suscribirse a TODAS las programaciones, maquinarias e inasistencias de la fecha para detectar asignaciones de todos los supervisores
   useEffect(() => {
     if (!date) return;
     const unsubProg = repository.subscribeProgramming({ date }, setProgrammings);
     const unsubMach = repository.subscribeMachinery({ date }, setMachineries);
+    const unsubAbs = repository.subscribeAbsences({ date }, setAbsences);
     return () => {
       unsubProg();
       unsubMach();
+      unsubAbs();
     };
   }, [date]);
 
   // Check pending (solo para nueva programación, no en modo edición)
   useEffect(() => {
-    if (!isEditing && user?.supervisorId) {
-      const hasPending = programmings.some(p => p.supervisorId === user.supervisorId && p.status === 'PENDIENTE');
+    const currentSupId = user?.idSupervisor || user?.supervisorId;
+    if (!isEditing && currentSupId) {
+      const hasPending = programmings.some(p => (p.supervisorId === currentSupId || p.idSupervisor === currentSupId) && p.status === 'PENDIENTE');
       if (hasPending) {
         navigate('/programming/pending');
       }
@@ -461,7 +455,7 @@ export default function NewProgramming() {
       setVoiceState('INTERPRETANDO');
       const extraction = await response.json();
       
-      const resolved = resolveVoiceData(extraction as any, catalogs, programmings, machineries);
+      const resolved = resolveVoiceData(extraction as any, catalogs, programmings, machineries, absences);
       
       // Load resolved values into UI form state
       if (resolved.date.canonicalId) setDate(resolved.date.canonicalId);
@@ -490,7 +484,16 @@ export default function NewProgramming() {
     setLoading(true);
 
     if (!skipConflictCheck) {
-      const conflicts = absences.filter(a => selectedPersonnel.includes(a.personnelId));
+      const conflicts = absences.filter(a => 
+        a.date === date && 
+        a.status !== 'CANCELADA' && 
+        selectedPersonnel.some(pId => {
+          const person = allPersonnel.find(p => p.id === pId);
+          return person 
+            ? matchPerson(person, a.personnelId) || matchPerson(person, a.personnelDoc) || matchPerson(person, a.personnelName)
+            : String(a.personnelId) === String(pId) || String(a.personnelDoc) === String(pId);
+        })
+      );
       if (conflicts.length > 0) {
         setConflictAbsences(conflicts);
         setConflictModalOpen(true);
@@ -1062,15 +1065,35 @@ export default function NewProgramming() {
                     <div className="space-y-1">
                       {filteredPersonnel.map(p => {
                         const isSelected = selectedPersonnel.includes(p.id);
-                        const novedad = (catalogs.personnelNovelties || []).find((n:any) => n.personaDocumento === p.documento && n.fechaInicio <= date && n.fechaFin >= date);
+
+                        // 1. Novedad activa en la fecha
+                        const novedad = (catalogs.personnelNovelties || []).find((n:any) => 
+                          (matchPerson(p, n.personaDocumento) || matchPerson(p, n.personaId) || matchPerson(p, n.personaNombre)) && 
+                          n.fechaInicio <= date && (n.fechaFin >= date || n.fechaFin === 'N/A')
+                        );
+
+                        // 2. Inasistencia registrada en la fecha (por cualquier supervisor o admin)
+                        const absenceObj = absences.find(a => 
+                          a.date === date && 
+                          a.status !== 'CANCELADA' && 
+                          (
+                            matchPerson(p, a.personnelId) || 
+                            matchPerson(p, a.personnelDoc) || 
+                            matchPerson(p, a.personnelName) ||
+                            matchPerson(p, a.personnel_id) || 
+                            matchPerson(p, a.personnel_doc) || 
+                            matchPerson(p, a.personnel_name)
+                          )
+                        );
+                        const isAbsence = !!absenceObj;
                         
-                        // Buscar si la persona está programada en OTRA programación de la fecha (excluyendo la que se está editando)
+                        // 3. Programación en otra labor de la fecha (cualquier supervisor)
                         const otherProg = programmings.find(prog => 
                            prog.date === date && 
                            prog.status !== 'CANCELADA' && 
                            (!isEditing || prog.id !== editRecord?.id) &&
                            Array.isArray(prog.personnelIds) && 
-                           prog.personnelIds.some((pId: any) => String(pId) === String(p.id) || String(pId) === String(p.documento))
+                           prog.personnelIds.some((pId: any) => matchPerson(p, pId))
                         );
                         const isProgrammed = !!otherProg;
 
@@ -1082,16 +1105,22 @@ export default function NewProgramming() {
                           supervisorName = supObj ? (supObj.name || supObj.nombre || supObj.username) : supId;
                         }
 
+                        // 4. Asignación a maquinaria en la fecha
                         const machObj = machineries.find(m => 
                            m.date === date && 
                            m.status !== 'CANCELADA' && 
-                           (m.operatorId === p.id || m.operatorName === p.name || m.operatorName === p.nombreCompleto)
+                           (
+                             matchPerson(p, m.operatorId) || 
+                             matchPerson(p, m.operatorName) ||
+                             matchPerson(p, m.operator_id) || 
+                             matchPerson(p, m.operator_name)
+                           )
                         );
                         const isMachinery = !!machObj;
                         
-                        // Solo está deshabilitado para nueva selección si tiene novedad, o está en otra programación o maquinaria
+                        // Deshabilitado para nueva selección si tiene inasistencia, novedad, o está en otra programación o maquinaria
                         // Pero si ya está seleccionado en esta programación (isSelected), SIEMPRE se permite hacer clic para deseleccionar
-                        const isDisabled = !isSelected && (!!novedad || isProgrammed || isMachinery);
+                        const isDisabled = !isSelected && (isAbsence || !!novedad || isProgrammed || isMachinery);
                         
                         return (
                           <div 
@@ -1100,37 +1129,49 @@ export default function NewProgramming() {
                             className={cn(
                               "flex items-center justify-between p-3 rounded-md transition-colors border min-h-[44px]",
                               isDisabled 
-                                ? "bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed"
+                                ? "bg-gray-100/90 border-gray-200 opacity-60 cursor-not-allowed select-none"
                                 : isSelected 
                                   ? "bg-amber-100/90 border-amber-400 text-amber-950 font-semibold cursor-pointer shadow-2xs" 
                                   : "bg-white border-gray-200 hover:bg-amber-50/50 text-gray-700 cursor-pointer"
                             )}
                           >
                             <div>
-                              <div className="text-sm font-black uppercase text-gray-900">{p.name || p.nombreCompleto}</div>
+                              <div className={cn("text-sm font-black uppercase", isDisabled ? "text-gray-500" : "text-gray-900")}>
+                                {p.name || p.nombreCompleto}
+                              </div>
                               <div className="text-xs text-gray-500 font-medium">C.C. {p.documento}</div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              {absenceObj && (
+                                <span className="text-[10px] bg-rose-100 text-rose-800 border border-rose-200 font-black px-1.5 py-0.5 rounded uppercase" title={`Inasistencia: ${absenceObj.reason || 'Reportada'}`}>
+                                  INASISTENCIA ({absenceObj.reason ? absenceObj.reason.toUpperCase() : 'REPORTADA'})
+                                </span>
+                              )}
                               {novedad && (
-                                <span className="text-[10px] bg-red-100 text-red-800 font-bold px-1.5 py-0.5 rounded uppercase">
+                                <span className="text-[10px] bg-red-100 text-red-800 font-black px-1.5 py-0.5 rounded uppercase">
                                   {novedad.tipo}
                                 </span>
                               )}
                               {isProgrammed && (
-                                <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded uppercase" title={`Programado por ${supervisorName || 'otro supervisor'}`}>
+                                <span className="text-[10px] bg-blue-100 text-blue-800 border border-blue-200 font-black px-1.5 py-0.5 rounded uppercase" title={`Programado por ${supervisorName || 'otro supervisor'}`}>
                                   PROGRAMADO ({supervisorName ? supervisorName.toUpperCase() : 'OTRO SUP.'})
                                 </span>
                               )}
                               {isMachinery && (
-                                <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded uppercase" title={`En maquinaria con operador ${machObj?.operatorName || ''}`}>
+                                <span className="text-[10px] bg-purple-100 text-purple-800 border border-purple-200 font-black px-1.5 py-0.5 rounded uppercase" title={`En maquinaria`}>
                                   MAQUINARIA ({machObj?.operatorName ? machObj.operatorName.toUpperCase() : 'OPERADOR'})
                                 </span>
                               )}
                               <div className={cn(
-                                "w-5 h-5 rounded-full border flex items-center justify-center transition-colors",
-                                isSelected ? "bg-amber-600 border-amber-600 text-white" : "border-gray-300 bg-white"
+                                "w-5 h-5 rounded-full border flex items-center justify-center transition-colors shrink-0",
+                                isSelected 
+                                  ? "bg-amber-600 border-amber-600 text-white" 
+                                  : isDisabled 
+                                    ? "border-gray-200 bg-gray-100" 
+                                    : "border-gray-300 bg-white"
                               )}>
                                 {isSelected && <Check size={12} className="stroke-[3]" />}
+                                {isDisabled && !isSelected && <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>}
                               </div>
                             </div>
                           </div>

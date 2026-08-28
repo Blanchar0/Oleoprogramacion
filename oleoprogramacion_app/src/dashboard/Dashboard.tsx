@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { repository } from '../shared/AgronomicRepository';
+import { repository, matchPerson } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
 import { Card, CardContent, CardHeader, CardTitle, Input } from '@/src/components/ui';
 import { 
@@ -185,6 +185,73 @@ export default function Dashboard() {
   };
 
   const DirectivoDashboard = () => {
+    const [unprogrammedSearch, setUnprogrammedSearch] = useState('');
+
+    const unprogrammedPersonnel = useMemo(() => {
+      const activeOperativesList = (catalogs.personnel || []).filter((p: any) => p.active !== false && isOperative(p));
+      
+      return activeOperativesList.filter((p: any) => {
+        // 1. ¿Está en alguna programación (confirmada o pendiente) de la fecha?
+        const inProg = programmings.some((prog: any) => 
+          prog.date === date &&
+          prog.status !== 'CANCELADA' && 
+          Array.isArray(prog.personnelIds) && 
+          prog.personnelIds.some((pId: any) => matchPerson(p, pId))
+        );
+        if (inProg) return false;
+
+        // 2. ¿Está en maquinaria en la fecha?
+        const inMach = machineries.some((m: any) => 
+          m.date === date &&
+          m.status !== 'CANCELADA' && 
+          (
+            matchPerson(p, m.operatorId) || 
+            matchPerson(p, m.operatorName) || 
+            matchPerson(p, m.operator_id) || 
+            matchPerson(p, m.operator_name)
+          )
+        );
+        if (inMach) return false;
+
+        // 3. ¿Tiene inasistencia registrada en la fecha?
+        const inAbs = filteredAbsences.some((a: any) => 
+          a.status !== 'CANCELADA' && 
+          (
+            matchPerson(p, a.personnelId) || 
+            matchPerson(p, a.personnelDoc) || 
+            matchPerson(p, a.personnelName) ||
+            matchPerson(p, a.personnel_id) || 
+            matchPerson(p, a.personnel_doc) || 
+            matchPerson(p, a.personnel_name)
+          )
+        );
+        if (inAbs) return false;
+
+        // 4. ¿Tiene novedad activa en la fecha?
+        const inNov = (catalogs.personnelNovelties || []).some((n: any) => {
+          const isMatch = matchPerson(p, n.personaDocumento) || matchPerson(p, n.personaId) || matchPerson(p, n.personaNombre);
+          if (!isMatch) return false;
+          if (isTerminationNovelty(n.tipo)) return n.fechaInicio === date;
+          return n.fechaInicio <= date && (n.fechaFin >= date || n.fechaFin === 'N/A');
+        });
+        if (inNov) return false;
+
+        return true;
+      }).sort((a: any, b: any) => (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true }));
+    }, [catalogs.personnel, catalogs.personnelNovelties, programmings, machineries, filteredAbsences, date]);
+
+    const filteredUnprogrammed = useMemo(() => {
+      if (!unprogrammedSearch.trim()) return unprogrammedPersonnel;
+      const q = unprogrammedSearch.trim().toLowerCase();
+      return unprogrammedPersonnel.filter((p: any) => {
+        const name = (p.name || p.nombreCompleto || '').toLowerCase();
+        const doc = (p.documento || '').toString().toLowerCase();
+        const cargo = (p.jobTitle || p.laborCargo || '').toLowerCase();
+        const cuadrilla = (p.cuadrilla || p.actividadCuadrilla || p.zona || '').toLowerCase();
+        return name.includes(q) || doc.includes(q) || cargo.includes(q) || cuadrilla.includes(q);
+      });
+    }, [unprogrammedPersonnel, unprogrammedSearch]);
+
     const stats = useMemo(() => {
       // 1. Total Personas en Catálogo (activas y existentes)
       const totalPersonnelList = (catalogs.personnel || []).filter((p: any) => p.active !== false);
@@ -789,6 +856,100 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Section Exclusiva ADMIN: Personal Pendiente por Programar */}
+        {user?.role === 'ADMIN' && (
+          <Card className="border-forest-900/15 shadow-sm bg-gradient-to-b from-white to-gray-50/50">
+            <CardHeader className="pb-3 border-b border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
+                  <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg">
+                    <UserX size={18} />
+                  </div>
+                  Personal Pendiente por Programar
+                  <span className="ml-1.5 px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-100 text-amber-900 border border-amber-300">
+                    {unprogrammedPersonnel.length} Sin Programar
+                  </span>
+                </CardTitle>
+                <p className="text-xs text-gray-500 mt-1">
+                  Operarios de campo disponibles en nómina que no han sido asignados a labores, maquinaria ni tienen inasistencia el día ({date}).
+                </p>
+              </div>
+
+              {/* Buscador en vivo */}
+              <div className="w-full sm:w-72">
+                <Input 
+                  placeholder="Buscar por nombre, cédula o cargo..." 
+                  value={unprogrammedSearch}
+                  onChange={(e) => setUnprogrammedSearch(e.target.value)}
+                  className="bg-white text-xs h-9 border-gray-300"
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {unprogrammedPersonnel.length === 0 ? (
+                <div className="py-8 text-center text-emerald-800 bg-emerald-50/60 rounded-xl border border-emerald-200 p-6 flex flex-col items-center justify-center">
+                  <CheckCircle2 size={36} className="text-emerald-600 mb-2" />
+                  <p className="text-sm font-bold uppercase tracking-wide">¡Todo el personal operativo está cubierto!</p>
+                  <p className="text-xs text-emerald-700 mt-0.5">
+                    Todos los operarios activos se encuentran programados en labores, maquinaria o tienen novedad/inasistencia registrada para el {date}.
+                  </p>
+                </div>
+              ) : filteredUnprogrammed.length === 0 ? (
+                <div className="py-8 text-center text-gray-400 text-sm">
+                  No se encontraron coincidencias para "{unprogrammedSearch}".
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs text-gray-500 font-medium px-1">
+                    <span>Mostrando <strong>{filteredUnprogrammed.length}</strong> de <strong>{unprogrammedPersonnel.length}</strong> personas</span>
+                    <span className="text-[11px] text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                      💡 Consulta con los supervisores de zona para su asignación
+                    </span>
+                  </div>
+
+                  {/* Tabla / Lista scrolleable con altura fija */}
+                  <div className="border border-gray-200 rounded-xl overflow-hidden bg-white max-h-[380px] overflow-y-auto shadow-2xs">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-gray-50 text-gray-600 text-xs uppercase font-bold tracking-wider sticky top-0 border-b border-gray-200 z-10">
+                        <tr>
+                          <th className="px-4 py-2.5">Operario</th>
+                          <th className="px-4 py-2.5">Cédula</th>
+                          <th className="px-4 py-2.5">Cargo / Labor Habitual</th>
+                          <th className="px-4 py-2.5">Cuadrilla / Zona</th>
+                          <th className="px-4 py-2.5 text-center">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {filteredUnprogrammed.map((per: any) => (
+                          <tr key={per.id || per.documento} className="hover:bg-amber-50/40 transition-colors">
+                            <td className="px-4 py-2.5 font-bold text-gray-900 uppercase">
+                              {per.name || per.nombreCompleto}
+                            </td>
+                            <td className="px-4 py-2.5 text-xs text-gray-600 font-mono font-medium">
+                              {per.documento}
+                            </td>
+                            <td className="px-4 py-2.5 text-xs text-gray-700 font-medium">
+                              {per.jobTitle || per.laborCargo || 'Operario de Campo'}
+                            </td>
+                            <td className="px-4 py-2.5 text-xs text-gray-500">
+                              {per.cuadrilla || per.actividadCuadrilla || per.zona || 'Sin asignar'}
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                                Sin Asignar
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   };
