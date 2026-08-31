@@ -1070,6 +1070,7 @@ class SupabaseRepository implements AgronomicRepository {
       return { ok: true, data };
     } catch (e: any) {
       return { ok: false, error: e.message };
+    }
   }
 }
 
