@@ -624,21 +624,21 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="pt-4">
               {stats.chartLabor.length === 0 ? (
-                <div className="h-[260px] flex items-center justify-center text-sm text-gray-400">
+                <div className="h-[310px] flex items-center justify-center text-sm text-gray-400">
                   No hay programaciones registradas para esta fecha.
                 </div>
               ) : (
-                <div className="h-[260px] flex flex-col md:flex-row items-center justify-between">
+                <div className="h-[310px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie 
                         data={stats.chartLabor} 
                         dataKey="value" 
                         nameKey="name" 
-                        cx="35%" 
-                        cy="50%" 
-                        innerRadius={55} 
-                        outerRadius={85} 
+                        cx="50%" 
+                        cy="40%" 
+                        innerRadius={50} 
+                        outerRadius={80} 
                         paddingAngle={3}
                       >
                         {stats.chartLabor.map((entry, index) => (
@@ -651,15 +651,27 @@ export default function Dashboard() {
                         itemStyle={{ color: '#B9CF58' }}
                       />
                       <Legend 
-                        layout="vertical" 
-                        align="right" 
-                        verticalAlign="middle" 
-                        wrapperStyle={{ fontSize: '11px', maxHeight: '230px', overflowY: 'auto', paddingLeft: '8px' }} 
+                        layout="horizontal" 
+                        align="center" 
+                        verticalAlign="bottom" 
+                        iconType="circle"
+                        wrapperStyle={{ 
+                          paddingTop: '12px', 
+                          fontSize: '11px', 
+                          maxHeight: '90px', 
+                          overflowY: 'auto',
+                          lineHeight: '1.6',
+                          textAlign: 'center'
+                        }} 
                         formatter={(value: any) => {
                           const item = stats.chartLabor.find((d: any) => d.name === value);
                           const total = stats.chartLabor.reduce((acc: number, curr: any) => acc + curr.value, 0);
                           const pct = total > 0 && item ? Math.round((item.value / total) * 100) : 0;
-                          return <span className="font-semibold text-gray-700">{value} <strong className="text-forest-900">({item?.value || 0} - {pct}%)</strong></span>;
+                          return (
+                            <span className="font-semibold text-gray-700 mx-1.5 inline-block">
+                              {value}: <strong className="text-forest-900">{pct}%</strong> <span className="text-gray-500 font-normal">({item?.value || 0} pers.)</span>
+                            </span>
+                          );
                         }}
                       />
                     </PieChart>
@@ -681,19 +693,19 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="pt-4">
               {stats.chartAbsences.length === 0 ? (
-                <div className="h-[260px] flex items-center justify-center text-sm text-gray-400">
+                <div className="h-[310px] flex items-center justify-center text-sm text-gray-400">
                   No hay inasistencias ni novedades reportadas en esta fecha.
                 </div>
               ) : (
-                <div className="h-[260px]">
+                <div className="h-[310px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie 
                         data={stats.chartAbsences} 
                         dataKey="value" 
                         nameKey="name" 
-                        cx="35%" 
-                        cy="50%" 
+                        cx="50%" 
+                        cy="40%" 
                         innerRadius={50}
                         outerRadius={80} 
                         paddingAngle={3}
@@ -707,13 +719,25 @@ export default function Dashboard() {
                         contentStyle={{ backgroundColor: '#123C2E', color: '#fff', borderRadius: '8px', border: 'none' }}
                       />
                       <Legend 
-                        layout="vertical" 
-                        align="right" 
-                        verticalAlign="middle" 
-                        wrapperStyle={{ fontSize: '11px', paddingLeft: '8px' }} 
+                        layout="horizontal" 
+                        align="center" 
+                        verticalAlign="bottom" 
+                        iconType="circle"
+                        wrapperStyle={{ 
+                          paddingTop: '12px', 
+                          fontSize: '11px',
+                          lineHeight: '1.6',
+                          textAlign: 'center'
+                        }} 
                         formatter={(value: any) => {
                           const item = stats.chartAbsences.find((d: any) => d.name === value);
-                          return <span className="font-semibold text-gray-700">{value}: <strong className="text-forest-900">{item?.value || 0}</strong></span>;
+                          const total = stats.chartAbsences.reduce((acc: number, curr: any) => acc + curr.value, 0);
+                          const pct = total > 0 && item ? Math.round((item.value / total) * 100) : 0;
+                          return (
+                            <span className="font-semibold text-gray-700 mx-2 inline-block">
+                              {value}: <strong className="text-forest-900">{pct}%</strong> <span className="text-gray-500 font-normal">({item?.value || 0} pers.)</span>
+                            </span>
+                          );
                         }}
                       />
                     </PieChart>
@@ -741,21 +765,21 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="pt-2">
               {stats.chartMachinery.length === 0 ? (
-                <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">
+                <div className="h-[280px] flex items-center justify-center text-sm text-gray-400">
                   No hay maquinaria activa programada hoy.
                 </div>
               ) : (
-                <div className="h-[220px]">
+                <div className="h-[280px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie 
                         data={stats.chartMachinery} 
                         dataKey="value" 
                         nameKey="name" 
-                        cx="35%" 
-                        cy="50%" 
-                        innerRadius={50} 
-                        outerRadius={80} 
+                        cx="50%" 
+                        cy="40%" 
+                        innerRadius={48} 
+                        outerRadius={78} 
                         paddingAngle={3}
                       >
                         {stats.chartMachinery.map((entry, index) => (
@@ -767,15 +791,27 @@ export default function Dashboard() {
                         formatter={(val: any, name: any) => [`${val} Equipo(s)`, name]}
                       />
                       <Legend 
-                        layout="vertical" 
-                        align="right" 
-                        verticalAlign="middle" 
-                        wrapperStyle={{ fontSize: '11px', maxHeight: '200px', overflowY: 'auto', paddingLeft: '8px' }} 
+                        layout="horizontal" 
+                        align="center" 
+                        verticalAlign="bottom" 
+                        iconType="circle"
+                        wrapperStyle={{ 
+                          paddingTop: '12px', 
+                          fontSize: '11px', 
+                          maxHeight: '80px', 
+                          overflowY: 'auto',
+                          lineHeight: '1.6',
+                          textAlign: 'center'
+                        }} 
                         formatter={(value: any) => {
                           const item = stats.chartMachinery.find((d: any) => d.name === value);
                           const total = stats.chartMachinery.reduce((acc: number, curr: any) => acc + curr.value, 0);
                           const pct = total > 0 && item ? Math.round((item.value / total) * 100) : 0;
-                          return <span className="font-semibold text-gray-700">{value} <strong className="text-forest-900">({item?.value || 0} - {pct}%)</strong></span>;
+                          return (
+                            <span className="font-semibold text-gray-700 mx-2 inline-block">
+                              {value}: <strong className="text-forest-900">{pct}%</strong> <span className="text-gray-500 font-normal">({item?.value || 0} eq.)</span>
+                            </span>
+                          );
                         }}
                       />
                     </PieChart>
@@ -795,11 +831,11 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="pt-2">
               {stats.chartBySup.length === 0 ? (
-                <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">
+                <div className="h-[280px] flex items-center justify-center text-sm text-gray-400">
                   No hay supervisores con personal programado hoy.
                 </div>
               ) : (
-                <div className="h-[220px]">
+                <div className="h-[280px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={stats.chartBySup} layout="vertical" margin={{ left: 20, right: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
