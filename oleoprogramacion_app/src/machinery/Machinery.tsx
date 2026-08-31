@@ -7,7 +7,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter 
 } from '@/src/components/ui';
 import { Combobox } from '@/src/components/ui/combobox';
-import { Play, Square, Tractor, Calendar, MapPin, Check, Layers, Clock, Pencil, Trash2, X, AlertCircle } from 'lucide-react';
+import { Play, Square, Tractor, Calendar, MapPin, Check, Layers, Clock, Pencil, Trash2, X, AlertCircle, Pause } from 'lucide-react';
 
 export function normalizeTimeForInput(timeStr?: string): string {
   if (!timeStr) return '';
@@ -27,17 +27,30 @@ export function normalizeTimeForInput(timeStr?: string): string {
   return trimmed;
 }
 
-export function getAutoEnd8hTime(startTime?: string): string {
+export function getMaxShiftHoursForDate(dateStr?: string): number {
+  if (!dateStr) return 8;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return 8;
+  const dateObj = new Date(y, m - 1, d, 12, 0, 0);
+  const dayOfWeek = dateObj.getDay(); // 0 = Domingo, 6 = Sábado
+  if (dayOfWeek === 6) {
+    return 6; // Sábados: jornada máxima de 6 horas
+  }
+  return 8; // Lunes a Viernes: jornada máxima de 8 horas
+}
+
+export function getAutoEndTimeForDate(dateStr: string, startTime?: string): string {
   if (!startTime) return '17:00';
   const parts = startTime.split(':').map(Number);
   if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return '17:00';
-  let endHour = parts[0] + 8;
+  const maxHours = getMaxShiftHoursForDate(dateStr);
+  let endHour = parts[0] + maxHours;
   let endMin = parts[1];
   if (endHour >= 24) endHour = endHour - 24;
   return `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
 }
 
-export function isOver8Hours(dateStr: string, startTime?: string): boolean {
+export function isOverShiftLimit(dateStr: string, startTime?: string): boolean {
   if (!startTime || !dateStr) return false;
   const parts = startTime.split(':').map(Number);
   if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return false;
@@ -48,21 +61,54 @@ export function isOver8Hours(dateStr: string, startTime?: string): boolean {
   const now = new Date();
   const diffMs = now.getTime() - startDate.getTime();
   const diffHours = diffMs / (1000 * 60 * 60);
-  return diffHours >= 8;
+  const maxHours = getMaxShiftHoursForDate(dateStr);
+  return diffHours >= maxHours;
 }
 
-export function calculateDuration(startTime?: string, endTime?: string): string | null {
-  if (!startTime || !endTime) return null;
+export function shouldAutoStartOperation(dateStr: string, startTime?: string): boolean {
+  if (!dateStr || !startTime) return false;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const parts = startTime.split(':').map(Number);
+  if (!y || !m || !d || parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return false;
+
+  const scheduledStart = new Date(y, m - 1, d, parts[0], parts[1], 0);
+  const now = new Date();
+  return now.getTime() >= scheduledStart.getTime();
+}
+
+export function calculateDuration(startTime?: string, endTime?: string, dateStr?: string): string | null {
+  if (!startTime) return null;
   const partsStart = startTime.split(':').map(Number);
-  const partsEnd = endTime.split(':').map(Number);
-  if (partsStart.length < 2 || partsEnd.length < 2) return null;
-  if (isNaN(partsStart[0]) || isNaN(partsStart[1]) || isNaN(partsEnd[0]) || isNaN(partsEnd[1])) return null;
+  if (partsStart.length < 2 || isNaN(partsStart[0]) || isNaN(partsStart[1])) return null;
+
+  let endH: number;
+  let endM: number;
+
+  if (endTime) {
+    const partsEnd = endTime.split(':').map(Number);
+    if (partsEnd.length < 2 || isNaN(partsEnd[0]) || isNaN(partsEnd[1])) return null;
+    endH = partsEnd[0];
+    endM = partsEnd[1];
+  } else {
+    const now = new Date();
+    endH = now.getHours();
+    endM = now.getMinutes();
+  }
 
   let startMins = partsStart[0] * 60 + partsStart[1];
-  let endMins = partsEnd[0] * 60 + partsEnd[1];
-  if (endMins < startMins) endMins += 24 * 60;
+  let endMins = endH * 60 + endM;
 
-  const diffMins = endMins - startMins;
+  let diffMins = endMins - startMins;
+  if (diffMins < 0) {
+    diffMins = 0;
+  }
+
+  const maxHours = getMaxShiftHoursForDate(dateStr);
+  const maxMins = maxHours * 60;
+  if (diffMins > maxMins) {
+    diffMins = maxMins;
+  }
+
   const hours = Math.floor(diffMins / 60);
   const mins = diffMins % 60;
 
@@ -114,38 +160,52 @@ export default function Machinery() {
 
   const isDirectivo = user?.role === 'DIRECTIVO';
 
+  // Chequeo periódico y sincronización automática de operaciones:
+  // 1. Activa automáticamente a EN_PROGRESO si llegó la hora de una operación PROGRAMADA
+  // 2. Auto-pausa a PAUSADA si excede la jornada máxima (8h lun-vie, 6h sábados)
+  const checkAndAutoManageOperations = (items: any[]) => {
+    items.forEach((m) => {
+      if (m.status === 'CANCELADA' || m.status === 'FINALIZADA') return;
+
+      // Regla 1: Si está PROGRAMADA y ya llegó la hora establecida, pasa automáticamente a EN_PROGRESO
+      if (m.status === 'PROGRAMADA' && m.startTime && shouldAutoStartOperation(m.date, m.startTime)) {
+        repository.updateMachineryOperation(m.id, {
+          status: 'EN_PROGRESO',
+        }, m.version);
+        return;
+      }
+
+      // Regla 2: Si está EN_PROGRESO y supera la jornada máxima (8h de lunes a viernes, 6h los sábados), se auto-pausa
+      if (m.status === 'EN_PROGRESO' && m.startTime && isOverShiftLimit(m.date, m.startTime)) {
+        const autoEndTime = getAutoEndTimeForDate(m.date, m.startTime);
+        const maxH = getMaxShiftHoursForDate(m.date);
+        const autoNote = m.observations 
+          ? (m.observations.includes('Auto-pausada') ? m.observations : `${m.observations} (Auto-pausada por límite de jornada de ${maxH}h)`)
+          : `Auto-pausada por límite de jornada laboral (${maxH}h)`;
+
+        repository.updateMachineryOperation(m.id, {
+          status: 'PAUSADA',
+          endTime: autoEndTime,
+          observations: autoNote
+        }, m.version);
+      }
+    });
+  };
+
   // Suscribirse a TODAS las operaciones de la fecha sin filtrar por supervisor
   useEffect(() => {
     const filters: any = { date };
     const unsub = repository.subscribeMachinery(filters, (items) => {
       setTodaysMachinery(items);
-
-      // Auto-detención si se han cumplido 8 horas
-      items.forEach((m) => {
-        if (m.status === 'EN_PROGRESO' && m.startTime && isOver8Hours(m.date, m.startTime)) {
-          const autoEndTime = getAutoEnd8hTime(m.startTime);
-          repository.updateMachineryOperation(m.id, {
-            status: 'FINALIZADA',
-            endTime: autoEndTime,
-          }, m.version);
-        }
-      });
+      checkAndAutoManageOperations(items);
     });
     return () => unsub();
   }, [date]);
 
-  // Chequeo periódico cada 60s para auto-detención a las 8 horas
+  // Chequeo periódico cada 60s
   useEffect(() => {
     const interval = setInterval(() => {
-      todaysMachinery.forEach((m) => {
-        if (m.status === 'EN_PROGRESO' && m.startTime && isOver8Hours(m.date, m.startTime)) {
-          const autoEndTime = getAutoEnd8hTime(m.startTime);
-          repository.updateMachineryOperation(m.id, {
-            status: 'FINALIZADA',
-            endTime: autoEndTime,
-          }, m.version);
-        }
-      });
+      checkAndAutoManageOperations(todaysMachinery);
     }, 60000);
     return () => clearInterval(interval);
   }, [todaysMachinery]);
@@ -217,6 +277,14 @@ export default function Machinery() {
     const opObj = catalogs.personnel?.find((p: any) => p.id === operatorId);
     const opName = opObj?.name || opObj?.nombreCompleto || '';
 
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+    const currentTimeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+
+    // Si la fecha es posterior a hoy, o si es hoy pero la hora es futura:
+    const isFuture = date > todayStr || (date === todayStr && startTime > currentTimeStr);
+    const initialStatus = isFuture ? 'PROGRAMADA' : 'EN_PROGRESO';
+
     const payload = {
       date,
       equipmentId,
@@ -229,8 +297,8 @@ export default function Machinery() {
       zoneSnapshot: selectedZones.join(', '),
       idSupervisor: user?.idSupervisor || 'SUP001',
       supervisorId: user?.idSupervisor || 'SUP001',
-      status: 'EN_PROGRESO',
-      startTime: startTime || new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
+      status: initialStatus,
+      startTime: startTime || currentTimeStr
     };
 
     const res = await repository.createMachineryOperation(payload);
@@ -246,6 +314,38 @@ export default function Machinery() {
     } else {
       setError(res.error || 'Error al guardar');
     }
+  };
+
+  const handlePause = async (op: any) => {
+    setActionLoading(true);
+    const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+    const res = await repository.updateMachineryOperation(op.id, {
+      status: 'PAUSADA',
+      endTime: nowTime
+    }, op.version);
+    setActionLoading(false);
+    if (!res.ok) alert(res.error || 'Error al pausar operación');
+  };
+
+  const handleResume = async (op: any) => {
+    setActionLoading(true);
+    const res = await repository.updateMachineryOperation(op.id, {
+      status: 'EN_PROGRESO',
+      endTime: null
+    }, op.version);
+    setActionLoading(false);
+    if (!res.ok) alert(res.error || 'Error al reanudar operación');
+  };
+
+  const handleStartNow = async (op: any) => {
+    setActionLoading(true);
+    const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+    const res = await repository.updateMachineryOperation(op.id, {
+      status: 'EN_PROGRESO',
+      startTime: nowTime
+    }, op.version);
+    setActionLoading(false);
+    if (!res.ok) alert(res.error || 'Error al iniciar operación');
   };
 
   const handleConfirmStop = async () => {
@@ -604,14 +704,32 @@ export default function Machinery() {
                 </div>
 
                 <div className="pt-2 pb-6">
-                  <Button 
-                    type="submit" 
-                    disabled={loading || !equipmentId || !operatorId || selectedZones.length === 0} 
-                    className="w-full min-h-[50px] h-auto py-3 px-4 shadow-xl font-black text-xs sm:text-sm uppercase tracking-wide bg-purple-900 hover:bg-purple-950 text-white rounded-xl flex items-center justify-center gap-2 cursor-pointer text-center leading-snug whitespace-normal"
-                  >
-                    <Play size={18} className="fill-white shrink-0" />
-                    <span>{loading ? 'INICIANDO...' : 'INICIAR OPERACIÓN MECANIZADA'}</span>
-                  </Button>
+                  {(() => {
+                    const now = new Date();
+                    const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+                    const currentTimeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+                    const isFuture = date > todayStr || (date === todayStr && startTime > currentTimeStr);
+
+                    return (
+                      <Button 
+                        type="submit" 
+                        disabled={loading || !equipmentId || !operatorId || selectedZones.length === 0} 
+                        className={cn(
+                          "w-full min-h-[50px] h-auto py-3 px-4 shadow-xl font-black text-xs sm:text-sm uppercase tracking-wide text-white rounded-xl flex items-center justify-center gap-2 cursor-pointer text-center leading-snug whitespace-normal transition-colors",
+                          isFuture ? "bg-indigo-900 hover:bg-indigo-950" : "bg-purple-900 hover:bg-purple-950"
+                        )}
+                      >
+                        <Play size={18} className="fill-white shrink-0" />
+                        <span>
+                          {loading 
+                            ? 'PROCESANDO...' 
+                            : isFuture 
+                              ? 'PROGRAMAR OPERACIÓN MECANIZADA' 
+                              : 'INICIAR OPERACIÓN MECANIZADA'}
+                        </span>
+                      </Button>
+                    );
+                  })()}
                 </div>
               </form>
             </CardContent>
@@ -640,7 +758,7 @@ export default function Machinery() {
                   const op = catalogs.personnel?.find((p: any) => p.id === m.operatorId);
                   const labor = catalogs.labors?.find((l: any) => l.id === (m.laborId || m.labor_id));
                   const act = catalogs.activities?.find((a: any) => a.id === (m.activityId || m.activity_id));
-                  const duration = calculateDuration(m.startTime, m.endTime);
+                  const duration = calculateDuration(m.startTime, m.endTime, m.date);
 
                   return (
                     <div key={m.id} className="border border-forest-900/15 rounded-xl p-4 bg-white shadow-xs hover:border-forest-900/30 transition-all space-y-3">
@@ -663,9 +781,15 @@ export default function Machinery() {
                         <span className={cn(
                           "px-2.5 py-1 text-xs rounded-full font-bold uppercase tracking-wider shrink-0",
                           m.status === 'EN_PROGRESO' ? "bg-blue-100 text-blue-800 border border-blue-200" :
-                            m.status === 'FINALIZADA' ? "bg-green-100 text-green-800 border border-green-200" : "bg-red-100 text-red-800 border border-red-200"
+                          m.status === 'PROGRAMADA' ? "bg-indigo-100 text-indigo-800 border border-indigo-200" :
+                          m.status === 'PAUSADA' ? "bg-amber-100 text-amber-900 border border-amber-300" :
+                          m.status === 'FINALIZADA' ? "bg-green-100 text-green-800 border border-green-200" : 
+                          "bg-red-100 text-red-800 border border-red-200"
                         )}>
-                          {m.status?.replace('_', ' ') || 'EN PROGRESO'}
+                          {m.status === 'EN_PROGRESO' ? 'EN PROGRESO' :
+                           m.status === 'PROGRAMADA' ? 'PROGRAMADA' :
+                           m.status === 'PAUSADA' ? 'PAUSADA' :
+                           m.status === 'FINALIZADA' ? 'FINALIZADA' : (m.status?.replace('_', ' ') || 'EN PROGRESO')}
                         </span>
                       </div>
 
@@ -710,16 +834,38 @@ export default function Machinery() {
                         {/* Botones de Acción */}
                         {!isDirectivo && (
                           <div className="flex items-center gap-1.5 ml-auto">
-                            {m.status === 'EN_PROGRESO' && (
+                            {m.status === 'PROGRAMADA' && (
                               <>
                                 <Button 
                                   size="sm" 
                                   variant="outline" 
                                   className="text-red-700 border border-red-300 hover:bg-red-50 text-xs h-7 px-2.5 font-bold cursor-pointer" 
                                   onClick={() => setCancellingOp(m)}
-                                  title="Cancelar operación"
+                                  title="Cancelar programación"
                                 >
                                   Cancelar
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  className="bg-indigo-700 hover:bg-indigo-800 text-white text-xs h-7 px-3 font-bold flex items-center gap-1 cursor-pointer" 
+                                  onClick={() => handleStartNow(m)}
+                                  title="Iniciar ahora la operación"
+                                >
+                                  <Play size={12} className="fill-white" /> Iniciar Ahora
+                                </Button>
+                              </>
+                            )}
+
+                            {m.status === 'EN_PROGRESO' && (
+                              <>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="text-amber-800 border border-amber-300 hover:bg-amber-50 text-xs h-7 px-2.5 font-bold flex items-center gap-1 cursor-pointer" 
+                                  onClick={() => handlePause(m)}
+                                  title="Pausar operación"
+                                >
+                                  <Pause size={12} /> Pausar
                                 </Button>
                                 <Button 
                                   size="sm" 
@@ -728,9 +874,33 @@ export default function Machinery() {
                                     const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
                                     setStoppingOp({ op: m, endTime: nowTime });
                                   }}
-                                  title="Detener operación y registrar hora de fin"
+                                  title="Finalizar operación y registrar hora de fin"
                                 >
-                                  <Square size={12} className="fill-white" /> Detener
+                                  <Square size={12} className="fill-white" /> Finalizar
+                                </Button>
+                              </>
+                            )}
+
+                            {m.status === 'PAUSADA' && (
+                              <>
+                                <Button 
+                                  size="sm" 
+                                  className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs h-7 px-3 font-bold flex items-center gap-1 cursor-pointer" 
+                                  onClick={() => handleResume(m)}
+                                  title="Reanudar operación"
+                                >
+                                  <Play size={12} className="fill-white" /> Reanudar
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  className="bg-forest-900 hover:bg-forest-950 text-white text-xs h-7 px-3 font-bold flex items-center gap-1 cursor-pointer" 
+                                  onClick={() => {
+                                    const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+                                    setStoppingOp({ op: m, endTime: nowTime });
+                                  }}
+                                  title="Finalizar operación"
+                                >
+                                  <Square size={12} className="fill-white" /> Finalizar
                                 </Button>
                               </>
                             )}
@@ -892,7 +1062,9 @@ export default function Machinery() {
                   <Label>Estado</Label>
                   <Combobox
                     options={[
+                      { value: 'PROGRAMADA', label: 'Programada' },
                       { value: 'EN_PROGRESO', label: 'En Progreso' },
+                      { value: 'PAUSADA', label: 'Pausada' },
                       { value: 'FINALIZADA', label: 'Finalizada' },
                       { value: 'CANCELADA', label: 'Cancelada' },
                     ]}

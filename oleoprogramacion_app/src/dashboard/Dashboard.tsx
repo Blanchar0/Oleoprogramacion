@@ -398,20 +398,23 @@ export default function Dashboard() {
       const activeMachineryCount = filteredMachineries.filter(m => m.status !== 'CANCELADA').length;
       const totalEquipmentCount = (catalogs.equipment || []).filter((e: any) => e.active).length;
 
-      const machineryTypeMap = new Map<string, number>();
+      const machineryActivityMap = new Map<string, number>();
       filteredMachineries.forEach(m => {
         if (m.status !== 'CANCELADA') {
-          const eq = catalogs.equipment.find((e: any) => e.id === m.equipmentId);
-          const typeName = eq ? (eq.name || eq.type || 'Otro') : 'Equipo';
-          machineryTypeMap.set(typeName, (machineryTypeMap.get(typeName) || 0) + 1);
+          const act = (catalogs.activities || []).find((a: any) => a.id === (m.activityId || m.activity_id));
+          const actName = act ? act.name : 'Operación General';
+          machineryActivityMap.set(actName, (machineryActivityMap.get(actName) || 0) + 1);
         }
       });
 
-      const chartMachinery = Array.from(machineryTypeMap.entries()).map(([name, value]) => ({
-        name,
-        value,
-        fill: '#315D43'
-      }));
+      const machineryPalette = ['#0284C7', '#315D43', '#E6B94F', '#7FA33D', '#6366F1', '#A855F7', '#EC4899', '#14B8A6'];
+      const chartMachinery = Array.from(machineryActivityMap.entries())
+        .map(([name, value], idx) => ({
+          name,
+          value,
+          fill: machineryPalette[idx % machineryPalette.length]
+        }))
+        .sort((a, b) => b.value - a.value);
 
       // 5. Top Leaderboard de Inasistentes Injustificados y Recurrencia
       const selectedMonthPrefix = date.substring(0, 7); // YYYY-MM
@@ -632,12 +635,11 @@ export default function Dashboard() {
                         data={stats.chartLabor} 
                         dataKey="value" 
                         nameKey="name" 
-                        cx="50%" 
+                        cx="35%" 
                         cy="50%" 
                         innerRadius={55} 
                         outerRadius={85} 
                         paddingAngle={3}
-                        label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
                       >
                         {stats.chartLabor.map((entry, index) => (
                           <Cell key={`cell-labor-${index}`} fill={entry.fill} />
@@ -648,7 +650,18 @@ export default function Dashboard() {
                         contentStyle={{ backgroundColor: '#123C2E', color: '#fff', borderRadius: '8px', border: 'none' }}
                         itemStyle={{ color: '#B9CF58' }}
                       />
-                      <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: '11px' }} />
+                      <Legend 
+                        layout="vertical" 
+                        align="right" 
+                        verticalAlign="middle" 
+                        wrapperStyle={{ fontSize: '11px', maxHeight: '230px', overflowY: 'auto', paddingLeft: '8px' }} 
+                        formatter={(value: any) => {
+                          const item = stats.chartLabor.find((d: any) => d.name === value);
+                          const total = stats.chartLabor.reduce((acc: number, curr: any) => acc + curr.value, 0);
+                          const pct = total > 0 && item ? Math.round((item.value / total) * 100) : 0;
+                          return <span className="font-semibold text-gray-700">{value} <strong className="text-forest-900">({item?.value || 0} - {pct}%)</strong></span>;
+                        }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -679,10 +692,11 @@ export default function Dashboard() {
                         data={stats.chartAbsences} 
                         dataKey="value" 
                         nameKey="name" 
-                        cx="50%" 
+                        cx="35%" 
                         cy="50%" 
+                        innerRadius={50}
                         outerRadius={80} 
-                        label={({ name, value }) => `${name}: ${value}`}
+                        paddingAngle={3}
                       >
                         {stats.chartAbsences.map((entry, index) => (
                           <Cell key={`cell-abs-${index}`} fill={entry.fill} />
@@ -692,7 +706,16 @@ export default function Dashboard() {
                         formatter={(val: any, name: any) => [`${val} Persona(s)`, name]}
                         contentStyle={{ backgroundColor: '#123C2E', color: '#fff', borderRadius: '8px', border: 'none' }}
                       />
-                      <Legend />
+                      <Legend 
+                        layout="vertical" 
+                        align="right" 
+                        verticalAlign="middle" 
+                        wrapperStyle={{ fontSize: '11px', paddingLeft: '8px' }} 
+                        formatter={(value: any) => {
+                          const item = stats.chartAbsences.find((d: any) => d.name === value);
+                          return <span className="font-semibold text-gray-700">{value}: <strong className="text-forest-900">{item?.value || 0}</strong></span>;
+                        }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -703,14 +726,14 @@ export default function Dashboard() {
 
         {/* Charts Row 2: Resumen de Maquinaria & Despliegue por Supervisor */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Chart 3: Resumen de Maquinaria y Equipos */}
+          {/* Chart 3: Distribución de Maquinaria por Actividad (Circular) */}
           <Card className="border-forest-900/10 shadow-xs">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
-                  <Tractor size={18} className="text-blue-600" /> Resumen de Maquinaria y Equipos
+                  <Tractor size={18} className="text-blue-600" /> Distribución de Maquinaria por Actividad
                 </CardTitle>
-                <p className="text-xs text-gray-500 mt-0.5">Equipos asignados y activos en el día</p>
+                <p className="text-xs text-gray-500 mt-0.5">Equipos mecanizados asignados por tipo de labor agrícola</p>
               </div>
               <div className="px-3 py-1 bg-blue-50 text-blue-800 rounded-lg text-xs font-bold border border-blue-200">
                 {stats.activeMachineryCount} Equipos Activos
@@ -724,16 +747,38 @@ export default function Dashboard() {
               ) : (
                 <div className="h-[220px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={stats.chartMachinery} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                      <YAxis allowDecimals={false} />
+                    <PieChart>
+                      <Pie 
+                        data={stats.chartMachinery} 
+                        dataKey="value" 
+                        nameKey="name" 
+                        cx="35%" 
+                        cy="50%" 
+                        innerRadius={50} 
+                        outerRadius={80} 
+                        paddingAngle={3}
+                      >
+                        {stats.chartMachinery.map((entry, index) => (
+                          <Cell key={`cell-mach-${index}`} fill={entry.fill} />
+                        ))}
+                      </Pie>
                       <Tooltip 
                         contentStyle={{ backgroundColor: '#123C2E', color: '#fff', borderRadius: '8px', border: 'none' }}
-                        formatter={(val: any) => [`${val} Unidad(es)`, 'Cantidad']}
+                        formatter={(val: any, name: any) => [`${val} Equipo(s)`, name]}
                       />
-                      <Bar dataKey="value" fill="#315D43" radius={[6, 6, 0, 0]} />
-                    </BarChart>
+                      <Legend 
+                        layout="vertical" 
+                        align="right" 
+                        verticalAlign="middle" 
+                        wrapperStyle={{ fontSize: '11px', maxHeight: '200px', overflowY: 'auto', paddingLeft: '8px' }} 
+                        formatter={(value: any) => {
+                          const item = stats.chartMachinery.find((d: any) => d.name === value);
+                          const total = stats.chartMachinery.reduce((acc: number, curr: any) => acc + curr.value, 0);
+                          const pct = total > 0 && item ? Math.round((item.value / total) * 100) : 0;
+                          return <span className="font-semibold text-gray-700">{value} <strong className="text-forest-900">({item?.value || 0} - {pct}%)</strong></span>;
+                        }}
+                      />
+                    </PieChart>
                   </ResponsiveContainer>
                 </div>
               )}

@@ -71,6 +71,15 @@ export function resolveVoiceData(
   let resolvedZone = resolveZone();
 
   const resolveLot = (): ResolvedField<string> => {
+    const actName = normalizeString(resolvedActivity.value || '');
+    const isAseoConservacion = actName.includes('aseo') && actName.includes('conservacion');
+    const isLaborOtros = normalizeString(resolvedLabor.value || '').includes('otro');
+    const isZoneNoLot = resolvedZone.canonicalId && ['almacen', 'la dilia'].includes(normalizeString(resolvedZone.canonicalId));
+
+    if (isAseoConservacion || isLaborOtros || isZoneNoLot) {
+      return { originalText: null, status: 'RECONOCIDO', value: 'Zona General (Sin Lote)', canonicalId: null, candidates: [], message: null };
+    }
+
     if (!extraction.lotText) return { originalText: null, status: 'PENDIENTE', value: null, canonicalId: null, candidates: [], message: 'No se mencionó lote' };
     const norm = normalizeString(extraction.lotText).replace(/\s/g, '');
     const possibleLotes = resolvedZone.canonicalId ? locations.filter((l:any) => l.zone === resolvedZone.canonicalId) : locations;

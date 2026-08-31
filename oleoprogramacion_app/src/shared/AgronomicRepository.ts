@@ -1070,8 +1070,9 @@ class SupabaseRepository implements AgronomicRepository {
       return { ok: true, data };
     } catch (e: any) {
       return { ok: false, error: e.message };
-    }
   }
+}
+
 export const repository = new SupabaseRepository();
 
 export const matchPerson = (person: any, target: any): boolean => {

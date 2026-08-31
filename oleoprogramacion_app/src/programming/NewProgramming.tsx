@@ -259,7 +259,22 @@ export default function NewProgramming() {
   const isZoneAlmacen = (zone || '').toUpperCase().trim() === 'ALMACEN';
   const isZoneLaDilia = (zone || '').toUpperCase().trim() === 'LA DILIA';
   const isZoneNoLot = isZoneAlmacen || isZoneLaDilia;
-  const isNoLotRequired = isZoneNoLot || isLaborOtros;
+
+  const selectedActivityObj = (catalogs.activities || []).find((a: any) => a.id === activityId);
+  const normActivityName = (selectedActivityObj?.name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  const isActivityAseoConservacion = normActivityName.includes('aseo') && normActivityName.includes('conservacion');
+
+  const isNoLotRequired = isZoneNoLot || isLaborOtros || isActivityAseoConservacion;
+
+  useEffect(() => {
+    if (isNoLotRequired && selectedLocations.length > 0) {
+      setSelectedLocations([]);
+    }
+  }, [isNoLotRequired]);
 
   const toggleLocation = (id: string) => {
     setSelectedLocations(prev =>
@@ -503,7 +518,9 @@ export default function NewProgramming() {
     }
 
     const selectedLoteNames = isNoLotRequired 
-      ? (isZoneAlmacen ? 'ALMACÉN' : (isZoneLaDilia ? 'LA DILIA' : 'GENERAL'))
+      ? (isActivityAseoConservacion 
+          ? 'ASEO Y CONSERVACIÓN' 
+          : (isZoneAlmacen ? 'ALMACÉN' : (isZoneLaDilia ? 'LA DILIA' : 'GENERAL')))
       : selectedLocations
           .map(id => locations.find(l => l.id === id)?.name || id)
           .join(', ');
@@ -943,7 +960,9 @@ export default function NewProgramming() {
                     <div className="p-3 bg-purple-100/80 border border-purple-300 rounded-lg text-purple-950 text-xs flex items-center gap-2.5 font-bold uppercase animate-fadeIn">
                       <CheckCircle2 size={18} className="text-purple-700 shrink-0" />
                       <span>
-                        {isZoneAlmacen 
+                        {isActivityAseoConservacion
+                          ? 'SELECCIÓN DE LOTES OMITIDA PARA ASEO Y CONSERVACIÓN (SOLO SE REGISTRA LA ZONA).'
+                          : isZoneAlmacen 
                           ? 'SELECCIÓN DE LOTES OMITIDA PARA LA ZONA ALMACÉN (SOLO SE REGISTRA LA ZONA).' 
                           : isZoneLaDilia
                           ? 'SELECCIÓN DE LOTES OMITIDA PARA LA ZONA LA DILIA (SOLO SE REGISTRA LA ZONA).'
