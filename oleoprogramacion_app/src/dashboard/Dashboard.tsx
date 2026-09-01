@@ -1,16 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { repository, matchPerson } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
-import { Card, CardContent, CardHeader, CardTitle, Input } from '@/src/components/ui';
+import { 
+  Card, CardContent, CardHeader, CardTitle, Input,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+  Button
+} from '@/src/components/ui';
 import { 
   Users, Briefcase, CalendarX, Tractor, Activity, 
   Award, TrendingUp, AlertTriangle, UserX, Stethoscope, 
-  CheckCircle2, Layers, Calendar, ChevronRight
+  CheckCircle2, Layers, Calendar, ChevronRight, Search,
+  ExternalLink, Check, Eye, ListFilter
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, Legend, CartesianGrid
+  PieChart, Pie, Cell, CartesianGrid
 } from 'recharts';
 
 export const ADMIN_PERSONNEL_NAMES = [
@@ -51,6 +57,140 @@ export const isOperative = (person: any): boolean => {
     'director', 'practicante', 'administrador', 'oficina', 'auxiliar administrativo'
   ];
   return !adminKeywords.some(kw => cargo.includes(kw));
+};
+
+// Tooltip de alto contraste con fondo blanco nítido y texto oscuro para evitar que letras coincidan con fondos oscuros
+const CustomPieTooltip = ({ active, payload, unit = 'pers.' }: any) => {
+  if (active && payload && payload.length) {
+    const item = payload[0];
+    const fill = item.payload?.fill || item.color || '#15803D';
+    return (
+      <div className="bg-white px-3.5 py-2.5 rounded-xl shadow-xl border border-gray-200 text-xs z-50 pointer-events-none">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="w-3 h-3 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: fill }} />
+          <span className="font-extrabold text-gray-900">{item.name}</span>
+        </div>
+        <div className="flex items-center justify-between gap-4 text-gray-600">
+          <span>Cantidad:</span>
+          <strong className="text-gray-900 font-mono font-bold">{item.value} {unit}</strong>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+// Componente para gráficos de torta / donut con leyenda organizada en lista vertical limpia
+interface DonutWithLegendListProps {
+  data: Array<{ name: string; value: number; fill: string; payload?: any }>;
+  unit?: string;
+  totalLabel?: string;
+  emptyMessage: string;
+  onItemClick?: (item: any) => void;
+  actionHint?: string;
+}
+
+const DonutWithLegendList = ({
+  data,
+  unit = 'pers.',
+  totalLabel = 'total',
+  emptyMessage,
+  onItemClick,
+  actionHint = 'Ver personas'
+}: DonutWithLegendListProps) => {
+  const total = useMemo(() => data.reduce((acc, curr) => acc + curr.value, 0), [data]);
+
+  if (data.length === 0) {
+    return (
+      <div className="h-[250px] flex items-center justify-center text-sm text-gray-400 font-medium">
+        {emptyMessage}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center gap-5 py-1">
+      {/* Donut Chart with Total in Center */}
+      <div className="relative w-full sm:w-5/12 flex items-center justify-center">
+        <div className="w-full h-[230px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={78}
+                paddingAngle={3}
+                cursor={onItemClick ? "pointer" : "default"}
+                onClick={(entry) => onItemClick && onItemClick(entry)}
+              >
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={entry.fill}
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                  />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomPieTooltip unit={unit} />} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        {/* Centro del Donut */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total</span>
+          <span className="text-2xl font-black text-forest-950 leading-tight">{total}</span>
+          <span className="text-[10px] font-semibold text-gray-500">{totalLabel}</span>
+        </div>
+      </div>
+
+      {/* Series Legend Organized as a Clean Vertical List */}
+      <div className="w-full sm:w-7/12 flex flex-col justify-center">
+        <div className="max-h-[230px] overflow-y-auto space-y-1.5 pr-1.5">
+          {data.map((item) => {
+            const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
+            return (
+              <div
+                key={item.name}
+                onClick={() => onItemClick && onItemClick(item)}
+                className={`flex items-center justify-between p-2 px-2.5 rounded-xl border transition-all text-xs ${
+                  onItemClick
+                    ? 'bg-gray-50/90 hover:bg-forest-50/60 hover:border-forest-200 cursor-pointer group shadow-2xs'
+                    : 'bg-gray-50/70 border-gray-100'
+                }`}
+                title={onItemClick ? `${actionHint} para ${item.name}` : undefined}
+              >
+                <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                  <span
+                    className="w-3 h-3 rounded-full shrink-0 shadow-2xs"
+                    style={{ backgroundColor: item.fill }}
+                  />
+                  <span className="font-bold text-gray-800 truncate group-hover:text-forest-950 transition-colors">
+                    {item.name}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-semibold text-gray-600 font-mono text-[11px]">
+                    {item.value} <span className="text-[10px] text-gray-500 font-sans">{unit}</span>
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md font-extrabold text-[11px] bg-white text-forest-950 border border-gray-200 shadow-2xs">
+                    {pct}%
+                  </span>
+                  {onItemClick && (
+                    <ChevronRight size={13} className="text-gray-400 group-hover:text-forest-800 group-hover:translate-x-0.5 transition-all" />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default function Dashboard() {
@@ -185,7 +325,11 @@ export default function Dashboard() {
   };
 
   const DirectivoDashboard = () => {
+    const navigate = useNavigate();
     const [unprogrammedSearch, setUnprogrammedSearch] = useState('');
+    const [selectedDetailModal, setSelectedDetailModal] = useState<'inasistencias' | 'incapacidades' | 'permisos' | null>(null);
+    const [detailSearch, setDetailSearch] = useState('');
+    const [permisosFilterTab, setPermisosFilterTab] = useState<'all' | 'vacaciones' | 'permisos'>('all');
 
     const unprogrammedPersonnel = useMemo(() => {
       const activeOperativesList = (catalogs.personnel || []).filter((p: any) => p.active !== false && isOperative(p));
@@ -273,37 +417,188 @@ export default function Dashboard() {
         return n.fechaInicio <= date && (n.fechaFin >= date || n.fechaFin === 'N/A');
       });
 
-      let inasistentesSet = new Set<string>();
-      let permisosSet = new Set<string>();
-      let vacacionesSet = new Set<string>();
-      let incapacidadesSet = new Set<string>();
+      const getPersonDetails = (docOrId: any, fallbackName?: string) => {
+        const p = (catalogs.personnel || []).find((per: any) => 
+          matchPerson(per, docOrId) || 
+          per.id === docOrId || 
+          per.documento === docOrId ||
+          (per.documento && docOrId && String(per.documento).trim() === String(docOrId).trim()) ||
+          (fallbackName && (per.name === fallbackName || per.nombreCompleto === fallbackName))
+        );
+        return {
+          id: p?.id || docOrId,
+          name: p ? (p.name || p.nombreCompleto) : (fallbackName || 'Operario de Campo'),
+          documento: p ? (p.documento || docOrId) : (docOrId || 'N/A'),
+          cargo: p ? (p.jobTitle || p.laborCargo || 'Operario de Campo') : 'Operario de Campo',
+          cuadrilla: p ? (p.cuadrilla || p.actividadCuadrilla || p.zona || 'Sin asignar') : 'Sin asignar',
+          key: p ? (p.documento || p.id) : (docOrId || fallbackName || Math.random().toString())
+        };
+      };
 
-      activeNovedades.forEach((n:any) => {
-        const doc = n.personaDocumento || n.personaId || n.personaNombreFuente;
-        if (n.tipo === 'VACACIONES') vacacionesSet.add(doc);
-        else if (n.tipo === 'INCAPACIDAD') incapacidadesSet.add(doc);
-        else if (n.tipo === 'PERMISO' || n.tipo === 'Permiso autorizado' || n.tipo === 'CALAMIDAD') permisosSet.add(doc);
-        else inasistentesSet.add(doc);
-      });
+      const processedKeys = new Set<string>();
 
-      filteredAbsences.forEach((a:any) => {
-        if (a.status === 'REGISTRADA') {
-          const p = catalogs.personnel.find((per:any) => per.id === a.personnelId);
-          const doc = p ? (p.documento || p.id) : a.personnelId;
-          
-          if (a.reason === 'Vacaciones') vacacionesSet.add(doc);
-          else if (a.reason === 'Incapacidad') incapacidadesSet.add(doc);
-          else if (a.reason === 'Permiso autorizado' || a.reason === 'PERMISO' || a.reason === 'Calamidad doméstica') permisosSet.add(doc);
-          else inasistentesSet.add(doc);
+      // 1. Vacaciones
+      const vacacionesList: any[] = [];
+      activeNovedades.filter((n: any) => n.tipo === 'VACACIONES').forEach((n: any) => {
+        const meta = getPersonDetails(n.personaDocumento || n.personaId, n.personaNombreFuente || n.personaNombre);
+        if (!processedKeys.has(meta.key)) {
+          processedKeys.add(meta.key);
+          vacacionesList.push({
+            id: n.id || `vac-${meta.key}`,
+            key: meta.key,
+            name: meta.name,
+            documento: meta.documento,
+            cargo: meta.cargo,
+            cuadrilla: meta.cuadrilla,
+            tipo: 'Vacaciones',
+            category: 'vacaciones',
+            fechaInicio: n.fechaInicio,
+            fechaFin: n.fechaFin,
+            dias: n.dias || 1,
+            observacion: n.observacion || 'Vacaciones aprobadas',
+            source: 'novedades'
+          });
         }
       });
 
-      // Evitar doble conteo entre grupos
-      incapacidadesSet.forEach(id => vacacionesSet.has(id) && incapacidadesSet.delete(id));
-      permisosSet.forEach(id => (vacacionesSet.has(id) || incapacidadesSet.has(id)) && permisosSet.delete(id));
-      inasistentesSet.forEach(id => (vacacionesSet.has(id) || incapacidadesSet.has(id) || permisosSet.has(id)) && inasistentesSet.delete(id));
+      filteredAbsences.filter((a: any) => a.status === 'REGISTRADA' && a.reason === 'Vacaciones').forEach((a: any) => {
+        const meta = getPersonDetails(a.personnelId || a.personnelDoc, a.personnelName);
+        if (!processedKeys.has(meta.key)) {
+          processedKeys.add(meta.key);
+          vacacionesList.push({
+            id: a.id || `abs-vac-${meta.key}`,
+            key: meta.key,
+            name: meta.name,
+            documento: meta.documento,
+            cargo: meta.cargo,
+            cuadrilla: meta.cuadrilla,
+            tipo: 'Vacaciones',
+            category: 'vacaciones',
+            fechaInicio: a.date,
+            fechaFin: a.date,
+            dias: 1,
+            observacion: a.observations || 'Vacaciones reportadas',
+            source: 'inasistencias'
+          });
+        }
+      });
 
-      const totalUnavailable = vacacionesSet.size + incapacidadesSet.size + permisosSet.size + inasistentesSet.size;
+      // 2. Incapacidades
+      const incapacidadesList: any[] = [];
+      activeNovedades.filter((n: any) => n.tipo === 'INCAPACIDAD').forEach((n: any) => {
+        const meta = getPersonDetails(n.personaDocumento || n.personaId, n.personaNombreFuente || n.personaNombre);
+        if (!processedKeys.has(meta.key)) {
+          processedKeys.add(meta.key);
+          incapacidadesList.push({
+            id: n.id || `incap-${meta.key}`,
+            key: meta.key,
+            name: meta.name,
+            documento: meta.documento,
+            cargo: meta.cargo,
+            cuadrilla: meta.cuadrilla,
+            tipo: 'Incapacidad Médica',
+            diagnostico: n.diagnostico || n.observacion || 'Incapacidad médica general',
+            fechaInicio: n.fechaInicio,
+            fechaFin: n.fechaFin,
+            dias: n.dias || 1,
+            observacion: n.observacion || 'Registrado en Novedades de Nómina',
+            source: 'novedades'
+          });
+        }
+      });
+
+      filteredAbsences.filter((a: any) => a.status === 'REGISTRADA' && a.reason === 'Incapacidad').forEach((a: any) => {
+        const meta = getPersonDetails(a.personnelId || a.personnelDoc, a.personnelName);
+        if (!processedKeys.has(meta.key)) {
+          processedKeys.add(meta.key);
+          incapacidadesList.push({
+            id: a.id || `abs-incap-${meta.key}`,
+            key: meta.key,
+            name: meta.name,
+            documento: meta.documento,
+            cargo: meta.cargo,
+            cuadrilla: meta.cuadrilla,
+            tipo: 'Incapacidad Médica',
+            diagnostico: a.observations || 'Incapacidad reportada en campo',
+            fechaInicio: a.date,
+            fechaFin: a.date,
+            dias: 1,
+            observacion: a.observations || 'Registrado en Inasistencias',
+            source: 'inasistencias'
+          });
+        }
+      });
+
+      // 3. Permisos
+      const permisosList: any[] = [];
+      activeNovedades.filter((n: any) => n.tipo === 'PERMISO' || n.tipo === 'Permiso autorizado' || n.tipo === 'CALAMIDAD').forEach((n: any) => {
+        const meta = getPersonDetails(n.personaDocumento || n.personaId, n.personaNombreFuente || n.personaNombre);
+        if (!processedKeys.has(meta.key)) {
+          processedKeys.add(meta.key);
+          permisosList.push({
+            id: n.id || `perm-${meta.key}`,
+            key: meta.key,
+            name: meta.name,
+            documento: meta.documento,
+            cargo: meta.cargo,
+            cuadrilla: meta.cuadrilla,
+            tipo: n.tipo === 'CALAMIDAD' ? 'Calamidad Doméstica' : 'Permiso Autorizado',
+            category: 'permisos',
+            fechaInicio: n.fechaInicio,
+            fechaFin: n.fechaFin,
+            dias: n.dias || 1,
+            observacion: n.observacion || 'Permiso laboral autorizado',
+            source: 'novedades'
+          });
+        }
+      });
+
+      filteredAbsences.filter((a: any) => a.status === 'REGISTRADA' && (a.reason === 'Permiso autorizado' || a.reason === 'PERMISO' || a.reason === 'Calamidad doméstica')).forEach((a: any) => {
+        const meta = getPersonDetails(a.personnelId || a.personnelDoc, a.personnelName);
+        if (!processedKeys.has(meta.key)) {
+          processedKeys.add(meta.key);
+          permisosList.push({
+            id: a.id || `abs-perm-${meta.key}`,
+            key: meta.key,
+            name: meta.name,
+            documento: meta.documento,
+            cargo: meta.cargo,
+            cuadrilla: meta.cuadrilla,
+            tipo: a.reason === 'Calamidad doméstica' ? 'Calamidad Doméstica' : 'Permiso Autorizado',
+            category: 'permisos',
+            fechaInicio: a.date,
+            fechaFin: a.date,
+            dias: 1,
+            observacion: a.observations || 'Permiso reportado',
+            source: 'inasistencias'
+          });
+        }
+      });
+
+      // 4. Inasistencias sin justificar
+      const inasistenciasList: any[] = [];
+      filteredAbsences.filter((a: any) => a.status === 'REGISTRADA' && isUnjustified(a.reason)).forEach((a: any) => {
+        const meta = getPersonDetails(a.personnelId || a.personnelDoc, a.personnelName);
+        if (!processedKeys.has(meta.key)) {
+          processedKeys.add(meta.key);
+          inasistenciasList.push({
+            id: a.id || `abs-${meta.key}`,
+            key: meta.key,
+            name: meta.name,
+            documento: meta.documento,
+            cargo: meta.cargo,
+            cuadrilla: meta.cuadrilla,
+            motivo: a.reason || 'Sin justificar en el día',
+            observacion: a.observations || 'Falta no justificada reportada en campo',
+            registradoPor: a.createdByName || a.supervisorName || 'Supervisor de zona',
+            fecha: a.date,
+            source: 'inasistencias'
+          });
+        }
+      });
+
+      const permisosVacacionesList = [...vacacionesList, ...permisosList];
+      const totalUnavailable = inasistenciasList.length + incapacidadesList.length + vacacionesList.length + permisosList.length;
       
       // Operativos de campo reales y disponibles en el día (presentes y sin reporte de inasistencia/novedad)
       const availableOperativesCount = Math.max(0, operativesPayrollTotal - totalUnavailable);
@@ -346,8 +641,8 @@ export default function Dashboard() {
       // La tasa de utilización se calcula sobre los operativos que en el día se encuentran disponibles y llegaron a la empresa
       const utilRate = availableOperativesCount > 0 ? (programmedCount / availableOperativesCount) * 100 : 0;
 
-      // 1. Chart: Personas por Labor
-      const palette = ['#123C2E', '#315D43', '#7FA33D', '#B9CF58', '#E6B94F', '#0284C7', '#6366F1', '#A855F7', '#EC4899'];
+      // 1. Chart: Personas por Labor (Paleta con contraste nítido y moderno)
+      const palette = ['#15803D', '#0284C7', '#D97706', '#7C3AED', '#0D9488', '#4338CA', '#BE185D', '#65A30D', '#E11D48'];
       const chartLabor = Array.from(laborPersonnelCountMap.entries())
         .map(([name, set], idx) => ({
           name,
@@ -386,12 +681,12 @@ export default function Dashboard() {
         .sort((a, b) => b.personas - a.personas)
         .slice(0, 8);
 
-      // 3. Chart: Motivos de Ausentismo / Inasistencias
+      // 3. Chart: Motivos de Ausentismo / Inasistencias (Colores coordinados con las tarjetas)
       const chartAbsences = [
-        { name: 'Inasistencia', value: inasistentesSet.size, fill: '#B42318' },
-        { name: 'Incapacidad', value: incapacidadesSet.size, fill: '#123C2E' },
-        { name: 'Permiso', value: permisosSet.size, fill: '#E6B94F' },
-        { name: 'Vacaciones', value: vacacionesSet.size, fill: '#64748B' },
+        { name: 'Incapacidad', value: incapacidadesList.length, fill: '#0D9488' },
+        { name: 'Inasistencia', value: inasistenciasList.length, fill: '#DC2626' },
+        { name: 'Permiso', value: permisosList.length, fill: '#D97706' },
+        { name: 'Vacaciones', value: vacacionesList.length, fill: '#7C3AED' },
       ].filter(x => x.value > 0);
 
       // 4. Maquinaria Summary
@@ -407,7 +702,7 @@ export default function Dashboard() {
         }
       });
 
-      const machineryPalette = ['#0284C7', '#315D43', '#E6B94F', '#7FA33D', '#6366F1', '#A855F7', '#EC4899', '#14B8A6'];
+      const machineryPalette = ['#0284C7', '#15803D', '#D97706', '#7C3AED', '#0D9488', '#4338CA', '#BE185D', '#14B8A6'];
       const chartMachinery = Array.from(machineryActivityMap.entries())
         .map(([name, value], idx) => ({
           name,
@@ -454,10 +749,10 @@ export default function Dashboard() {
         operativesTotal: availableOperativesCount,
         operativesPayrollTotal,
         adminTotal,
-        absencesTotal: inasistentesSet.size,
-        incapacidadesTotal: incapacidadesSet.size,
-        permissionsTotal: permisosSet.size,
-        vacationsTotal: vacacionesSet.size,
+        absencesTotal: inasistenciasList.length,
+        incapacidadesTotal: incapacidadesList.length,
+        permissionsTotal: permisosList.length,
+        vacationsTotal: vacacionesList.length,
         availableOperativesCount,
         totalUnavailable,
         programmedCount,
@@ -468,7 +763,10 @@ export default function Dashboard() {
         chartBySup,
         activeMachineryCount,
         totalEquipmentCount,
-        topAbsentees
+        topAbsentees,
+        inasistenciasList,
+        incapacidadesList,
+        permisosVacacionesList
       };
     }, [catalogs, date, absencesRange, filteredProgrammings, filteredMachineries, filteredAbsences]);
 
@@ -551,44 +849,77 @@ export default function Dashboard() {
           </Card>
 
           {/* Card 4: Inasistencias del Día */}
-          <Card className="border-red-200 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-red-50/40">
+          <Card 
+            onClick={() => { setSelectedDetailModal('inasistencias'); setDetailSearch(''); }}
+            className="border-red-200 shadow-xs hover:shadow-md hover:border-red-400 transition-all cursor-pointer bg-gradient-to-br from-white to-red-50/40 group relative overflow-hidden"
+            role="button"
+            tabIndex={0}
+            title="Clic para ver detalle de personas con inasistencia"
+          >
             <CardContent className="p-3.5">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[11px] font-bold text-red-800 uppercase tracking-wider">Inasistencias</span>
-                <div className="p-1.5 bg-red-100 text-red-800 rounded-lg">
+                <div className="p-1.5 bg-red-100 text-red-800 rounded-lg group-hover:bg-red-200 transition-colors">
                   <UserX size={16} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-red-950">{stats.absencesTotal}</h3>
-              <p className="text-[10px] text-red-700/80 mt-1 truncate">Sin justificar en el día</p>
+              <div className="flex items-center justify-between mt-1 text-[10px] text-red-700 font-medium">
+                <span className="truncate">Sin justificar hoy</span>
+                <span className="font-bold inline-flex items-center gap-0.5 group-hover:underline text-red-800 shrink-0">
+                  Ver lista <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              </div>
             </CardContent>
           </Card>
 
           {/* Card 5: Incapacidades */}
-          <Card className="border-teal-200 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-teal-50/40">
+          <Card 
+            onClick={() => { setSelectedDetailModal('incapacidades'); setDetailSearch(''); }}
+            className="border-teal-200 shadow-xs hover:shadow-md hover:border-teal-400 transition-all cursor-pointer bg-gradient-to-br from-white to-teal-50/40 group relative overflow-hidden"
+            role="button"
+            tabIndex={0}
+            title="Clic para ver detalle de personas con incapacidad médica"
+          >
             <CardContent className="p-3.5">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[11px] font-bold text-teal-800 uppercase tracking-wider">Incapacidades</span>
-                <div className="p-1.5 bg-teal-100 text-teal-800 rounded-lg">
+                <div className="p-1.5 bg-teal-100 text-teal-800 rounded-lg group-hover:bg-teal-200 transition-colors">
                   <Stethoscope size={16} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-teal-950">{stats.incapacidadesTotal}</h3>
-              <p className="text-[10px] text-teal-700/80 mt-1 truncate">Médica activa</p>
+              <div className="flex items-center justify-between mt-1 text-[10px] text-teal-700 font-medium">
+                <span className="truncate">Médica activa</span>
+                <span className="font-bold inline-flex items-center gap-0.5 group-hover:underline text-teal-800 shrink-0">
+                  Ver lista <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              </div>
             </CardContent>
           </Card>
 
           {/* Card 6: Permisos / Vacaciones */}
-          <Card className="border-amber-200 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-amber-50/40">
+          <Card 
+            onClick={() => { setSelectedDetailModal('permisos'); setDetailSearch(''); setPermisosFilterTab('all'); }}
+            className="border-amber-200 shadow-xs hover:shadow-md hover:border-amber-400 transition-all cursor-pointer bg-gradient-to-br from-white to-amber-50/40 group relative overflow-hidden"
+            role="button"
+            tabIndex={0}
+            title="Clic para ver detalle de personas con permisos o vacaciones"
+          >
             <CardContent className="p-3.5">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Permisos / Vac.</span>
-                <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg">
+                <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg group-hover:bg-amber-200 transition-colors">
                   <CalendarX size={16} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-amber-900">{stats.permissionsTotal + stats.vacationsTotal}</h3>
-              <p className="text-[10px] text-amber-700/80 mt-1 truncate">Novedad autorizada</p>
+              <div className="flex items-center justify-between mt-1 text-[10px] text-amber-700 font-medium">
+                <span className="truncate">Novedad autorizada</span>
+                <span className="font-bold inline-flex items-center gap-0.5 group-hover:underline text-amber-800 shrink-0">
+                  Ver lista <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              </div>
             </CardContent>
           </Card>
 
@@ -612,7 +943,7 @@ export default function Dashboard() {
 
         {/* Charts Row 1: Personas por Labor & Resumen de Ausentismo */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Chart 1: Personas por Labor (Donut/Pie Chart) */}
+          {/* Chart 1: Personas por Labor (Donut con lista vertical estructurada) */}
           <Card className="border-forest-900/10 shadow-xs">
             <CardHeader className="pb-0 flex flex-row items-center justify-between">
               <div>
@@ -622,135 +953,54 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-500 mt-0.5">Operarios asignados a tareas agrónomas en el día</p>
               </div>
             </CardHeader>
-            <CardContent className="pt-4">
-              {stats.chartLabor.length === 0 ? (
-                <div className="h-[310px] flex items-center justify-center text-sm text-gray-400">
-                  No hay programaciones registradas para esta fecha.
-                </div>
-              ) : (
-                <div className="h-[310px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie 
-                        data={stats.chartLabor} 
-                        dataKey="value" 
-                        nameKey="name" 
-                        cx="50%" 
-                        cy="40%" 
-                        innerRadius={50} 
-                        outerRadius={80} 
-                        paddingAngle={3}
-                      >
-                        {stats.chartLabor.map((entry, index) => (
-                          <Cell key={`cell-labor-${index}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        formatter={(val: any, name: any) => [`${val} Operario(s)`, name]}
-                        contentStyle={{ backgroundColor: '#123C2E', color: '#fff', borderRadius: '8px', border: 'none' }}
-                        itemStyle={{ color: '#B9CF58' }}
-                      />
-                      <Legend 
-                        layout="horizontal" 
-                        align="center" 
-                        verticalAlign="bottom" 
-                        iconType="circle"
-                        wrapperStyle={{ 
-                          paddingTop: '12px', 
-                          fontSize: '11px', 
-                          maxHeight: '90px', 
-                          overflowY: 'auto',
-                          lineHeight: '1.6',
-                          textAlign: 'center'
-                        }} 
-                        formatter={(value: any) => {
-                          const item = stats.chartLabor.find((d: any) => d.name === value);
-                          const total = stats.chartLabor.reduce((acc: number, curr: any) => acc + curr.value, 0);
-                          const pct = total > 0 && item ? Math.round((item.value / total) * 100) : 0;
-                          return (
-                            <span className="font-semibold text-gray-700 mx-1.5 inline-block">
-                              {value}: <strong className="text-forest-900">{pct}%</strong> <span className="text-gray-500 font-normal">({item?.value || 0} pers.)</span>
-                            </span>
-                          );
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
+            <CardContent className="pt-2">
+              <DonutWithLegendList
+                data={stats.chartLabor}
+                unit="pers."
+                totalLabel="operarios"
+                emptyMessage="No hay programaciones registradas para esta fecha."
+              />
             </CardContent>
           </Card>
 
-          {/* Chart 2: Resumen y Motivos de Ausentismo */}
+          {/* Chart 2: Resumen y Motivos de Ausentismo (Donut con lista vertical interactiva) */}
           <Card className="border-forest-900/10 shadow-xs">
             <CardHeader className="pb-0 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
                   <CalendarX size={18} className="text-red-600" /> Resumen y Motivos de Novedad / Ausentismo
                 </CardTitle>
-                <p className="text-xs text-gray-500 mt-0.5">Clasificación de inasistencias e incapacidades</p>
+                <p className="text-xs text-gray-500 mt-0.5">Clasificación de inasistencias, incapacidades y permisos</p>
               </div>
             </CardHeader>
-            <CardContent className="pt-4">
-              {stats.chartAbsences.length === 0 ? (
-                <div className="h-[310px] flex items-center justify-center text-sm text-gray-400">
-                  No hay inasistencias ni novedades reportadas en esta fecha.
-                </div>
-              ) : (
-                <div className="h-[310px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie 
-                        data={stats.chartAbsences} 
-                        dataKey="value" 
-                        nameKey="name" 
-                        cx="50%" 
-                        cy="40%" 
-                        innerRadius={50}
-                        outerRadius={80} 
-                        paddingAngle={3}
-                      >
-                        {stats.chartAbsences.map((entry, index) => (
-                          <Cell key={`cell-abs-${index}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        formatter={(val: any, name: any) => [`${val} Persona(s)`, name]}
-                        contentStyle={{ backgroundColor: '#123C2E', color: '#fff', borderRadius: '8px', border: 'none' }}
-                      />
-                      <Legend 
-                        layout="horizontal" 
-                        align="center" 
-                        verticalAlign="bottom" 
-                        iconType="circle"
-                        wrapperStyle={{ 
-                          paddingTop: '12px', 
-                          fontSize: '11px',
-                          lineHeight: '1.6',
-                          textAlign: 'center'
-                        }} 
-                        formatter={(value: any) => {
-                          const item = stats.chartAbsences.find((d: any) => d.name === value);
-                          const total = stats.chartAbsences.reduce((acc: number, curr: any) => acc + curr.value, 0);
-                          const pct = total > 0 && item ? Math.round((item.value / total) * 100) : 0;
-                          return (
-                            <span className="font-semibold text-gray-700 mx-2 inline-block">
-                              {value}: <strong className="text-forest-900">{pct}%</strong> <span className="text-gray-500 font-normal">({item?.value || 0} pers.)</span>
-                            </span>
-                          );
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
+            <CardContent className="pt-2">
+              <DonutWithLegendList
+                data={stats.chartAbsences}
+                unit="pers."
+                totalLabel="ausencias"
+                emptyMessage="No hay inasistencias ni novedades reportadas en esta fecha."
+                onItemClick={(item) => {
+                  const lower = (item.name || '').toLowerCase();
+                  if (lower.includes('incapacidad')) {
+                    setSelectedDetailModal('incapacidades');
+                  } else if (lower.includes('inasistencia')) {
+                    setSelectedDetailModal('inasistencias');
+                  } else if (lower.includes('permiso') || lower.includes('vacacion')) {
+                    setSelectedDetailModal('permisos');
+                    if (lower.includes('vacacion')) setPermisosFilterTab('vacaciones');
+                    else if (lower.includes('permiso')) setPermisosFilterTab('permisos');
+                  }
+                  setDetailSearch('');
+                }}
+                actionHint="Ver personas"
+              />
             </CardContent>
           </Card>
         </div>
 
         {/* Charts Row 2: Resumen de Maquinaria & Despliegue por Supervisor */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Chart 3: Distribución de Maquinaria por Actividad (Circular) */}
+          {/* Chart 3: Distribución de Maquinaria por Actividad (Donut con lista vertical) */}
           <Card className="border-forest-900/10 shadow-xs">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <div>
@@ -764,60 +1014,12 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent className="pt-2">
-              {stats.chartMachinery.length === 0 ? (
-                <div className="h-[280px] flex items-center justify-center text-sm text-gray-400">
-                  No hay maquinaria activa programada hoy.
-                </div>
-              ) : (
-                <div className="h-[280px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie 
-                        data={stats.chartMachinery} 
-                        dataKey="value" 
-                        nameKey="name" 
-                        cx="50%" 
-                        cy="40%" 
-                        innerRadius={48} 
-                        outerRadius={78} 
-                        paddingAngle={3}
-                      >
-                        {stats.chartMachinery.map((entry, index) => (
-                          <Cell key={`cell-mach-${index}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#123C2E', color: '#fff', borderRadius: '8px', border: 'none' }}
-                        formatter={(val: any, name: any) => [`${val} Equipo(s)`, name]}
-                      />
-                      <Legend 
-                        layout="horizontal" 
-                        align="center" 
-                        verticalAlign="bottom" 
-                        iconType="circle"
-                        wrapperStyle={{ 
-                          paddingTop: '12px', 
-                          fontSize: '11px', 
-                          maxHeight: '80px', 
-                          overflowY: 'auto',
-                          lineHeight: '1.6',
-                          textAlign: 'center'
-                        }} 
-                        formatter={(value: any) => {
-                          const item = stats.chartMachinery.find((d: any) => d.name === value);
-                          const total = stats.chartMachinery.reduce((acc: number, curr: any) => acc + curr.value, 0);
-                          const pct = total > 0 && item ? Math.round((item.value / total) * 100) : 0;
-                          return (
-                            <span className="font-semibold text-gray-700 mx-2 inline-block">
-                              {value}: <strong className="text-forest-900">{pct}%</strong> <span className="text-gray-500 font-normal">({item?.value || 0} eq.)</span>
-                            </span>
-                          );
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
+              <DonutWithLegendList
+                data={stats.chartMachinery}
+                unit="eq."
+                totalLabel="equipos"
+                emptyMessage="No hay maquinaria activa programada hoy."
+              />
             </CardContent>
           </Card>
 
@@ -1030,6 +1232,326 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Modal de Detalle / Tabla Resumen para Inasistencias, Incapacidades y Permisos/Vacaciones */}
+        {selectedDetailModal && (
+          <Dialog open={!!selectedDetailModal} onOpenChange={(open) => { if (!open) setSelectedDetailModal(null); }}>
+            <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-white border border-gray-200 shadow-2xl">
+              {(() => {
+                const q = detailSearch.trim().toLowerCase();
+                let type = selectedDetailModal;
+                let title = '';
+                let desc = '';
+                let badge = '';
+                let color = 'red';
+                let list: any[] = [];
+                let targetRoute = '/absences';
+                let buttonText = 'Ir al Módulo';
+                let icon = <UserX className="text-red-600" size={22} />;
+
+                if (type === 'inasistencias') {
+                  list = stats.inasistenciasList.filter((item: any) => {
+                    if (!q) return true;
+                    return (item.name || '').toLowerCase().includes(q) || 
+                           (item.documento || '').toString().toLowerCase().includes(q) ||
+                           (item.cargo || '').toLowerCase().includes(q) ||
+                           (item.motivo || '').toLowerCase().includes(q) ||
+                           (item.cuadrilla || '').toLowerCase().includes(q);
+                  });
+                  title = 'Detalle de Inasistencias del Día';
+                  desc = `Operarios con falta sin justificar registrada para la fecha: ${date}`;
+                  badge = `${stats.absencesTotal} Inasistencias`;
+                  color = 'red';
+                  targetRoute = '/absences';
+                  buttonText = 'Ir al Módulo de Inasistencias';
+                  icon = <UserX className="text-red-600" size={22} />;
+                } else if (type === 'incapacidades') {
+                  list = stats.incapacidadesList.filter((item: any) => {
+                    if (!q) return true;
+                    return (item.name || '').toLowerCase().includes(q) || 
+                           (item.documento || '').toString().toLowerCase().includes(q) ||
+                           (item.cargo || '').toLowerCase().includes(q) ||
+                           (item.diagnostico || '').toLowerCase().includes(q) ||
+                           (item.cuadrilla || '').toLowerCase().includes(q);
+                  });
+                  title = 'Detalle de Incapacidades Médicas Activas';
+                  desc = `Personal con reporte de incapacidad médica que cubre la fecha: ${date}`;
+                  badge = `${stats.incapacidadesTotal} Incapacidades`;
+                  color = 'teal';
+                  targetRoute = '/novedades';
+                  buttonText = 'Ir a Novedades de Personal';
+                  icon = <Stethoscope className="text-teal-600" size={22} />;
+                } else if (type === 'permisos') {
+                  let rawList = stats.permisosVacacionesList;
+                  if (permisosFilterTab === 'vacaciones') {
+                    rawList = rawList.filter((item: any) => item.category === 'vacaciones');
+                  } else if (permisosFilterTab === 'permisos') {
+                    rawList = rawList.filter((item: any) => item.category === 'permisos');
+                  }
+                  list = rawList.filter((item: any) => {
+                    if (!q) return true;
+                    return (item.name || '').toLowerCase().includes(q) || 
+                           (item.documento || '').toString().toLowerCase().includes(q) ||
+                           (item.cargo || '').toLowerCase().includes(q) ||
+                           (item.tipo || '').toLowerCase().includes(q) ||
+                           (item.cuadrilla || '').toLowerCase().includes(q);
+                  });
+                  title = 'Detalle de Permisos y Vacaciones';
+                  desc = `Personal con novedades autorizadas (vacaciones, licencias o permisos) para la fecha: ${date}`;
+                  badge = `${stats.permissionsTotal + stats.vacationsTotal} Novedades`;
+                  color = 'amber';
+                  targetRoute = '/novedades';
+                  buttonText = 'Ir a Novedades de Personal';
+                  icon = <CalendarX className="text-amber-600" size={22} />;
+                }
+
+                return (
+                  <>
+                    {/* Header */}
+                    <div className={`p-4 sm:p-5 border-b text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                      color === 'red' ? 'bg-gradient-to-r from-red-800 to-red-950 border-red-700' :
+                      color === 'teal' ? 'bg-gradient-to-r from-teal-800 to-teal-950 border-teal-700' :
+                      'bg-gradient-to-r from-amber-700 to-amber-900 border-amber-600'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-white/10 rounded-xl backdrop-blur-sm border border-white/20">
+                          {icon}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <DialogTitle className="text-lg font-black text-white">
+                              {title}
+                            </DialogTitle>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-white text-gray-900 shadow-xs">
+                              {badge}
+                            </span>
+                          </div>
+                          <DialogDescription className="text-xs text-white/80 mt-0.5">
+                            {desc}
+                          </DialogDescription>
+                        </div>
+                      </div>
+
+                      <Button
+                        onClick={() => {
+                          setSelectedDetailModal(null);
+                          navigate(targetRoute);
+                        }}
+                        className="bg-white text-gray-900 hover:bg-gray-100 font-bold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-auto cursor-pointer"
+                      >
+                        {buttonText} <ExternalLink size={14} />
+                      </Button>
+                    </div>
+
+                    {/* Sub-bar with Search & Tabs */}
+                    <div className="p-3.5 px-5 border-b border-gray-100 bg-gray-50/70 flex flex-col sm:flex-row items-center justify-between gap-3">
+                      <div className="relative w-full sm:w-80">
+                        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <Input
+                          type="text"
+                          placeholder="Buscar por nombre, cédula o cargo..."
+                          value={detailSearch}
+                          onChange={(e) => setDetailSearch(e.target.value)}
+                          className="pl-9 h-9 text-xs bg-white border-gray-300 focus-visible:ring-forest-600"
+                        />
+                      </div>
+
+                      {type === 'permisos' && (
+                        <div className="flex bg-gray-200/80 p-1 rounded-xl text-xs font-bold uppercase tracking-wider shrink-0 w-full sm:w-auto justify-center">
+                          <button
+                            type="button"
+                            onClick={() => setPermisosFilterTab('all')}
+                            className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                              permisosFilterTab === 'all' ? 'bg-amber-700 text-white shadow-xs font-bold' : 'text-gray-600 hover:text-amber-800'
+                            }`}
+                          >
+                            Todos ({stats.permissionsTotal + stats.vacationsTotal})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPermisosFilterTab('vacaciones')}
+                            className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                              permisosFilterTab === 'vacaciones' ? 'bg-purple-700 text-white shadow-xs font-bold' : 'text-gray-600 hover:text-purple-800'
+                            }`}
+                          >
+                            Vacaciones ({stats.vacationsTotal})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPermisosFilterTab('permisos')}
+                            className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                              permisosFilterTab === 'permisos' ? 'bg-amber-700 text-white shadow-xs font-bold' : 'text-gray-600 hover:text-amber-800'
+                            }`}
+                          >
+                            Permisos ({stats.permissionsTotal})
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Table */}
+                    <div className="overflow-y-auto max-h-[50vh] p-4">
+                      {list.length === 0 ? (
+                        <div className="py-12 px-4 text-center flex flex-col items-center justify-center">
+                          <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 mb-3">
+                            {detailSearch ? <Search size={22} /> : <CheckCircle2 size={24} className="text-emerald-500" />}
+                          </div>
+                          <p className="text-sm font-bold text-gray-800">
+                            {detailSearch 
+                              ? `No se encontraron coincidencias para "${detailSearch}"`
+                              : `No hay registros en esta categoría para la fecha seleccionada.`}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {detailSearch ? 'Prueba con otra palabra clave o cédula.' : 'Todo el personal se encuentra activo o disponible.'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                          <table className="w-full text-left text-xs sm:text-sm">
+                            <thead className="bg-gray-50 text-gray-600 text-[11px] uppercase font-bold tracking-wider sticky top-0 border-b border-gray-200 z-10">
+                              <tr>
+                                <th className="px-4 py-2.5">Colaborador</th>
+                                <th className="px-4 py-2.5">Cargo / Cuadrilla</th>
+                                {type === 'inasistencias' && (
+                                  <>
+                                    <th className="px-4 py-2.5">Motivo Reportado</th>
+                                    <th className="px-4 py-2.5">Registrado Por</th>
+                                    <th className="px-4 py-2.5">Detalle / Observación</th>
+                                  </>
+                                )}
+                                {type === 'incapacidades' && (
+                                  <>
+                                    <th className="px-4 py-2.5">Diagnóstico / Motivo</th>
+                                    <th className="px-4 py-2.5">Vigencia / Período</th>
+                                    <th className="px-4 py-2.5 text-center">Días</th>
+                                    <th className="px-4 py-2.5">Observación</th>
+                                  </>
+                                )}
+                                {type === 'permisos' && (
+                                  <>
+                                    <th className="px-4 py-2.5">Tipo Novedad</th>
+                                    <th className="px-4 py-2.5">Vigencia / Período</th>
+                                    <th className="px-4 py-2.5 text-center">Días</th>
+                                    <th className="px-4 py-2.5">Observación</th>
+                                  </>
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {list.map((item: any, idx: number) => (
+                                <tr key={item.id || idx} className="hover:bg-gray-50/80 transition-colors">
+                                  {/* Colaborador */}
+                                  <td className="px-4 py-2.5">
+                                    <div className="font-bold text-gray-900 uppercase">
+                                      {item.name}
+                                    </div>
+                                    <div className="text-xs text-gray-500 font-mono mt-0.5">
+                                      C.C. {item.documento}
+                                    </div>
+                                  </td>
+
+                                  {/* Cargo / Cuadrilla */}
+                                  <td className="px-4 py-2.5">
+                                    <div className="font-medium text-gray-800 text-xs">
+                                      {item.cargo}
+                                    </div>
+                                    <div className="text-[11px] text-gray-500 mt-0.5">
+                                      {item.cuadrilla}
+                                    </div>
+                                  </td>
+
+                                  {/* Inasistencias */}
+                                  {type === 'inasistencias' && (
+                                    <>
+                                      <td className="px-4 py-2.5">
+                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-red-100 text-red-800 border border-red-200 inline-block">
+                                          {item.motivo}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs text-gray-600 font-medium">
+                                        {item.registradoPor}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs text-gray-500 italic max-w-xs">
+                                        {item.observacion || '-'}
+                                      </td>
+                                    </>
+                                  )}
+
+                                  {/* Incapacidades */}
+                                  {type === 'incapacidades' && (
+                                    <>
+                                      <td className="px-4 py-2.5">
+                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-teal-100 text-teal-800 border border-teal-200 inline-block">
+                                          {item.diagnostico}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs text-gray-700 font-medium">
+                                        {item.fechaInicio} al {item.fechaFin}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-center">
+                                        <span className="font-mono font-bold text-teal-900 text-xs bg-teal-50 px-2 py-0.5 rounded border border-teal-100">
+                                          {item.dias} d
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs text-gray-500 italic max-w-xs">
+                                        {item.observacion || '-'}
+                                      </td>
+                                    </>
+                                  )}
+
+                                  {/* Permisos */}
+                                  {type === 'permisos' && (
+                                    <>
+                                      <td className="px-4 py-2.5">
+                                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase inline-block ${
+                                          item.category === 'vacaciones' 
+                                            ? 'bg-purple-100 text-purple-800 border border-purple-200' 
+                                            : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                        }`}>
+                                          {item.tipo}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs text-gray-700 font-medium">
+                                        {item.fechaInicio} al {item.fechaFin}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-center">
+                                        <span className="font-mono font-bold text-gray-900 text-xs bg-gray-100 px-2 py-0.5 rounded">
+                                          {item.dias} d
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs text-gray-500 italic max-w-xs">
+                                        {item.observacion || '-'}
+                                      </td>
+                                    </>
+                                  )}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="p-3 px-5 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+                      <span className="text-xs text-gray-500 font-medium">
+                        Mostrando <strong>{list.length}</strong> registro(s) para el {date}
+                      </span>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setSelectedDetailModal(null)}
+                        className="text-xs font-semibold cursor-pointer"
+                      >
+                        Cerrar
+                      </Button>
+                    </div>
+                  </>
+                );
+              })()}
+            </DialogContent>
+          </Dialog>
         )}
       </div>
     );
