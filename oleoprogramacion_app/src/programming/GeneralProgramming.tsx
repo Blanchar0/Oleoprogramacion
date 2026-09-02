@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Input, Button, cn } from '@/src/components/ui';
-import { ChevronDown, ChevronRight, ChevronUp, Download, Search, Copy, Edit2, Trash2, Users, UserCheck, Tractor } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Download, Search, Copy, Edit2, Trash2, Users, UserCheck, Tractor, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { repository } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
@@ -135,6 +135,207 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
     });
   }, [filteredProgrammings, catalogs]);
 
+  const handleExportExcel = () => {
+    if (groupedProgrammings.length === 0) {
+      alert('No hay programaciones registradas para exportar en esta fecha.');
+      return;
+    }
+
+    const exportDay = date || new Date().toISOString().split('T')[0];
+    const exportFormattedDate = new Date().toLocaleDateString('es-CO');
+    const exportFormattedTime = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+
+    // Nombre del documento requerido por el usuario: "PROGRAMACION LABORAL DE CAMPO_"DÍA DE EXPORTACIÓN""
+    const docName = `PROGRAMACION LABORAL DE CAMPO_${exportDay}`;
+    const fileName = `${docName}.xls`;
+
+    // Totales globales
+    const totalSupervisors = groupedProgrammings.length;
+    let totalActivities = 0;
+    const totalPeopleSet = new Set<string>();
+
+    groupedProgrammings.forEach(g => {
+      totalActivities += g.programmings.length;
+      g.programmings.forEach((p: any) => {
+        (p.personnelIds || []).forEach((id: string) => totalPeopleSet.add(id));
+      });
+    });
+
+    // Generación de tabla Excel enriquecida con XML y CSS para máxima fidelidad visual
+    let html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>Programación de Campo</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          body { font-family: 'Segoe UI', Calibri, Arial, sans-serif; font-size: 10pt; color: #1F2937; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border: 1px solid #CBD5E1; padding: 6px 10px; vertical-align: middle; }
+          .header-main { background-color: #1B5E20; color: #FFFFFF; font-size: 15pt; font-weight: bold; text-align: center; height: 38px; border: 1px solid #14532D; }
+          .header-sub { background-color: #2E7D32; color: #FFFFFF; font-size: 10pt; font-weight: bold; text-align: center; height: 24px; border: 1px solid #1B5E20; }
+          .meta-title { background-color: #F1F5F9; font-weight: bold; color: #334155; font-size: 9pt; }
+          .meta-val { background-color: #FFFFFF; font-weight: normal; color: #0F172A; font-size: 9pt; }
+          .sup-row { background-color: #C8E6C9; color: #1B5E20; font-size: 11pt; font-weight: bold; height: 30px; border: 1px solid #A5D6A7; }
+          .col-header { background-color: #14532D; color: #FFFFFF; font-size: 9pt; font-weight: bold; text-align: center; height: 28px; border: 1px solid #0F172A; }
+          .data-cell { font-size: 9pt; vertical-align: top; mso-number-format: "\\@"; }
+          .data-cell-center { font-size: 9pt; text-align: center; vertical-align: top; mso-number-format: "\\@"; }
+          .data-cell-num { font-size: 9pt; text-align: center; font-weight: bold; vertical-align: top; mso-number-format: "0"; }
+          .personnel-cell { font-size: 8.5pt; line-height: 1.4; vertical-align: top; white-space: pre-wrap; mso-number-format: "\\@"; }
+          .subtotal-row { background-color: #E8F5E9; font-weight: bold; color: #1B5E20; font-size: 9.5pt; height: 26px; border: 1px solid #C8E6C9; }
+          .grand-total { background-color: #1B5E20; color: #FFFFFF; font-weight: bold; font-size: 11pt; height: 34px; text-align: center; border: 1px solid #14532D; }
+          .alt-row { background-color: #F8FAFC; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <!-- ENCABEZADO DEL DOCUMENTO REQUERIDO -->
+          <tr>
+            <th colspan="10" class="header-main">
+              ${docName}
+            </th>
+          </tr>
+          <tr>
+            <th colspan="10" class="header-sub">
+              OLEOFLORES AGRONÓMICA — CONTROL OPERATIVO DIARIO POR SUPERVISOR Y CUADRILLA
+            </th>
+          </tr>
+
+          <!-- METADATOS Y RESUMEN GENERAL -->
+          <tr>
+            <td colspan="2" class="meta-title">FECHA DE PROGRAMACIÓN:</td>
+            <td colspan="3" class="meta-val"><b>${exportDay}</b></td>
+            <td colspan="2" class="meta-title">FECHA Y HORA DE EXPORTACIÓN:</td>
+            <td colspan="3" class="meta-val">${exportFormattedDate} ${exportFormattedTime}</td>
+          </tr>
+          <tr>
+            <td colspan="2" class="meta-title">EXPORTADO POR:</td>
+            <td colspan="3" class="meta-val">${user?.name || user?.username || 'Administrador Agronomía'} (${user?.role || 'ADMIN'})</td>
+            <td colspan="2" class="meta-title">TOTAL PERSONAL PROGRAMADO:</td>
+            <td colspan="3" class="meta-val"><b>${totalPeopleSet.size} colaboradores únicos</b></td>
+          </tr>
+          <tr>
+            <td colspan="2" class="meta-title">SUPERVISORES ACTIVOS:</td>
+            <td colspan="3" class="meta-val">${totalSupervisors} supervisores</td>
+            <td colspan="2" class="meta-title">TOTAL FRENTES / ACTIVIDADES:</td>
+            <td colspan="3" class="meta-val">${totalActivities} actividades programadas</td>
+          </tr>
+          <tr><td colspan="10" style="height: 12px; border: none;"></td></tr>
+    `;
+
+    // Recorrido por cada supervisor
+    groupedProgrammings.forEach(group => {
+      html += `
+        <!-- SUPERVISOR BANNER -->
+        <tr>
+          <td colspan="10" class="sup-row">
+            &nbsp;SUPERVISOR: ${group.supervisorName.toUpperCase()} &nbsp;|&nbsp; ${group.personnelCount} PERSONAS ASIGNADAS
+          </td>
+        </tr>
+        <!-- ENCABEZADOS DE COLUMNA -->
+        <tr>
+          <th class="col-header" style="width: 140px;">ZONA</th>
+          <th class="col-header" style="width: 130px;">LABOR</th>
+          <th class="col-header" style="width: 220px;">ACTIVIDAD</th>
+          <th class="col-header" style="width: 60px;">UN.</th>
+          <th class="col-header" style="width: 65px;">N° PERS.</th>
+          <th class="col-header" style="width: 330px;">PERSONAL ASIGNADO (NOMBRES Y CÉDULAS)</th>
+          <th class="col-header" style="width: 200px;">UBICACIÓN / LOTES</th>
+          <th class="col-header" style="width: 110px;">REND. HOMBRE/DÍA</th>
+          <th class="col-header" style="width: 120px;">CANTIDAD TOTAL</th>
+          <th class="col-header" style="width: 200px;">OBSERVACIONES</th>
+        </tr>
+      `;
+
+      let groupPersonnelSum = 0;
+
+      group.programmings.forEach((p: any, idx: number) => {
+        groupPersonnelSum += p.numPeople;
+        const rowClass = idx % 2 === 1 ? 'alt-row' : '';
+
+        // Nombres completos, documento y cargo de cada persona asignada
+        const personnelFormatted = (p.personnelDetails && p.personnelDetails.length > 0)
+          ? p.personnelDetails.map((per: any, pIdx: number) => {
+              const docPart = per.documento ? `(CC: ${per.documento})` : '';
+              const cargoPart = per.jobTitle ? `- ${per.jobTitle}` : '';
+              return `${pIdx + 1}. ${per.name} ${docPart} ${cargoPart}`.trim();
+            }).join('&#10;')
+          : 'Sin colaboradores asignados';
+
+        // Lotes visibles completos
+        const lotesFormatted = (p.lotesList && p.lotesList.length > 0)
+          ? p.lotesList.join(', ')
+          : (p.locationName || p.zoneName || 'Zona General');
+
+        html += `
+          <tr class="${rowClass}">
+            <td class="data-cell"><b>${p.zoneName || '-'}</b></td>
+            <td class="data-cell">${p.laborName || '-'}</td>
+            <td class="data-cell">${p.activityName || '-'}</td>
+            <td class="data-cell-center">${p.unit || '-'}</td>
+            <td class="data-cell-num">${p.numPeople}</td>
+            <td class="personnel-cell">${personnelFormatted}</td>
+            <td class="data-cell">${lotesFormatted}</td>
+            <td class="data-cell-center">${p.perfDisplay || '-'}</td>
+            <td class="data-cell-center">${p.totalDisplay || '-'}</td>
+            <td class="data-cell">${p.obs || '-'}</td>
+          </tr>
+        `;
+      });
+
+      // Subtotal de asignaciones del supervisor
+      html += `
+        <tr>
+          <td colspan="4" class="subtotal-row" style="text-align: right;">
+            TOTAL ASIGNACIONES DE ${group.supervisorName.toUpperCase()}:
+          </td>
+          <td class="subtotal-row" style="text-align: center;">
+            ${groupPersonnelSum}
+          </td>
+          <td colspan="5" class="subtotal-row">
+            ${group.personnelCount} colaboradores únicos
+          </td>
+        </tr>
+        <tr><td colspan="10" style="height: 10px; border: none;"></td></tr>
+      `;
+    });
+
+    // Total general
+    html += `
+        <tr>
+          <td colspan="10" class="grand-total">
+            TOTAL GENERAL: ${totalSupervisors} SUPERVISORES &nbsp;|&nbsp; ${totalActivities} ACTIVIDADES &nbsp;|&nbsp; ${totalPeopleSet.size} COLABORADORES PROGRAMADOS
+          </td>
+        </tr>
+      </table>
+      </body>
+      </html>
+    `;
+
+    // Descarga directa con BOM UTF-8 (\uFEFF) para garantizar acentos perfectos en Excel
+    const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) return (
     <div className="flex items-center justify-center min-h-[300px]">
       <div className="flex flex-col items-center gap-3">
@@ -146,18 +347,32 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-forest-900/10 shadow-xs">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-forest-900/10 shadow-xs">
         <div>
           <h2 className="text-xl font-bold text-forest-950">Programación General</h2>
           <p className="text-xs text-gray-500 mt-0.5">Control operativo diario por cuadrilla y supervisor</p>
         </div>
-        <div className="flex items-center gap-2 bg-forest-50 px-3 py-1.5 rounded-lg border border-forest-200">
-          <Input 
-            type="date" 
-            value={date} 
-            onChange={e => setDate(e.target.value)} 
-            className="bg-transparent border-0 h-7 text-sm font-semibold text-forest-950 focus-visible:ring-0 p-0"
-          />
+        <div className="flex items-center gap-2.5 self-end sm:self-auto">
+          {user?.role === 'ADMIN' && (
+            <Button 
+              onClick={handleExportExcel}
+              disabled={groupedProgrammings.length === 0}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm px-3.5 h-8 rounded-lg cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Descargar archivo Excel con la programación general visible y detallada"
+            >
+              <FileSpreadsheet size={15} />
+              <span>Exportar Excel</span>
+            </Button>
+          )}
+
+          <div className="flex items-center gap-2 bg-forest-50 px-3 py-1.5 rounded-lg border border-forest-200">
+            <Input 
+              type="date" 
+              value={date} 
+              onChange={e => setDate(e.target.value)} 
+              className="bg-transparent border-0 h-7 text-sm font-semibold text-forest-950 focus-visible:ring-0 p-0 cursor-pointer"
+            />
+          </div>
         </div>
       </div>
       
