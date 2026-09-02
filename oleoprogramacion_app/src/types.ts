@@ -53,7 +53,8 @@ export interface Personnel {
   id: string;
   documento: string;
   name: string;
-  type: 'DIRECTO' | 'TEMPORAL';
+  type: string;
+  tipoPersonal?: string;
   jobTitle: string;
   cuadrilla: string;
   observaciones: string;

@@ -12,7 +12,7 @@ import {
   Users, Briefcase, CalendarX, Tractor, Activity, 
   Award, TrendingUp, AlertTriangle, UserX, Stethoscope, 
   CheckCircle2, Layers, Calendar, ChevronRight, Search,
-  ExternalLink, Check, Eye, ListFilter
+  ExternalLink, Check, Eye, ListFilter, UserMinus
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
@@ -32,16 +32,23 @@ export const ADMIN_PERSONNEL_NAMES = [
   'JUAN BOHORQUEZ'
 ];
 
-export const isOperative = (person: any): boolean => {
+export const isReubicado = (person: any): boolean => {
   if (!person) return false;
+  const tipo = (person.tipoPersonal || person.tipo_personal || person.type || '').toUpperCase();
+  return tipo === 'REUBICADO' || tipo.includes('REUBICAD');
+};
+
+export const isAdmin = (person: any): boolean => {
+  if (!person) return false;
+  if (isReubicado(person)) return false;
 
   // 1. Si el usuario definió la clasificación en Catálogos
   const tipo = (person.tipoPersonal || person.tipo_personal || person.type || '').toUpperCase();
   if (tipo === 'ADMINISTRATIVO' || tipo === 'ADMIN' || tipo === 'OFICINA') {
-    return false;
-  }
-  if (tipo === 'CAMPO' || tipo === 'OPERATIVO') {
     return true;
+  }
+  if (tipo === 'CAMPO' || tipo === 'OPERATIVO' || tipo.includes('PRODUCTIVO')) {
+    return false;
   }
 
   // 2. Si no tiene clasificación explícita, comprobar por nombre y palabras clave de cargo
@@ -49,14 +56,28 @@ export const isOperative = (person: any): boolean => {
   const cargo = (person.jobTitle || person.laborCargo || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   
   if (ADMIN_PERSONNEL_NAMES.some(adm => name.includes(adm))) {
-    return false;
+    return true;
   }
 
   const adminKeywords = [
     'analista', 'jefe', 'supervisor', 'secretari', 'gerente', 'coordinador', 
     'director', 'practicante', 'administrador', 'oficina', 'auxiliar administrativo'
   ];
-  return !adminKeywords.some(kw => cargo.includes(kw));
+  return adminKeywords.some(kw => cargo.includes(kw));
+};
+
+export const isOperative = (person: any): boolean => {
+  if (!person) return false;
+  // Personas reubicadas o administrativas NO son operativos de campo productivos
+  if (isReubicado(person)) return false;
+  if (isAdmin(person)) return false;
+
+  const tipo = (person.tipoPersonal || person.tipo_personal || person.type || '').toUpperCase();
+  if (tipo === 'CAMPO' || tipo === 'OPERATIVO' || tipo.includes('PRODUCTIVO')) {
+    return true;
+  }
+
+  return true;
 };
 
 // Tooltip de alto contraste con fondo blanco nítido y texto oscuro para evitar que letras coincidan con fondos oscuros
@@ -327,7 +348,7 @@ export default function Dashboard() {
   const DirectivoDashboard = () => {
     const navigate = useNavigate();
     const [unprogrammedSearch, setUnprogrammedSearch] = useState('');
-    const [selectedDetailModal, setSelectedDetailModal] = useState<'inasistencias' | 'incapacidades' | 'permisos' | null>(null);
+    const [selectedDetailModal, setSelectedDetailModal] = useState<'inasistencias' | 'incapacidades' | 'permisos' | 'reubicados' | null>(null);
     const [detailSearch, setDetailSearch] = useState('');
     const [permisosFilterTab, setPermisosFilterTab] = useState<'all' | 'vacaciones' | 'permisos'>('all');
 
@@ -401,13 +422,28 @@ export default function Dashboard() {
       const totalPersonnelList = (catalogs.personnel || []).filter((p: any) => p.active !== false);
       const totalPeople = totalPersonnelList.length;
 
-      // 2. Personal Administrativo y de Supervisión (oficina + supervisores)
-      const adminList = totalPersonnelList.filter((p: any) => !isOperative(p));
+      // 2. Personal Reubicado (no productivo, descontado de campo)
+      const reubicadosList = totalPersonnelList.filter((p: any) => isReubicado(p));
+      const reubicadosTotal = reubicadosList.length;
+
+      // 3. Personal Administrativo y de Supervisión (oficina + supervisores)
+      const adminList = totalPersonnelList.filter((p: any) => isAdmin(p));
       const adminTotal = adminList.length;
 
-      // 3. Total Operativos Teóricos en nómina
+      // 4. Total Operativos Teóricos en nómina (Campo Productivo)
       const activeOperativesList = totalPersonnelList.filter((p: any) => isOperative(p));
       const operativesPayrollTotal = activeOperativesList.length;
+
+      const reubicadosDetailList = reubicadosList.map((p: any) => ({
+        id: p.id,
+        key: p.documento || p.id,
+        name: p.name || p.nombreCompleto || 'Colaborador',
+        documento: p.documento || 'N/A',
+        cargo: p.jobTitle || p.laborCargo || 'Sin cargo',
+        cuadrilla: p.cuadrilla || p.actividadCuadrilla || p.zona || 'Sin asignar',
+        tipo: 'Reubicado no productivo',
+        observaciones: p.observaciones || 'Personal reubicado descontado de campo'
+      }));
 
       // Novedades e inasistencias activas del día
       const activeNovedades = (catalogs.personnelNovelties || []).filter((n: any) => {
@@ -748,6 +784,8 @@ export default function Dashboard() {
         totalPeople,
         operativesTotal: availableOperativesCount,
         operativesPayrollTotal,
+        reubicadosTotal,
+        reubicadosList: reubicadosDetailList,
         adminTotal,
         absencesTotal: inasistenciasList.length,
         incapacidadesTotal: incapacidadesList.length,
@@ -804,7 +842,7 @@ export default function Dashboard() {
         </div>
 
         {/* Tactical Metric Cards Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-8 gap-3">
           {/* Card 1: Total Personas */}
           <Card className="border-forest-900/10 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-forest-50/40">
             <CardContent className="p-3.5">
@@ -815,6 +853,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-forest-950">{stats.totalPeople}</h3>
+              <p className="text-[10px] text-gray-500 mt-1 truncate">Total colaboradores</p>
             </CardContent>
           </Card>
 
@@ -834,7 +873,32 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Card 3: Personal Administrativo */}
+          {/* Card 3: Personal Reubicado (Descontado de campo) */}
+          <Card 
+            onClick={() => { setSelectedDetailModal('reubicados'); setDetailSearch(''); }}
+            className="border-purple-200/80 shadow-xs hover:shadow-md hover:border-purple-400 transition-all cursor-pointer bg-gradient-to-br from-white to-purple-50/40 group relative overflow-hidden"
+            role="button"
+            tabIndex={0}
+            title="Clic para ver detalle de personas reubicadas"
+          >
+            <CardContent className="p-3.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-purple-900 uppercase tracking-wider">Reubicados</span>
+                <div className="p-1.5 bg-purple-100 text-purple-800 rounded-lg group-hover:bg-purple-200 transition-colors">
+                  <UserMinus size={16} />
+                </div>
+              </div>
+              <h3 className="text-2xl font-extrabold text-purple-950">{stats.reubicadosTotal}</h3>
+              <div className="flex items-center justify-between mt-1 text-[10px] text-purple-700 font-medium">
+                <span className="truncate">No productivos</span>
+                <span className="font-bold inline-flex items-center gap-0.5 group-hover:underline text-purple-800 shrink-0">
+                  Ver lista <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 4: Personal Administrativo */}
           <Card className="border-forest-900/10 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-blue-50/30">
             <CardContent className="p-3.5">
               <div className="flex items-center justify-between mb-1.5">
@@ -1304,6 +1368,22 @@ export default function Dashboard() {
                   targetRoute = '/novedades';
                   buttonText = 'Ir a Novedades de Personal';
                   icon = <CalendarX className="text-amber-600" size={22} />;
+                } else if (type === 'reubicados') {
+                  list = stats.reubicadosList.filter((item: any) => {
+                    if (!q) return true;
+                    return (item.name || '').toLowerCase().includes(q) || 
+                           (item.documento || '').toString().toLowerCase().includes(q) ||
+                           (item.cargo || '').toLowerCase().includes(q) ||
+                           (item.cuadrilla || '').toLowerCase().includes(q) ||
+                           (item.observaciones || '').toLowerCase().includes(q);
+                  });
+                  title = 'Personal Reubicado (No Productivo)';
+                  desc = 'Colaboradores con restricción o reubicación, descontados de la fuerza operativa de campo.';
+                  badge = `${stats.reubicadosTotal} Reubicados`;
+                  color = 'purple';
+                  targetRoute = '/admin';
+                  buttonText = 'Ir a Catálogo de Personal';
+                  icon = <UserMinus className="text-purple-600" size={22} />;
                 }
 
                 return (
@@ -1312,6 +1392,7 @@ export default function Dashboard() {
                     <div className={`p-4 sm:p-5 border-b text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
                       color === 'red' ? 'bg-gradient-to-r from-red-800 to-red-950 border-red-700' :
                       color === 'teal' ? 'bg-gradient-to-r from-teal-800 to-teal-950 border-teal-700' :
+                      color === 'purple' ? 'bg-gradient-to-r from-purple-800 to-purple-950 border-purple-700' :
                       'bg-gradient-to-r from-amber-700 to-amber-900 border-amber-600'
                     }`}>
                       <div className="flex items-center gap-3">
@@ -1436,6 +1517,13 @@ export default function Dashboard() {
                                     <th className="px-4 py-2.5">Observación</th>
                                   </>
                                 )}
+                                {type === 'reubicados' && (
+                                  <>
+                                    <th className="px-4 py-2.5">Condición</th>
+                                    <th className="px-4 py-2.5">Estado Operativo</th>
+                                    <th className="px-4 py-2.5">Observación / Detalle</th>
+                                  </>
+                                )}
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -1522,6 +1610,23 @@ export default function Dashboard() {
                                       </td>
                                       <td className="px-4 py-2.5 text-xs text-gray-500 italic max-w-xs">
                                         {item.observacion || '-'}
+                                      </td>
+                                    </>
+                                  )}
+
+                                  {/* Reubicados */}
+                                  {type === 'reubicados' && (
+                                    <>
+                                      <td className="px-4 py-2.5">
+                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-purple-100 text-purple-800 border border-purple-200 inline-block">
+                                          REUBICADO
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs text-purple-900 font-bold">
+                                        No productivo en campo
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs text-gray-500 italic max-w-xs">
+                                        {item.observaciones || 'Descontado de operativos de campo'}
                                       </td>
                                     </>
                                   )}

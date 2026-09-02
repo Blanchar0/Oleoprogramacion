@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { supabase } from '../shared/supabase';
 import { repository } from '../shared/AgronomicRepository';
 import { Plus, Edit2, TrendingUp, Trash2, MapPin } from 'lucide-react';
-import { isOperative } from '../dashboard/Dashboard';
+import { isOperative, isReubicado, isAdmin } from '../dashboard/Dashboard';
 
 export default function Catalogs() {
   const { user } = useAuth();
@@ -14,6 +14,7 @@ export default function Catalogs() {
   const [activeTab, setActiveTab] = useState<'users' | 'personnel' | 'activities' | 'performance' | 'equipment' | 'locations'>('personnel');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedZoneFilter, setSelectedZoneFilter] = useState<string>('TODAS');
+  const [selectedPersonnelFilter, setSelectedPersonnelFilter] = useState<'TODOS' | 'CAMPO' | 'REUBICADO' | 'ADMINISTRATIVO'>('TODOS');
 
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
@@ -177,16 +178,34 @@ export default function Catalogs() {
             </CardTitle>
             <div className="flex items-center gap-2">
               {activeTab === 'locations' && (
-                <select
-                  value={selectedZoneFilter}
-                  onChange={e => setSelectedZoneFilter(e.target.value)}
-                  className="text-xs bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-500 shadow-2xs h-9 cursor-pointer"
-                >
-                  <option value="TODAS">Todas las Zonas ({existingZones.length})</option>
-                  {existingZones.map((z: any) => (
-                    <option key={z} value={z}>Zona: {z}</option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-gray-500 whitespace-nowrap">Zona:</span>
+                  <select
+                    value={selectedZoneFilter}
+                    onChange={e => setSelectedZoneFilter(e.target.value)}
+                    className="text-xs bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-500 shadow-2xs h-9 cursor-pointer"
+                  >
+                    <option value="TODAS">Todas las Zonas ({locations.length})</option>
+                    {existingZones.map((z: any) => (
+                      <option key={z} value={z}>{z} ({locations.filter((l: any) => (l.zone || 'Sin Zona') === z).length})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {activeTab === 'personnel' && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-gray-500 whitespace-nowrap">Área:</span>
+                  <select
+                    value={selectedPersonnelFilter}
+                    onChange={e => setSelectedPersonnelFilter(e.target.value as any)}
+                    className="text-xs bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-500 shadow-2xs h-9 cursor-pointer"
+                  >
+                    <option value="TODOS">Todos ({personnel.length})</option>
+                    <option value="CAMPO">Campo Productivo ({personnel.filter((p: any) => isOperative(p)).length})</option>
+                    <option value="REUBICADO">Reubicados ({personnel.filter((p: any) => isReubicado(p)).length})</option>
+                    <option value="ADMINISTRATIVO">Administrativo ({personnel.filter((p: any) => isAdmin(p)).length})</option>
+                  </select>
+                </div>
               )}
               <Input 
                 placeholder="Buscar..." 
@@ -247,9 +266,17 @@ export default function Catalogs() {
                   ))}
 
                 {activeTab === 'personnel' && personnel
-                  .filter((p:any) => (p.name || p.nombreCompleto)?.toLowerCase().includes(searchTerm.toLowerCase()) || p.documento?.includes(searchTerm))
-                  .map((p:any) => {
-                    const isAdmin = (p.tipoPersonal || p.tipo_personal || p.type || '').toUpperCase() === 'ADMINISTRATIVO' || !isOperative(p);
+                  .filter((p: any) => {
+                    const matchesSearch = (p.name || p.nombreCompleto)?.toLowerCase().includes(searchTerm.toLowerCase()) || p.documento?.includes(searchTerm);
+                    if (!matchesSearch) return false;
+                    if (selectedPersonnelFilter === 'CAMPO') return isOperative(p);
+                    if (selectedPersonnelFilter === 'REUBICADO') return isReubicado(p);
+                    if (selectedPersonnelFilter === 'ADMINISTRATIVO') return isAdmin(p);
+                    return true;
+                  })
+                  .map((p: any) => {
+                    const isReub = isReubicado(p);
+                    const isAdm = !isReub && isAdmin(p);
                     return (
                       <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50/50">
                         <td className="px-4 py-3 font-medium">
@@ -259,9 +286,13 @@ export default function Catalogs() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <span className={`px-2 py-0.5 text-xs font-bold rounded-md ${
-                              isAdmin ? 'bg-blue-100 text-blue-800 border border-blue-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              isReub 
+                                ? 'bg-purple-100 text-purple-800 border border-purple-200' 
+                                : isAdm 
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                             }`}>
-                              {isAdmin ? 'ADMINISTRATIVO' : 'CAMPO'}
+                              {isReub ? 'REUBICADO' : isAdm ? 'ADMINISTRATIVO' : 'CAMPO PRODUCTIVO'}
                             </span>
                             <span className="text-xs text-gray-600">{p.jobTitle || p.laborCargo || 'Sin cargo'} ({p.cuadrilla || p.actividadCuadrilla || 'S/C'})</span>
                           </div>
@@ -520,16 +551,26 @@ export default function Catalogs() {
                 <div><Label>Nombre Completo</Label><Input required value={formData.name || formData.nombreCompleto || ''} onChange={e => setFormData({...formData, name: e.target.value, nombreCompleto: e.target.value})} /></div>
                 <div><Label>Documento (C.C.)</Label><Input required value={formData.documento || ''} onChange={e => setFormData({...formData, documento: e.target.value})} /></div>
                 <div>
-                  <Label>Clasificación / Área</Label>
+                  <Label>Clasificación / Área *</Label>
                   <Combobox 
                     options={[
-                      { value: 'CAMPO', label: 'CAMPO (Operativo / Productivo)' },
+                      { value: 'CAMPO', label: 'CAMPO PRODUCTIVO (Operativo / Cosecha / Mantenimiento)' },
+                      { value: 'REUBICADO', label: 'REUBICADO (No productivo / Descontado de campo)' },
                       { value: 'ADMINISTRATIVO', label: 'ADMINISTRATIVO (Oficina / Supervisor / Directivo)' }
                     ]} 
-                    value={formData.tipoPersonal || formData.type || 'CAMPO'} 
-                    onChange={v => setFormData({...formData, tipoPersonal: v, type: v})} 
-                    placeholder="Seleccione Área"
+                    value={
+                      isReubicado(formData) 
+                        ? 'REUBICADO' 
+                        : (formData.tipoPersonal || formData.tipo_personal || formData.type || '').toUpperCase() === 'ADMINISTRATIVO' || isAdmin(formData)
+                        ? 'ADMINISTRATIVO' 
+                        : (formData.tipoPersonal || formData.tipo_personal || formData.type || 'CAMPO')
+                    } 
+                    onChange={v => setFormData({...formData, tipoPersonal: v, type: v, tipo_personal: v})} 
+                    placeholder="Seleccione Área / Clasificación"
                   />
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    * Los <strong className="text-purple-700">REUBICADOS</strong> se descuentan automáticamente de los operativos de campo para reflejar la disponibilidad real en el Dashboard.
+                  </p>
                 </div>
                 <div><Label>Cargo / Función</Label><Input value={formData.jobTitle || formData.laborCargo || ''} onChange={e => setFormData({...formData, jobTitle: e.target.value, laborCargo: e.target.value})} placeholder="Ej: Administrador, Supervisor, Cosechero, etc." /></div>
                 <div><Label>Cuadrilla / Zona</Label><Input value={formData.cuadrilla || formData.actividadCuadrilla || ''} onChange={e => setFormData({...formData, cuadrilla: e.target.value})} placeholder="Opcional" /></div>
