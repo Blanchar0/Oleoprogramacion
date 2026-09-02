@@ -8,7 +8,7 @@ import { Combobox } from '@/src/components/ui/combobox';
 import { Mic, MicOff, Square, RefreshCcw, Check, X, AlertCircle, Play, Pause, FileText, CheckCircle2, CalendarPlus, TrendingUp, Pencil } from 'lucide-react';
 import { ProgrammingPerformance } from '../types';
 import { resolveVoiceData } from './voiceResolver';
-import { isOperative } from '../dashboard/Dashboard';
+import { isOperative, isReubicado } from '../dashboard/Dashboard';
 
 type VoiceState = 
   | 'LISTO' 
@@ -39,7 +39,7 @@ export default function NewProgramming() {
     .sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
   const allActivities = (catalogs.activities || []).filter(a => a.active).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
   const locations = (catalogs.locations || []).filter(l => l.active).sort((a,b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
-  const allPersonnel = (catalogs.personnel || []).filter(p => p.active && isOperative(p)).sort((a,b) => (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true }));
+  const allPersonnel = (catalogs.personnel || []).filter(p => p.active && (isOperative(p) || isReubicado(p))).sort((a,b) => (a.name || a.nombreCompleto || '').localeCompare(b.name || b.nombreCompleto || '', 'es', { numeric: true }));
   const allNovedades = (catalogs.personnelNovelties || []) || [];
   
   const rawZones = Array.from(new Set(locations.map(l => l.zone).filter(Boolean)));

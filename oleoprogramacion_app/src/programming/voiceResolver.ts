@@ -1,4 +1,4 @@
-import { isOperative } from '../dashboard/Dashboard';
+import { isOperative, isReubicado } from '../dashboard/Dashboard';
 import { matchPerson } from '../shared/AgronomicRepository';
 
 const normalizeString = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -31,7 +31,7 @@ export function resolveVoiceData(
   absences: any[] = []
 ) {
   const { labors = [], activities = [], locations = [], personnel = [], personnelNovelties = [] } = catalogs;
-  const operativePersonnel = personnel.filter((p: any) => isOperative(p));
+  const operativePersonnel = personnel.filter((p: any) => isOperative(p) || isReubicado(p));
   const zones = Array.from(new Set(locations.map((l: any) => l.zone)));
 
   const dateText = extraction.dateText || new Date().toISOString().split('T')[0];

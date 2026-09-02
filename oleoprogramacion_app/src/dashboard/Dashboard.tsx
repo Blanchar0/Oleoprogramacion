@@ -12,7 +12,7 @@ import {
   Users, Briefcase, CalendarX, Tractor, Activity, 
   Award, TrendingUp, AlertTriangle, UserX, Stethoscope, 
   CheckCircle2, Layers, Calendar, ChevronRight, Search,
-  ExternalLink, Check, Eye, ListFilter, UserMinus
+  ExternalLink, Check, Eye, ListFilter, UserMinus, ArrowRightLeft
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
@@ -328,8 +328,8 @@ export default function Dashboard() {
     const machineryCount = filteredMachineries.filter(m => m.status !== 'CANCELADA').length;
     const absencesCount = filteredAbsences.filter(a => a.status === 'REGISTRADA').length;
     
-    const activeOperatives = catalogs.personnel.filter((p:any) => p.active && isOperative(p));
-    const totalActive = activeOperatives.length;
+    const activeProgrammable = catalogs.personnel.filter((p:any) => p.active && (isOperative(p) || isReubicado(p)));
+    const totalActive = activeProgrammable.length;
 
     return (
       <div className="space-y-6">
@@ -353,9 +353,9 @@ export default function Dashboard() {
     const [permisosFilterTab, setPermisosFilterTab] = useState<'all' | 'vacaciones' | 'permisos'>('all');
 
     const unprogrammedPersonnel = useMemo(() => {
-      const activeOperativesList = (catalogs.personnel || []).filter((p: any) => p.active !== false && isOperative(p));
+      const activeProgrammableList = (catalogs.personnel || []).filter((p: any) => p.active !== false && (isOperative(p) || isReubicado(p)));
       
-      return activeOperativesList.filter((p: any) => {
+      return activeProgrammableList.filter((p: any) => {
         // 1. ¿Está en alguna programación (confirmada o pendiente) de la fecha?
         const inProg = programmings.some((prog: any) => 
           prog.date === date &&
@@ -639,17 +639,23 @@ export default function Dashboard() {
       // Operativos de campo reales y disponibles en el día (presentes y sin reporte de inasistencia/novedad)
       const availableOperativesCount = Math.max(0, operativesPayrollTotal - totalUnavailable);
 
+      // Total de personas programables en nómina (Operativos de Campo + Reubicados)
+      const activeProgrammableList = totalPersonnelList.filter((p: any) => isOperative(p) || isReubicado(p));
+      const programmablePayrollTotal = activeProgrammableList.length;
+      // Total de colaboradores programables disponibles en el día que llegaron a trabajar (Operativos + Reubicados)
+      const availableProgrammableCount = Math.max(0, programmablePayrollTotal - totalUnavailable);
+
       let programmedOperativesSet = new Set<string>();
       const laborPersonnelCountMap = new Map<string, Set<string>>();
 
-      // 1. Personal en programaciones confirmadas
+      // 1. Personal en programaciones confirmadas (Operativos y Reubicados programables)
       filteredProgrammings.forEach(p => {
         const laborObj = catalogs.labors.find((l:any) => l.id === p.laborId);
         const laborName = laborObj ? laborObj.name : 'Otra Labor';
         if (!laborPersonnelCountMap.has(laborName)) laborPersonnelCountMap.set(laborName, new Set());
 
         (p.personnelIds || []).forEach((id: string) => {
-          const per = activeOperativesList.find((x: any) => x.id === id);
+          const per = activeProgrammableList.find((x: any) => x.id === id || x.documento === id);
           if (per) {
             programmedOperativesSet.add(per.documento || per.id);
             laborPersonnelCountMap.get(laborName)?.add(per.documento || per.id);
@@ -663,7 +669,7 @@ export default function Dashboard() {
       // 2. Operadores / Tractoristas en maquinaria del día
       filteredMachineries.filter(m => m.status !== 'CANCELADA').forEach(m => {
         if (!m.operatorId) return;
-        const per = activeOperativesList.find((x: any) => x.id === m.operatorId || x.documento === m.operatorId || x.name === m.operatorName);
+        const per = activeProgrammableList.find((x: any) => x.id === m.operatorId || x.documento === m.operatorId || x.name === m.operatorName);
         const doc = per ? (per.documento || per.id) : m.operatorId;
         programmedOperativesSet.add(doc);
 
@@ -674,8 +680,8 @@ export default function Dashboard() {
       });
 
       const programmedCount = programmedOperativesSet.size;
-      // La tasa de utilización se calcula sobre los operativos que en el día se encuentran disponibles y llegaron a la empresa
-      const utilRate = availableOperativesCount > 0 ? (programmedCount / availableOperativesCount) * 100 : 0;
+      // El porcentaje de personal programado se calcula sobre la totalidad disponible entre operativos y reubicados
+      const utilRate = availableProgrammableCount > 0 ? (programmedCount / availableProgrammableCount) * 100 : 0;
 
       // 1. Chart: Personas por Labor (Paleta con contraste nítido y moderno)
       const palette = ['#15803D', '#0284C7', '#D97706', '#7C3AED', '#0D9488', '#4338CA', '#BE185D', '#65A30D', '#E11D48'];
@@ -695,7 +701,7 @@ export default function Dashboard() {
         const supName = sup ? sup.name : (p.idSupervisor || 'Otros');
         if (!bySupMap.has(supName)) bySupMap.set(supName, new Set());
         (p.personnelIds || []).forEach((id: string) => {
-          const per = activeOperativesList.find((x: any) => x.id === id);
+          const per = activeProgrammableList.find((x: any) => x.id === id || x.documento === id);
           bySupMap.get(supName)?.add(per ? (per.documento || per.id) : id);
         });
       });
@@ -706,7 +712,7 @@ export default function Dashboard() {
         const sup = catalogs.supervisors.find((s:any) => s.id === supId);
         const supName = sup ? sup.name : (supId || 'Otros');
         if (!bySupMap.has(supName)) bySupMap.set(supName, new Set());
-        const per = activeOperativesList.find((x: any) => x.id === m.operatorId);
+        const per = activeProgrammableList.find((x: any) => x.id === m.operatorId || x.documento === m.operatorId || x.name === m.operatorName);
         bySupMap.get(supName)?.add(per ? (per.documento || per.id) : m.operatorId);
       });
 
@@ -787,6 +793,8 @@ export default function Dashboard() {
         reubicadosTotal,
         reubicadosList: reubicadosDetailList,
         adminTotal,
+        programmablePayrollTotal,
+        availableProgrammableCount,
         absencesTotal: inasistenciasList.length,
         incapacidadesTotal: incapacidadesList.length,
         permissionsTotal: permisosList.length,
@@ -845,11 +853,13 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-8 gap-3">
           {/* Card 1: Total Personas */}
           <Card className="border-forest-900/10 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-forest-50/40">
-            <CardContent className="p-3.5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wider">Total Personas</span>
-                <div className="p-1.5 bg-forest-100 text-forest-900 rounded-lg">
-                  <Users size={16} />
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <span className="text-[10px] sm:text-[11px] font-bold text-gray-600 uppercase tracking-tight truncate" title="Total Personas">
+                  Total Personas
+                </span>
+                <div className="w-7 h-7 shrink-0 rounded-lg bg-forest-100 text-forest-900 flex items-center justify-center">
+                  <Users size={15} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-forest-950">{stats.totalPeople}</h3>
@@ -859,16 +869,18 @@ export default function Dashboard() {
 
           {/* Card 2: Operativos de Campo */}
           <Card className="border-forest-900/10 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-emerald-50/30">
-            <CardContent className="p-3.5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Operativos Campo</span>
-                <div className="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg">
-                  <Layers size={16} />
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <span className="text-[10px] sm:text-[11px] font-bold text-emerald-800 uppercase tracking-tight truncate" title="Operativos Campo">
+                  Operativos Campo
+                </span>
+                <div className="w-7 h-7 shrink-0 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                  <Layers size={15} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-emerald-950">{stats.availableOperativesCount}</h3>
-              <p className="text-[10px] text-emerald-700/80 mt-1 truncate">
-                {stats.totalUnavailable > 0 ? `${stats.availableOperativesCount} de ${stats.operativesPayrollTotal} disponibles` : 'Personal productivo'}
+              <p className="text-[10px] text-emerald-700/80 mt-1 truncate" title={`${stats.availableOperativesCount} de ${stats.operativesPayrollTotal} disponibles`}>
+                {stats.totalUnavailable > 0 ? `${stats.availableOperativesCount} de ${stats.operativesPayrollTotal} disp.` : 'Personal productivo'}
               </p>
             </CardContent>
           </Card>
@@ -881,18 +893,20 @@ export default function Dashboard() {
             tabIndex={0}
             title="Clic para ver detalle de personas reubicadas"
           >
-            <CardContent className="p-3.5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-purple-900 uppercase tracking-wider">Reubicados</span>
-                <div className="p-1.5 bg-purple-100 text-purple-800 rounded-lg group-hover:bg-purple-200 transition-colors">
-                  <UserMinus size={16} />
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <span className="text-[10px] sm:text-[11px] font-bold text-purple-900 uppercase tracking-tight truncate" title="Reubicados">
+                  Reubicados
+                </span>
+                <div className="w-7 h-7 shrink-0 rounded-lg bg-purple-100 text-purple-800 group-hover:bg-purple-200 transition-colors flex items-center justify-center">
+                  <ArrowRightLeft size={15} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-purple-950">{stats.reubicadosTotal}</h3>
               <div className="flex items-center justify-between mt-1 text-[10px] text-purple-700 font-medium">
-                <span className="truncate">No productivos</span>
+                <span className="truncate">No prod.</span>
                 <span className="font-bold inline-flex items-center gap-0.5 group-hover:underline text-purple-800 shrink-0">
-                  Ver lista <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                  Ver lista <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
                 </span>
               </div>
             </CardContent>
@@ -900,11 +914,13 @@ export default function Dashboard() {
 
           {/* Card 4: Personal Administrativo */}
           <Card className="border-forest-900/10 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-white to-blue-50/30">
-            <CardContent className="p-3.5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider">Oficina / Admin</span>
-                <div className="p-1.5 bg-blue-100 text-blue-800 rounded-lg">
-                  <Briefcase size={16} />
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <span className="text-[10px] sm:text-[11px] font-bold text-blue-800 uppercase tracking-tight truncate" title="Oficina / Admin">
+                  Oficina / Admin
+                </span>
+                <div className="w-7 h-7 shrink-0 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center">
+                  <Briefcase size={15} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-blue-950">{stats.adminTotal}</h3>
@@ -912,7 +928,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Card 4: Inasistencias del Día */}
+          {/* Card 5: Inasistencias del Día */}
           <Card 
             onClick={() => { setSelectedDetailModal('inasistencias'); setDetailSearch(''); }}
             className="border-red-200 shadow-xs hover:shadow-md hover:border-red-400 transition-all cursor-pointer bg-gradient-to-br from-white to-red-50/40 group relative overflow-hidden"
@@ -920,24 +936,26 @@ export default function Dashboard() {
             tabIndex={0}
             title="Clic para ver detalle de personas con inasistencia"
           >
-            <CardContent className="p-3.5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-red-800 uppercase tracking-wider">Inasistencias</span>
-                <div className="p-1.5 bg-red-100 text-red-800 rounded-lg group-hover:bg-red-200 transition-colors">
-                  <UserX size={16} />
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <span className="text-[10px] sm:text-[11px] font-bold text-red-800 uppercase tracking-tight truncate" title="Inasistencias">
+                  Inasistencias
+                </span>
+                <div className="w-7 h-7 shrink-0 rounded-lg bg-red-100 text-red-800 group-hover:bg-red-200 transition-colors flex items-center justify-center">
+                  <UserX size={15} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-red-950">{stats.absencesTotal}</h3>
               <div className="flex items-center justify-between mt-1 text-[10px] text-red-700 font-medium">
-                <span className="truncate">Sin justificar hoy</span>
+                <span className="truncate">Sin justificar</span>
                 <span className="font-bold inline-flex items-center gap-0.5 group-hover:underline text-red-800 shrink-0">
-                  Ver lista <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                  Ver lista <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
                 </span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Card 5: Incapacidades */}
+          {/* Card 6: Incapacidades */}
           <Card 
             onClick={() => { setSelectedDetailModal('incapacidades'); setDetailSearch(''); }}
             className="border-teal-200 shadow-xs hover:shadow-md hover:border-teal-400 transition-all cursor-pointer bg-gradient-to-br from-white to-teal-50/40 group relative overflow-hidden"
@@ -945,24 +963,26 @@ export default function Dashboard() {
             tabIndex={0}
             title="Clic para ver detalle de personas con incapacidad médica"
           >
-            <CardContent className="p-3.5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-teal-800 uppercase tracking-wider">Incapacidades</span>
-                <div className="p-1.5 bg-teal-100 text-teal-800 rounded-lg group-hover:bg-teal-200 transition-colors">
-                  <Stethoscope size={16} />
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <span className="text-[10px] sm:text-[11px] font-bold text-teal-800 uppercase tracking-tight truncate" title="Incapacidades">
+                  Incapacidades
+                </span>
+                <div className="w-7 h-7 shrink-0 rounded-lg bg-teal-100 text-teal-800 group-hover:bg-teal-200 transition-colors flex items-center justify-center">
+                  <Stethoscope size={15} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-teal-950">{stats.incapacidadesTotal}</h3>
               <div className="flex items-center justify-between mt-1 text-[10px] text-teal-700 font-medium">
-                <span className="truncate">Médica activa</span>
+                <span className="truncate">Médica act.</span>
                 <span className="font-bold inline-flex items-center gap-0.5 group-hover:underline text-teal-800 shrink-0">
-                  Ver lista <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                  Ver lista <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
                 </span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Card 6: Permisos / Vacaciones */}
+          {/* Card 7: Permisos / Vacaciones */}
           <Card 
             onClick={() => { setSelectedDetailModal('permisos'); setDetailSearch(''); setPermisosFilterTab('all'); }}
             className="border-amber-200 shadow-xs hover:shadow-md hover:border-amber-400 transition-all cursor-pointer bg-gradient-to-br from-white to-amber-50/40 group relative overflow-hidden"
@@ -970,34 +990,40 @@ export default function Dashboard() {
             tabIndex={0}
             title="Clic para ver detalle de personas con permisos o vacaciones"
           >
-            <CardContent className="p-3.5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Permisos / Vac.</span>
-                <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg group-hover:bg-amber-200 transition-colors">
-                  <CalendarX size={16} />
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <span className="text-[10px] sm:text-[11px] font-bold text-amber-800 uppercase tracking-tight truncate" title="Permisos / Vacaciones">
+                  Permisos / Vac.
+                </span>
+                <div className="w-7 h-7 shrink-0 rounded-lg bg-amber-100 text-amber-800 group-hover:bg-amber-200 transition-colors flex items-center justify-center">
+                  <CalendarX size={15} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-amber-900">{stats.permissionsTotal + stats.vacationsTotal}</h3>
               <div className="flex items-center justify-between mt-1 text-[10px] text-amber-700 font-medium">
-                <span className="truncate">Novedad autorizada</span>
+                <span className="truncate">Novedad aut.</span>
                 <span className="font-bold inline-flex items-center gap-0.5 group-hover:underline text-amber-800 shrink-0">
-                  Ver lista <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                  Ver lista <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
                 </span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Card 7: Utilización Operativa % */}
+          {/* Card 8: % Personal Programado */}
           <Card className="border-lime-300 shadow-xs hover:shadow-md transition-shadow bg-gradient-to-br from-lime-50/50 to-white">
-            <CardContent className="p-3.5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-bold text-lime-900 uppercase tracking-wider">Utilización</span>
-                <div className="p-1.5 bg-lime-200 text-lime-800 rounded-lg">
-                  <TrendingUp size={16} />
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <span className="text-[10px] sm:text-[11px] font-bold text-lime-900 uppercase tracking-tight truncate" title="% Personal Programado">
+                  % Personal Prog.
+                </span>
+                <div className="w-7 h-7 shrink-0 rounded-lg bg-lime-200 text-lime-800 flex items-center justify-center">
+                  <TrendingUp size={15} />
                 </div>
               </div>
               <h3 className="text-2xl font-extrabold text-lime-900">{stats.utilRate}%</h3>
-              <p className="text-[10px] text-lime-800/80 mt-1 truncate">{stats.programmedCount} de {stats.availableOperativesCount} disp.</p>
+              <p className="text-[10px] text-lime-800/80 mt-1 truncate" title={`${stats.programmedCount} de ${stats.availableProgrammableCount} disponibles`}>
+                {stats.programmedCount} de {stats.availableProgrammableCount} disp.
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -1383,7 +1409,7 @@ export default function Dashboard() {
                   color = 'purple';
                   targetRoute = '/admin';
                   buttonText = 'Ir a Catálogo de Personal';
-                  icon = <UserMinus className="text-purple-600" size={22} />;
+                  icon = <ArrowRightLeft className="text-purple-600" size={22} />;
                 }
 
                 return (
