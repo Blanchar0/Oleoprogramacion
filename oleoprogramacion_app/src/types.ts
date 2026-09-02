@@ -85,7 +85,12 @@ export interface Location {
   id: string;
   zone: string;
   name: string;
+  anoSiembra?: number | null;
+  ha?: number | null;
+  palmasDiferenciadas?: number | null;
   active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type ProgrammingStatus = 'PENDIENTE' | 'CONFIRMADA' | 'RECHAZADA';

@@ -70,6 +70,9 @@ CREATE TABLE IF NOT EXISTS public.locations (
   id TEXT PRIMARY KEY,
   zone TEXT,
   name TEXT NOT NULL,
+  ano_siembra NUMERIC,
+  ha NUMERIC,
+  palmas_diferenciadas NUMERIC,
   active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

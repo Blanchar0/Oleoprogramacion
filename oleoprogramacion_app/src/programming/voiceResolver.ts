@@ -73,10 +73,12 @@ export function resolveVoiceData(
   const resolveLot = (): ResolvedField<string> => {
     const actName = normalizeString(resolvedActivity.value || '');
     const isAseoConservacion = actName.includes('aseo') && actName.includes('conservacion');
+    const isMantenimientoBufalos = actName.includes('bufalo');
+    const isSenderoAgronomia = actName.includes('sendero') && actName.includes('agronomia');
     const isLaborOtros = normalizeString(resolvedLabor.value || '').includes('otro');
     const isZoneNoLot = resolvedZone.canonicalId && ['almacen', 'la dilia'].includes(normalizeString(resolvedZone.canonicalId));
 
-    if (isAseoConservacion || isLaborOtros || isZoneNoLot) {
+    if (isAseoConservacion || isMantenimientoBufalos || isSenderoAgronomia || isLaborOtros || isZoneNoLot) {
       return { originalText: null, status: 'RECONOCIDO', value: 'Zona General (Sin Lote)', canonicalId: null, candidates: [], message: null };
     }
 

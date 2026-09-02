@@ -4,15 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle, Button, Input, Dialog, Dialog
 import { useAuth } from '../auth/AuthContext';
 import { supabase } from '../shared/supabase';
 import { repository } from '../shared/AgronomicRepository';
-import { Plus, Edit2, TrendingUp, Trash2 } from 'lucide-react';
+import { Plus, Edit2, TrendingUp, Trash2, MapPin } from 'lucide-react';
 import { isOperative } from '../dashboard/Dashboard';
 
 export default function Catalogs() {
   const { user } = useAuth();
   const { catalogs, loading } = useCatalogs();
 
-  const [activeTab, setActiveTab] = useState<'users' | 'personnel' | 'activities' | 'performance' | 'equipment'>('personnel');
+  const [activeTab, setActiveTab] = useState<'users' | 'personnel' | 'activities' | 'performance' | 'equipment' | 'locations'>('personnel');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedZoneFilter, setSelectedZoneFilter] = useState<string>('TODAS');
 
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
@@ -27,6 +28,15 @@ export default function Catalogs() {
   const activities = [...(catalogs.activities || [])].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', 'es', { numeric: true }));
   const equipment = [...(catalogs.equipment || [])].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', 'es', { numeric: true }));
   const labors = [...(catalogs.labors || [])].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', 'es', { numeric: true }));
+  const locations = [...(catalogs.locations || [])].sort((a: any, b: any) => {
+    const zoneComp = (a.zone || '').localeCompare(b.zone || '', 'es', { numeric: true });
+    if (zoneComp !== 0) return zoneComp;
+    return (a.name || '').localeCompare(b.name || '', 'es', { numeric: true });
+  });
+
+  const existingZones = Array.from(new Set(locations.map((l: any) => l.zone).filter(Boolean))).sort((a: any, b: any) =>
+    String(a).localeCompare(String(b), 'es', { numeric: true })
+  );
   
   const performanceReferences = [...(catalogs.performanceReferences || [])].sort((a: any, b: any) => {
     const actA = activities.find(act => act.id === (a.activityId || a.activity_id))?.name || '';
@@ -54,6 +64,7 @@ export default function Catalogs() {
         else if (table === 'activities') res = await repository.deleteActivity(record.id);
         else if (table === 'equipment') res = await repository.deleteEquipment(record.id);
         else if (table === 'performance_references') res = await repository.deletePerformanceReference(record.id);
+        else if (table === 'locations') res = await repository.deleteLocation(record.id);
         else {
           const { error } = await supabase.from(table).delete().eq('id', record.id);
           if (error) throw error;
@@ -82,6 +93,15 @@ export default function Catalogs() {
           performancePerPersonDay: 1, 
           unit: 'Jornal',
           source: 'MANUAL' 
+        });
+      } else if (activeTab === 'locations') {
+        setFormData({
+          active: true,
+          zone: existingZones[0] || '',
+          name: '',
+          anoSiembra: '',
+          ha: '',
+          palmasDiferenciadas: ''
         });
       } else {
         setFormData({ active: true });
@@ -116,6 +136,9 @@ export default function Catalogs() {
     } else if (activeTab === 'equipment') {
       if (editingRecord) res = await repository.updateEquipment(editingRecord.id, formData);
       else res = await repository.createEquipment(formData);
+    } else if (activeTab === 'locations') {
+      if (editingRecord) res = await repository.updateLocation(editingRecord.id, formData);
+      else res = await repository.createLocation(formData);
     }
 
     setSaving(false);
@@ -141,15 +164,30 @@ export default function Catalogs() {
           <TrendingUp size={15} className="mr-1.5" /> Rendimiento ({performanceReferences.length})
         </Button>
         <Button variant={activeTab === 'equipment' ? 'primary' : 'outline'} onClick={() => setActiveTab('equipment')}>Maquinaria ({equipment.length})</Button>
+        <Button variant={activeTab === 'locations' ? 'primary' : 'outline'} onClick={() => setActiveTab('locations')} className={cn(activeTab === 'locations' && "font-bold shadow-xs")}>
+          <MapPin size={15} className="mr-1.5" /> Ubicación ({locations.length})
+        </Button>
       </div>
 
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle className="capitalize">
-              {activeTab === 'performance' ? 'Referencias de Rendimiento por Actividad' : activeTab}
+              {activeTab === 'performance' ? 'Referencias de Rendimiento por Actividad' : activeTab === 'locations' ? 'Ubicación (Lotes y Zonas)' : activeTab}
             </CardTitle>
             <div className="flex items-center gap-2">
+              {activeTab === 'locations' && (
+                <select
+                  value={selectedZoneFilter}
+                  onChange={e => setSelectedZoneFilter(e.target.value)}
+                  className="text-xs bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-forest-500 shadow-2xs h-9 cursor-pointer"
+                >
+                  <option value="TODAS">Todas las Zonas ({existingZones.length})</option>
+                  {existingZones.map((z: any) => (
+                    <option key={z} value={z}>Zona: {z}</option>
+                  ))}
+                </select>
+              )}
               <Input 
                 placeholder="Buscar..." 
                 value={searchTerm}
@@ -167,8 +205,15 @@ export default function Catalogs() {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-gray-700 bg-gray-50 uppercase border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3">{activeTab === 'performance' ? 'Actividad / Labor' : 'Nombre / Identificador'}</th>
-                  <th className="px-4 py-3">{activeTab === 'performance' ? 'Rendimiento Base (Por persona/día)' : 'Detalle / Rol / Tipo'}</th>
+                  <th className="px-4 py-3">{activeTab === 'performance' ? 'Actividad / Labor' : activeTab === 'locations' ? 'Lote / Identificador' : 'Nombre / Identificador'}</th>
+                  <th className="px-4 py-3">{activeTab === 'performance' ? 'Rendimiento Base (Por persona/día)' : activeTab === 'locations' ? 'Zona' : 'Detalle / Rol / Tipo'}</th>
+                  {activeTab === 'locations' && (
+                    <>
+                      <th className="px-4 py-3">Año Siembra</th>
+                      <th className="px-4 py-3">Ha (Netas)</th>
+                      <th className="px-4 py-3">Palmas Diferenciadas</th>
+                    </>
+                  )}
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3 text-right">Acciones</th>
                 </tr>
@@ -366,6 +411,73 @@ export default function Catalogs() {
                       </td>
                     </tr>
                   ))}
+
+                {activeTab === 'locations' && locations
+                  .filter((l: any) => {
+                    const matchesSearch = (l.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                          (l.zone || '').toLowerCase().includes(searchTerm.toLowerCase());
+                    const matchesZone = selectedZoneFilter === 'TODAS' || l.zone === selectedZoneFilter;
+                    return matchesSearch && matchesZone;
+                  })
+                  .map((l: any) => (
+                    <tr key={l.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                      <td className="px-4 py-3 font-bold text-gray-900">
+                        <span className="font-mono text-xs bg-forest-50 text-forest-900 border border-forest-200 px-2 py-0.5 rounded font-bold">
+                          {l.name}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-gray-700">
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin size={13} className="text-forest-600 shrink-0" />
+                          {l.zone || 'Sin Zona'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 font-medium">
+                        {l.anoSiembra ?? l.ano_siembra ?? '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 font-medium">
+                        {l.ha !== null && l.ha !== undefined ? `${l.ha} Ha` : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 font-medium">
+                        {l.palmasDiferenciadas ?? l.palmas_diferenciadas ?? '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 text-xs rounded-full font-semibold ${l.active ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>
+                          {l.active ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button size="sm" variant="ghost" onClick={() => openModal(l)} className="text-forest-900 hover:text-forest-950 hover:bg-forest-100 h-8 w-8 p-0" title="Editar lote">
+                            <Edit2 size={16} />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => handleToggle(l.id, 'locations', l.active)}
+                            className={cn(
+                              "text-xs h-8 px-2.5 font-bold",
+                              l.active 
+                                ? "text-red-700 border-2 border-red-300 hover:bg-red-50 hover:border-red-400" 
+                                : "text-emerald-700 border-2 border-emerald-300 hover:bg-emerald-50 hover:border-emerald-400"
+                            )}
+                            title={l.active ? "Desactivar lote" : "Activar lote"}
+                          >
+                            {l.active ? 'Desactivar' : 'Activar'}
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={() => handleDelete(l, 'locations')} 
+                            className="text-red-600 hover:text-red-800 hover:bg-red-50 h-8 w-8 p-0" 
+                            title="Eliminar lote"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -376,7 +488,7 @@ export default function Catalogs() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingRecord ? 'Editar' : 'Agregar'} {activeTab === 'performance' ? 'Rendimiento de Actividad' : activeTab}
+              {editingRecord ? 'Editar' : 'Agregar'} {activeTab === 'performance' ? 'Rendimiento de Actividad' : activeTab === 'locations' ? 'Ubicación (Lote / Zona)' : activeTab}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-4">
@@ -504,6 +616,86 @@ export default function Catalogs() {
               <>
                 <div><Label>Nombre/Placa</Label><Input required value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
                 <div><Label>Tipo</Label><Input value={formData.type || ''} onChange={e => setFormData({...formData, type: e.target.value})} placeholder="Ej: Tractor" /></div>
+              </>
+            )}
+
+            {activeTab === 'locations' && (
+              <>
+                <div>
+                  <Label>Zona *</Label>
+                  <div className="space-y-1.5">
+                    <Input 
+                      required 
+                      value={formData.zone || ''} 
+                      onChange={e => setFormData({ ...formData, zone: e.target.value.toUpperCase() })} 
+                      placeholder="Ej: EL CARMEN, SAN CARLOS, LAS FLORES" 
+                    />
+                    {existingZones.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        <span className="text-[11px] text-gray-500 font-semibold mr-1 self-center">Zonas existentes:</span>
+                        {existingZones.slice(0, 8).map((z: any) => (
+                          <button
+                            key={z}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, zone: z })}
+                            className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-700 hover:bg-forest-100 hover:text-forest-900 border border-gray-200 cursor-pointer transition-colors"
+                          >
+                            {z}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <Label>Nombre / Código del Lote *</Label>
+                  <Input 
+                    required 
+                    value={formData.name || ''} 
+                    onChange={e => setFormData({ ...formData, name: e.target.value.toUpperCase() })} 
+                    placeholder="Ej: 09F014, 03A001, LOTE 5" 
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <Label>Año de Siembra</Label>
+                    <Input 
+                      type="number" 
+                      min="1950" 
+                      max="2050" 
+                      value={formData.anoSiembra ?? formData.ano_siembra ?? ''} 
+                      onChange={e => setFormData({ ...formData, anoSiembra: e.target.value })} 
+                      placeholder="Ej: 1995" 
+                    />
+                  </div>
+                  <div>
+                    <Label>Ha (Hectáreas)</Label>
+                    <Input 
+                      type="number" 
+                      step="any" 
+                      min="0" 
+                      value={formData.ha ?? ''} 
+                      onChange={e => setFormData({ ...formData, ha: e.target.value })} 
+                      placeholder="Ej: 19.16" 
+                    />
+                  </div>
+                  <div>
+                    <Label>Palmas Diferenciadas</Label>
+                    <Input 
+                      type="number" 
+                      min="0" 
+                      value={formData.palmasDiferenciadas ?? formData.palmas_diferenciadas ?? ''} 
+                      onChange={e => setFormData({ ...formData, palmasDiferenciadas: e.target.value })} 
+                      placeholder="Ej: 2740" 
+                    />
+                  </div>
+                </div>
+                <div className="p-3 bg-forest-50/80 rounded-xl border border-forest-200 text-xs text-forest-900">
+                  <p className="font-semibold">🌴 Catálogo de Ubicación</p>
+                  <p className="mt-0.5 text-gray-600">
+                    Este lote estará disponible inmediatamente para asignación y programación en campo por los supervisores bajo la zona indicada.
+                  </p>
+                </div>
               </>
             )}
 

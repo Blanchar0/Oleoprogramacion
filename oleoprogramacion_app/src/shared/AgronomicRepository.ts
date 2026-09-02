@@ -31,6 +31,9 @@ export interface AgronomicRepository {
   createPerformanceReference(input: any): Promise<Result>;
   updatePerformanceReference(id: string, input: any): Promise<Result>;
   deletePerformanceReference(id: string): Promise<Result>;
+  createLocation(input: any): Promise<Result>;
+  updateLocation(id: string, input: any): Promise<Result>;
+  deleteLocation(id: string): Promise<Result>;
 }
 
 class SupabaseRepository implements AgronomicRepository {
@@ -744,13 +747,20 @@ class SupabaseRepository implements AgronomicRepository {
           nombreCompleto: p.nombre_completo || p.name,
         }));
 
+        const mappedLocations = (locations || []).map((loc: any) => ({
+          ...loc,
+          anoSiembra: loc.ano_siembra ?? loc.anoSiembra ?? null,
+          ha: loc.ha !== null && loc.ha !== undefined ? Number(loc.ha) : null,
+          palmasDiferenciadas: loc.palmas_diferenciadas ?? loc.palmasDiferenciadas ?? null,
+        }));
+
         const catalogsPayload = {
           users: mappedUsers,
           supervisors: supervisors || [],
           personnel: mappedPersonnel,
           labors: labors || [],
           activities: mappedActivities,
-          locations: locations || [],
+          locations: mappedLocations,
           equipment: equipment || [],
           performanceReferences: mappedPerformance,
           personnelNovelties: mappedNovelties,
@@ -1068,6 +1078,104 @@ class SupabaseRepository implements AgronomicRepository {
       const { data, error } = await supabase.from('personnel_novelties').delete().eq('id', id).select().single();
       if (error) throw error;
       return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  // Locations (Ubicación: Lotes y Zonas)
+  async createLocation(input: any): Promise<Result> {
+    try {
+      const lotName = String(input.name || '').trim().toUpperCase();
+      const zoneName = String(input.zone || '').trim().toUpperCase();
+      const cleanCode = lotName.replace(/[^A-Z0-9]/g, '');
+      const id = input.id || `UBI-${cleanCode || crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+
+      const payload: any = {
+        id,
+        name: lotName,
+        zone: zoneName,
+        active: input.active !== undefined ? input.active : true,
+      };
+
+      if (input.anoSiembra !== undefined && input.anoSiembra !== '' && input.anoSiembra !== null) {
+        payload.ano_siembra = Number(input.anoSiembra);
+      }
+      if (input.ha !== undefined && input.ha !== '' && input.ha !== null) {
+        payload.ha = Number(input.ha);
+      }
+      if (input.palmasDiferenciadas !== undefined && input.palmasDiferenciadas !== '' && input.palmasDiferenciadas !== null) {
+        payload.palmas_diferenciadas = Number(input.palmasDiferenciadas);
+      }
+
+      const { data, error } = await supabase.from('locations').insert(payload).select().single();
+      if (error) {
+        // Fallback si las columnas técnicas aún no han sido migradas en la BD
+        if (error.message?.includes('does not exist') || error.code === 'PGRST204' || error.code === '42703') {
+          console.warn("Columnas adicionales no encontradas en tabla locations de Supabase. Guardando campos base.", error.message);
+          const basicPayload = {
+            id: payload.id,
+            name: payload.name,
+            zone: payload.zone,
+            active: payload.active
+          };
+          const fallbackRes = await supabase.from('locations').insert(basicPayload).select().single();
+          if (fallbackRes.error) throw fallbackRes.error;
+          return { ok: true, data: fallbackRes.data };
+        }
+        throw error;
+      }
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async updateLocation(id: string, input: any): Promise<Result> {
+    try {
+      const payload: any = {
+        updated_at: new Date().toISOString()
+      };
+      if (input.name !== undefined) payload.name = String(input.name).trim().toUpperCase();
+      if (input.zone !== undefined) payload.zone = String(input.zone).trim().toUpperCase();
+      if (input.active !== undefined) payload.active = input.active;
+      if (input.anoSiembra !== undefined) {
+        payload.ano_siembra = (input.anoSiembra === '' || input.anoSiembra === null) ? null : Number(input.anoSiembra);
+      }
+      if (input.ha !== undefined) {
+        payload.ha = (input.ha === '' || input.ha === null) ? null : Number(input.ha);
+      }
+      if (input.palmasDiferenciadas !== undefined) {
+        payload.palmas_diferenciadas = (input.palmasDiferenciadas === '' || input.palmasDiferenciadas === null) ? null : Number(input.palmasDiferenciadas);
+      }
+
+      const { data, error } = await supabase.from('locations').update(payload).eq('id', id).select().single();
+      if (error) {
+        if (error.message?.includes('does not exist') || error.code === 'PGRST204' || error.code === '42703') {
+          console.warn("Columnas adicionales no encontradas en tabla locations al actualizar. Guardando campos base.", error.message);
+          const basicPayload: any = {
+            updated_at: new Date().toISOString()
+          };
+          if (input.name !== undefined) basicPayload.name = String(input.name).trim().toUpperCase();
+          if (input.zone !== undefined) basicPayload.zone = String(input.zone).trim().toUpperCase();
+          if (input.active !== undefined) basicPayload.active = input.active;
+          const fallbackRes = await supabase.from('locations').update(basicPayload).eq('id', id).select().single();
+          if (fallbackRes.error) throw fallbackRes.error;
+          return { ok: true, data: fallbackRes.data };
+        }
+        throw error;
+      }
+      return { ok: true, data };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async deleteLocation(id: string): Promise<Result> {
+    try {
+      const { error } = await supabase.from('locations').delete().eq('id', id);
+      if (error) throw error;
+      return { ok: true };
     } catch (e: any) {
       return { ok: false, error: e.message };
     }

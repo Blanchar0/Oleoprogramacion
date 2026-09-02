@@ -267,8 +267,11 @@ export default function NewProgramming() {
     .replace(/[\u0300-\u036f]/g, '')
     .trim();
   const isActivityAseoConservacion = normActivityName.includes('aseo') && normActivityName.includes('conservacion');
+  const isActivityMantenimientoBufalos = normActivityName.includes('bufalo');
+  const isActivitySenderoAgronomia = normActivityName.includes('sendero') && normActivityName.includes('agronomia');
+  const isActivityNoLot = isActivityAseoConservacion || isActivityMantenimientoBufalos || isActivitySenderoAgronomia;
 
-  const isNoLotRequired = isZoneNoLot || isLaborOtros || isActivityAseoConservacion;
+  const isNoLotRequired = isZoneNoLot || isLaborOtros || isActivityNoLot;
 
   useEffect(() => {
     if (isNoLotRequired && selectedLocations.length > 0) {
@@ -520,6 +523,10 @@ export default function NewProgramming() {
     const selectedLoteNames = isNoLotRequired 
       ? (isActivityAseoConservacion 
           ? 'ASEO Y CONSERVACIÓN' 
+          : isActivityMantenimientoBufalos
+          ? 'MANTENIMIENTO DE BÚFALOS'
+          : isActivitySenderoAgronomia
+          ? 'SENDERO AGRONOMÍA'
           : (isZoneAlmacen ? 'ALMACÉN' : (isZoneLaDilia ? 'LA DILIA' : 'GENERAL')))
       : selectedLocations
           .map(id => locations.find(l => l.id === id)?.name || id)
@@ -962,6 +969,10 @@ export default function NewProgramming() {
                       <span>
                         {isActivityAseoConservacion
                           ? 'SELECCIÓN DE LOTES OMITIDA PARA ASEO Y CONSERVACIÓN (SOLO SE REGISTRA LA ZONA).'
+                          : isActivityMantenimientoBufalos
+                          ? 'SELECCIÓN DE LOTES OMITIDA PARA MANTENIMIENTO DE BÚFALOS (SOLO SE REGISTRA LA ZONA).'
+                          : isActivitySenderoAgronomia
+                          ? 'SELECCIÓN DE LOTES OMITIDA PARA SENDERO AGRONOMÍA (SOLO SE REGISTRA LA ZONA).'
                           : isZoneAlmacen 
                           ? 'SELECCIÓN DE LOTES OMITIDA PARA LA ZONA ALMACÉN (SOLO SE REGISTRA LA ZONA).' 
                           : isZoneLaDilia
