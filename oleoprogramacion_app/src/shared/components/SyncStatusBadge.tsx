@@ -64,71 +64,78 @@ export const SyncStatusBadge: React.FC = () => {
 
       {/* Popover de Detalles y Sincronización Manual */}
       {showDetails && (
-        <div 
-          className="absolute right-0 mt-2 w-72 rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl border border-zinc-200 dark:border-zinc-800 p-4 z-50 animate-in fade-in zoom-in-95 duration-150"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
-            <div className="flex items-center gap-2">
-              {isOnline ? (
-                <Wifi className="w-4 h-4 text-emerald-600" />
-              ) : (
-                <WifiOff className="w-4 h-4 text-amber-600" />
+        <>
+          {/* Backdrop en móvil para cerrar al tocar afuera */}
+          <div 
+            className="fixed inset-0 bg-black/40 z-40 sm:hidden" 
+            onClick={() => setShowDetails(false)} 
+          />
+          <div 
+            className="fixed left-3 right-3 top-16 sm:absolute sm:left-0 sm:right-auto sm:top-full sm:mt-2 w-auto sm:w-80 max-w-sm rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl border border-zinc-200 dark:border-zinc-800 p-4 z-50 animate-in fade-in zoom-in-95 duration-150 mx-auto sm:mx-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center gap-2">
+                {isOnline ? (
+                  <Wifi className="w-4 h-4 text-emerald-600" />
+                ) : (
+                  <WifiOff className="w-4 h-4 text-amber-600" />
+                )}
+                <span className="font-bold text-xs uppercase tracking-wide text-zinc-900 dark:text-zinc-100">
+                  {isOnline ? 'Conexión Activa' : 'Modo Offline (Sin Señal)'}
+                </span>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowDetails(false)}
+                className="text-zinc-400 hover:text-zinc-600 text-xs font-bold px-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="py-3 space-y-2 text-xs text-zinc-600 dark:text-zinc-400">
+              <div className="flex justify-between items-center">
+                <span>Reportes en celular:</span>
+                <span className={`font-black px-2 py-0.5 rounded-md ${
+                  pendingCount > 0 
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200' 
+                    : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+                }`}>
+                  {pendingCount} pendientes
+                </span>
+              </div>
+
+              {lastSyncTime && (
+                <div className="flex justify-between items-center text-[11px] text-zinc-400">
+                  <span>Última sincronización:</span>
+                  <span>{lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
               )}
-              <span className="font-bold text-xs uppercase tracking-wide text-zinc-900 dark:text-zinc-100">
-                {isOnline ? 'Conexión Activa' : 'Modo Offline (Sin Señal)'}
-              </span>
-            </div>
-            <button 
-              type="button" 
-              onClick={() => setShowDetails(false)}
-              className="text-zinc-400 hover:text-zinc-600 text-xs font-bold px-1"
-            >
-              ✕
-            </button>
-          </div>
 
-          <div className="py-3 space-y-2 text-xs text-zinc-600 dark:text-zinc-400">
-            <div className="flex justify-between items-center">
-              <span>Reportes en celular:</span>
-              <span className={`font-black px-2 py-0.5 rounded-md ${
-                pendingCount > 0 
-                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200' 
-                  : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
-              }`}>
-                {pendingCount} pendientes
-              </span>
+              {!isOnline && (
+                <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl p-2.5 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                  <p>
+                    Puedes seguir reportando programaciones, inasistencias y maquinaria normalmente. Se guardarán en el teléfono y se subirán al detectar señal.
+                  </p>
+                </div>
+              )}
             </div>
 
-            {lastSyncTime && (
-              <div className="flex justify-between items-center text-[11px] text-zinc-400">
-                <span>Última sincronización:</span>
-                <span>{lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-              </div>
-            )}
-
-            {!isOnline && (
-              <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl p-2.5 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-                <p>
-                  Puedes seguir reportando programaciones, inasistencias y maquinaria normalmente. Se guardarán en el teléfono y se subirán al detectar señal.
-                </p>
-              </div>
+            {isOnline && (
+              <button
+                type="button"
+                disabled={isSyncing}
+                onClick={handleManualSync}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black transition-all shadow-sm active:scale-98 cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Sincronizando datos...' : 'Sincronizar ahora'}
+              </button>
             )}
           </div>
-
-          {isOnline && (
-            <button
-              type="button"
-              disabled={isSyncing}
-              onClick={handleManualSync}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black transition-all shadow-sm active:scale-98 cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? 'Sincronizando datos...' : 'Sincronizar ahora'}
-            </button>
-          )}
-        </div>
+        </>
       )}
     </div>
   );
