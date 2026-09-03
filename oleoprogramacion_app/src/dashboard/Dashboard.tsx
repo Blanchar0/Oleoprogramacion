@@ -12,12 +12,19 @@ import {
   Users, Briefcase, CalendarX, Tractor, Activity, 
   Award, TrendingUp, AlertTriangle, UserX, Stethoscope, 
   CheckCircle2, Layers, Calendar, ChevronRight, Search,
-  ExternalLink, Check, Eye, ListFilter, UserMinus, ArrowRightLeft
+  ExternalLink, Check, Eye, ListFilter, UserMinus, ArrowRightLeft,
+  Clock, ShieldAlert, Send, BellRing
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, CartesianGrid
 } from 'recharts';
+import { 
+  getSupervisorsReportingStatus, 
+  saveNotification, 
+  triggerSystemNotification, 
+  getColombiaDateString 
+} from '../shared/notificationService';
 
 export const ADMIN_PERSONNEL_NAMES = [
   'PAOLA CHAVEZ',
@@ -348,9 +355,58 @@ export default function Dashboard() {
   const DirectivoDashboard = () => {
     const navigate = useNavigate();
     const [unprogrammedSearch, setUnprogrammedSearch] = useState('');
+    const [supervisorSearch, setSupervisorSearch] = useState('');
+    const [broadcastAlertSuccess, setBroadcastAlertSuccess] = useState<string | null>(null);
     const [selectedDetailModal, setSelectedDetailModal] = useState<'inasistencias' | 'incapacidades' | 'permisos' | 'reubicados' | null>(null);
     const [detailSearch, setDetailSearch] = useState('');
     const [permisosFilterTab, setPermisosFilterTab] = useState<'all' | 'vacaciones' | 'permisos'>('all');
+
+    const supervisorsReportingList = useMemo(() => {
+      return getSupervisorsReportingStatus(catalogs.supervisors || [], programmings || []);
+    }, [catalogs.supervisors, programmings]);
+
+    const filteredSupervisorsReporting = useMemo(() => {
+      if (!supervisorSearch.trim()) return supervisorsReportingList;
+      const q = supervisorSearch.trim().toLowerCase();
+      return supervisorsReportingList.filter(s => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q));
+    }, [supervisorsReportingList, supervisorSearch]);
+
+    const pendingSupervisorsCount = supervisorsReportingList.filter(s => !s.hasProgrammedToday).length;
+    const readySupervisorsCount = supervisorsReportingList.length - pendingSupervisorsCount;
+
+    const handleBroadcastEmergency = () => {
+      const pendingSups = supervisorsReportingList.filter(s => !s.hasProgrammedToday);
+      if (pendingSups.length === 0) {
+        alert('¡Excelente! Todos los supervisores ya cuentan con programación confirmada para hoy.');
+        return;
+      }
+
+      const todayStr = getColombiaDateString(0);
+      const title = '🚨 ALERTA DE EMERGENCIA: Programación Diaria Requerida';
+      const body = `Atención: Aún no registras la programación diaria de hoy (${todayStr}). Es información relevante que se debe actualizar a diario para el inicio de labores.`;
+
+      // Guardar in-app
+      saveNotification({
+        id: `broadcast_emergencia_${Date.now()}`,
+        title,
+        body,
+        date: new Date().toISOString(),
+        type: 'EMERGENCIA_ADMIN',
+        targetDate: todayStr,
+        read: false,
+        actionUrl: '/programming/new',
+        level: 'emergency'
+      });
+
+      // Disparar en dispositivos / sistema
+      triggerSystemNotification(title, {
+        body,
+        actionUrl: '/programming/new'
+      });
+
+      setBroadcastAlertSuccess(`¡Alerta de emergencia emitida al sistema y dispositivos para ${pendingSups.length} supervisores pendientes!`);
+      setTimeout(() => setBroadcastAlertSuccess(null), 6000);
+    };
 
     const unprogrammedPersonnel = useMemo(() => {
       const activeProgrammableList = (catalogs.personnel || []).filter((p: any) => p.active !== false && (isOperative(p) || isReubicado(p)));
@@ -1229,6 +1285,153 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Section Exclusiva ADMIN: Control de Reporte de Supervisores y Advertencias */}
+        {user?.role === 'ADMIN' && (
+          <Card className="border-forest-900/15 shadow-sm bg-gradient-to-b from-white to-gray-50/50">
+            <CardHeader className="pb-3 border-b border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
+                  <div className="p-1.5 bg-forest-100 text-forest-800 rounded-lg">
+                    <Clock size={18} />
+                  </div>
+                  Control y Horarios de Reporte de Supervisores
+                  <span className={`ml-1.5 px-2.5 py-0.5 rounded-full text-xs font-black border ${
+                    pendingSupervisorsCount > 0 
+                      ? 'bg-red-100 text-red-900 border-red-300 animate-pulse' 
+                      : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                  }`}>
+                    {pendingSupervisorsCount > 0 ? `${pendingSupervisorsCount} Pendientes de Reporte` : 'Todos al Día (100%)'}
+                  </span>
+                </CardTitle>
+                <p className="text-xs text-gray-500 mt-1">
+                  Seguimiento del cumplimiento de reporte de programación. Franjas automáticas: 12:00 PM, 05:00 PM (ayer) • 05:00 AM, 06:00 AM y 07:00 AM (hoy).
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+                <Input 
+                  placeholder="Buscar supervisor..." 
+                  value={supervisorSearch}
+                  onChange={(e) => setSupervisorSearch(e.target.value)}
+                  className="bg-white text-xs h-9 w-full sm:w-52 border-gray-300"
+                />
+
+                <Button
+                  type="button"
+                  onClick={handleBroadcastEmergency}
+                  className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1.5 h-9 px-3 rounded-lg shadow-sm cursor-pointer whitespace-nowrap"
+                  title="Disparar notificación de emergencia a los dispositivos de los supervisores sin reporte"
+                >
+                  <BellRing size={15} />
+                  <span>Emitir Alerta del Sistema</span>
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="pt-4 space-y-3">
+              {broadcastAlertSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                  <CheckCircle2 size={16} className="text-emerald-700" />
+                  <span>{broadcastAlertSuccess}</span>
+                </div>
+              )}
+
+              {/* Badges de Resumen */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-950">Reportaron Hoy:</span>
+                  <span className="text-sm font-black text-emerald-700">{readySupervisorsCount}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 flex items-center justify-between">
+                  <span className="text-xs font-bold text-red-950">Sin Reporte Hoy:</span>
+                  <span className="text-sm font-black text-red-700">{pendingSupervisorsCount}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-950">Total Supervisores:</span>
+                  <span className="text-sm font-black text-amber-900">{supervisorsReportingList.length}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-950">Avisos del Sistema:</span>
+                  <span className="text-xs font-bold text-blue-800">Activos en PWA</span>
+                </div>
+              </div>
+
+              {/* Tabla de Supervisores */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden bg-white max-h-[340px] overflow-y-auto shadow-2xs">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 text-gray-600 text-xs uppercase font-bold tracking-wider sticky top-0 border-b border-gray-200 z-10">
+                    <tr>
+                      <th className="px-4 py-2.5">Supervisor</th>
+                      <th className="px-4 py-2.5 text-center">Prog. Hoy</th>
+                      <th className="px-4 py-2.5 text-center">Prog. Mañana</th>
+                      <th className="px-4 py-2.5">Nivel / Estado Horario</th>
+                      <th className="px-4 py-2.5 text-right">Detalle</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredSupervisorsReporting.map((sup) => {
+                      const isEmergency = sup.statusLevel === 'emergency';
+                      const isUrgent = sup.statusLevel === 'urgent';
+                      const isWarning = sup.statusLevel === 'warning';
+
+                      return (
+                        <tr key={sup.id} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="px-4 py-2.5 font-bold text-gray-900 uppercase">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full shrink-0" style={{
+                                backgroundColor: sup.hasProgrammedToday ? '#16A34A' : '#DC2626'
+                              }} />
+                              <span>{sup.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-center">
+                            {sup.hasProgrammedToday ? (
+                              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                ✓ {sup.todayCount} personas
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-red-100 text-red-900 border border-red-300">
+                                ✗ Sin Reportar
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-center">
+                            {sup.hasProgrammedTomorrow ? (
+                              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-900">
+                                ✓ Listo
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-700">
+                                Pendiente
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md border ${
+                              isEmergency 
+                                ? 'bg-red-50 text-red-800 border-red-300' 
+                                : isUrgent 
+                                ? 'bg-orange-50 text-orange-800 border-orange-300' 
+                                : isWarning 
+                                ? 'bg-amber-50 text-amber-800 border-amber-300' 
+                                : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                            }`}>
+                              {sup.statusLabel}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-xs text-gray-500 font-medium">
+                            {sup.lastAlertTitle}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Section Exclusiva ADMIN: Personal Pendiente por Programar */}
         {user?.role === 'ADMIN' && (
