@@ -621,12 +621,33 @@ export default function Dashboard() {
         }
       });
 
-      // 3. Permisos
+      // 3. Permisos y Licencias
       const permisosList: any[] = [];
-      activeNovedades.filter((n: any) => n.tipo === 'PERMISO' || n.tipo === 'Permiso autorizado' || n.tipo === 'CALAMIDAD').forEach((n: any) => {
+      activeNovedades.filter((n: any) => {
+        const t = (n.tipo || '').toUpperCase().trim();
+        return (
+          t === 'PERMISO' ||
+          t === 'PERMISO AUTORIZADO' ||
+          t === 'PERMISO NO REMUNERADO' ||
+          t === 'LICENCIA' ||
+          t === 'CALAMIDAD' ||
+          t.includes('PERMISO') ||
+          t.includes('LICENCIA') ||
+          t.includes('CALAMIDAD')
+        );
+      }).forEach((n: any) => {
         const meta = getPersonDetails(n.personaDocumento || n.personaId, n.personaNombreFuente || n.personaNombre);
         if (!processedKeys.has(meta.key)) {
           processedKeys.add(meta.key);
+          const tUpper = (n.tipo || '').toUpperCase().trim();
+          const tipoLabel = tUpper.includes('LICENCIA')
+            ? 'Licencia'
+            : tUpper.includes('CALAMIDAD')
+            ? 'Calamidad Doméstica'
+            : tUpper.includes('NO REMUNERADO')
+            ? 'Permiso No Remunerado'
+            : 'Permiso Autorizado';
+
           permisosList.push({
             id: n.id || `perm-${meta.key}`,
             key: meta.key,
@@ -634,12 +655,12 @@ export default function Dashboard() {
             documento: meta.documento,
             cargo: meta.cargo,
             cuadrilla: meta.cuadrilla,
-            tipo: n.tipo === 'CALAMIDAD' ? 'Calamidad Doméstica' : 'Permiso Autorizado',
+            tipo: tipoLabel,
             category: 'permisos',
             fechaInicio: n.fechaInicio,
             fechaFin: n.fechaFin,
             dias: n.dias || 1,
-            observacion: n.observacion || 'Permiso laboral autorizado',
+            observacion: n.observacion || 'Permiso o licencia laboral autorizada',
             source: 'novedades'
           });
         }
@@ -667,8 +688,28 @@ export default function Dashboard() {
         }
       });
 
-      // 4. Inasistencias sin justificar
+      // 4. Inasistencias sin justificar y suspensiones
       const inasistenciasList: any[] = [];
+      activeNovedades.filter((n: any) => (n.tipo || '').toUpperCase().trim() === 'SUSPENSION').forEach((n: any) => {
+        const meta = getPersonDetails(n.personaDocumento || n.personaId, n.personaNombreFuente || n.personaNombre);
+        if (!processedKeys.has(meta.key)) {
+          processedKeys.add(meta.key);
+          inasistenciasList.push({
+            id: n.id || `susp-${meta.key}`,
+            key: meta.key,
+            name: meta.name,
+            documento: meta.documento,
+            cargo: meta.cargo,
+            cuadrilla: meta.cuadrilla,
+            motivo: 'Suspensión',
+            observacion: n.observacion || 'Suspensión disciplinaria',
+            registradoPor: 'Gestión Humana',
+            fecha: n.fechaInicio || date,
+            source: 'novedades'
+          });
+        }
+      });
+
       filteredAbsences.filter((a: any) => a.status === 'REGISTRADA' && isUnjustified(a.reason)).forEach((a: any) => {
         const meta = getPersonDetails(a.personnelId || a.personnelDoc, a.personnelName);
         if (!processedKeys.has(meta.key)) {
@@ -690,16 +731,27 @@ export default function Dashboard() {
       });
 
       const permisosVacacionesList = [...vacacionesList, ...permisosList];
-      const totalUnavailable = inasistenciasList.length + incapacidadesList.length + vacacionesList.length + permisosList.length;
+      const allUnavailableItems = [...inasistenciasList, ...incapacidadesList, ...vacacionesList, ...permisosList];
+      const totalUnavailable = allUnavailableItems.length;
       
-      // Operativos de campo reales y disponibles en el día (presentes y sin reporte de inasistencia/novedad)
-      const availableOperativesCount = Math.max(0, operativesPayrollTotal - totalUnavailable);
-
       // Total de personas programables en nómina (Operativos de Campo + Reubicados)
       const activeProgrammableList = totalPersonnelList.filter((p: any) => isOperative(p) || isReubicado(p));
       const programmablePayrollTotal = activeProgrammableList.length;
+
+      // Descontar no disponibles pertenecientes al grupo operativo de campo
+      const operativesUnavailableCount = allUnavailableItems.filter(item => {
+        const per = totalPersonnelList.find((p: any) => matchPerson(p, item.documento) || matchPerson(p, item.key) || matchPerson(p, item.id));
+        return per ? isOperative(per) : true;
+      }).length;
+      const availableOperativesCount = Math.max(0, operativesPayrollTotal - operativesUnavailableCount);
+
+      // Descontar no disponibles pertenecientes a programables (Operativos + Reubicados)
+      const programmableUnavailableCount = allUnavailableItems.filter(item => {
+        const per = totalPersonnelList.find((p: any) => matchPerson(p, item.documento) || matchPerson(p, item.key) || matchPerson(p, item.id));
+        return per ? (isOperative(per) || isReubicado(per)) : true;
+      }).length;
       // Total de colaboradores programables disponibles en el día que llegaron a trabajar (Operativos + Reubicados)
-      const availableProgrammableCount = Math.max(0, programmablePayrollTotal - totalUnavailable);
+      const availableProgrammableCount = Math.max(0, programmablePayrollTotal - programmableUnavailableCount);
 
       let programmedOperativesSet = new Set<string>();
       const laborPersonnelCountMap = new Map<string, Set<string>>();
@@ -711,7 +763,7 @@ export default function Dashboard() {
         if (!laborPersonnelCountMap.has(laborName)) laborPersonnelCountMap.set(laborName, new Set());
 
         (p.personnelIds || []).forEach((id: string) => {
-          const per = activeProgrammableList.find((x: any) => x.id === id || x.documento === id);
+          const per = activeProgrammableList.find((x: any) => matchPerson(x, id));
           if (per) {
             programmedOperativesSet.add(per.documento || per.id);
             laborPersonnelCountMap.get(laborName)?.add(per.documento || per.id);
@@ -724,9 +776,11 @@ export default function Dashboard() {
 
       // 2. Operadores / Tractoristas en maquinaria del día
       filteredMachineries.filter(m => m.status !== 'CANCELADA').forEach(m => {
-        if (!m.operatorId) return;
-        const per = activeProgrammableList.find((x: any) => x.id === m.operatorId || x.documento === m.operatorId || x.name === m.operatorName);
-        const doc = per ? (per.documento || per.id) : m.operatorId;
+        const opId = m.operatorId || m.operator_id;
+        const opName = m.operatorName || m.operator_name;
+        if (!opId && !opName) return;
+        const per = activeProgrammableList.find((x: any) => matchPerson(x, opId) || matchPerson(x, opName));
+        const doc = per ? (per.documento || per.id) : (opId || opName);
         programmedOperativesSet.add(doc);
 
         const laborObj = catalogs.labors.find((l:any) => l.id === (m.laborId || m.labor_id));
@@ -737,7 +791,7 @@ export default function Dashboard() {
 
       const programmedCount = programmedOperativesSet.size;
       // El porcentaje de personal programado se calcula sobre la totalidad disponible entre operativos y reubicados
-      const utilRate = availableProgrammableCount > 0 ? (programmedCount / availableProgrammableCount) * 100 : 0;
+      const utilRate = availableProgrammableCount > 0 ? Math.min(100, (programmedCount / availableProgrammableCount) * 100) : 0;
 
       // 1. Chart: Personas por Labor (Paleta con contraste nítido y moderno)
       const palette = ['#15803D', '#0284C7', '#D97706', '#7C3AED', '#0D9488', '#4338CA', '#BE185D', '#65A30D', '#E11D48'];
