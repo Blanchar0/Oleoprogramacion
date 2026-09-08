@@ -10,7 +10,6 @@ import GeneralProgramming from './programming/GeneralProgramming';
 import Absences from './absences/Absences';
 import Machinery from './machinery/Machinery';
 import Catalogs from './admin/Catalogs';
-import Audit from './admin/Audit';
 import Novedades from './admin/Novedades';
 import { Leaf } from 'lucide-react';
 

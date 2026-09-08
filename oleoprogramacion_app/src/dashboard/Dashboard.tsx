@@ -266,34 +266,6 @@ export default function Dashboard() {
     );
   };
 
-  const NormalDashboard = () => {
-    const uniquePersonnel = new Set<string>();
-    filteredProgrammings.forEach(p => (p.personnelIds || []).forEach((id: string) => uniquePersonnel.add(id)));
-    filteredMachineries.filter(m => m.status !== 'CANCELADA').forEach(m => {
-      if (m.operatorId) uniquePersonnel.add(m.operatorId);
-    });
-    
-    const activeProgrammingsCount = filteredProgrammings.length;
-    const machineryCount = filteredMachineries.filter(m => m.status !== 'CANCELADA').length;
-    const absencesCount = filteredAbsences.filter(a => a.status === 'REGISTRADA').length;
-    
-    const activeProgrammable = catalogs.personnel.filter((p:any) => p.active && (isOperative(p) || isReubicado(p)));
-    const totalActive = activeProgrammable.length;
-
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-forest-100 text-forest-700 rounded-lg"><Users size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Personal Programado</p><h3 className="text-2xl font-bold text-forest-950">{uniquePersonnel.size} <span className="text-sm font-normal text-gray-500">/ {totalActive}</span></h3></div></CardContent></Card>
-          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-emerald-100 text-emerald-700 rounded-lg"><CheckCircle2 size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Progs. Activas</p><h3 className="text-2xl font-bold text-forest-950">{activeProgrammingsCount}</h3></div></CardContent></Card>
-          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-amber-100 text-amber-700 rounded-lg"><CalendarX size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Ausencias (Día)</p><h3 className="text-2xl font-bold text-forest-950">{absencesCount}</h3></div></CardContent></Card>
-          <Card className="border-forest-900/10 shadow-sm"><CardContent className="p-6 flex items-center space-x-4"><div className="p-3 bg-blue-100 text-blue-700 rounded-lg"><Tractor size={24} /></div><div><p className="text-sm font-medium text-text-secondary">Maquinaria Activa</p><h3 className="text-2xl font-bold text-forest-950">{machineryCount}</h3></div></CardContent></Card>
-        </div>
-
-        <NovedadesPanel />
-      </div>
-    );
-  };
-
   const DirectivoDashboard = () => {
     const navigate = useNavigate();
     const [unprogrammedSearch, setUnprogrammedSearch] = useState('');

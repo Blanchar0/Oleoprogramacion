@@ -189,16 +189,6 @@ export interface Machinery {
   needsReview?: boolean;
 }
 
-export interface AuditLog {
-  id: string;
-  date: string;
-  actor: string;
-  action: string;
-  resource: string;
-  result: string;
-  summary: string;
-}
-
 export type ApiResponse<T> =
   | { ok: true; codigo?: string; mensaje?: string; requestId?: string; data: T; error?: string }
   | { ok: false; codigo?: string; mensaje?: string; requestId?: string; conflictos?: unknown[]; detalle?: unknown; error?: string };
