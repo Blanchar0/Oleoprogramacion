@@ -36,9 +36,13 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
   const [absences, setAbsences] = useState<any[]>([]);
 
   useEffect(() => {
-    // Esta es una vista global compartida: el personal rota entre supervisores,
-    // por lo que nunca se filtra la programación por el supervisor autenticado.
-    const unsub1 = repository.subscribeProgramming({ date }, setProgrammings);
+    // La racha es global, pero el detalle operativo conserva la vista propia de
+    // cada supervisor para no mezclar sus programaciones con las de otros.
+    const programmingFilters: any = { date };
+    if (user?.role === 'SUPERVISOR' && user.idSupervisor) {
+      programmingFilters.supervisorId = user.idSupervisor;
+    }
+    const unsub1 = repository.subscribeProgramming(programmingFilters, setProgrammings);
     const unsub2 = repository.subscribeMachinery({ date }, setMachineries);
     const unsub3 = repository.subscribeAbsences({ date }, setAbsences);
     return () => { unsub1(); unsub2(); unsub3(); };
@@ -49,7 +53,9 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
   const toggleRowLotes = (progId: string) => setExpandedRowLotes(p => ({ ...p, [progId]: !p[progId] }));
 
   const validProgrammings = programmings.filter(p => p.status === 'CONFIRMADA');
-  const filteredProgrammings = validProgrammings;
+  const filteredProgrammings = user?.role === 'SUPERVISOR'
+    ? validProgrammings.filter(programming => programming.idSupervisor === user.idSupervisor)
+    : validProgrammings;
   const filteredMachineries = machineries;
 
   const groupedProgrammings = useMemo(() => {

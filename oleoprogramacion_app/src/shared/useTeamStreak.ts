@@ -6,6 +6,7 @@ import { calculateTeamProgress, getActiveSupervisors } from './teamStreak';
 
 const EMPTY_HISTORY = { protectedDays: [] as ProgrammingStreakDay[], reports: [] as ProgrammingReport[] };
 const protectingDates = new Set<string>();
+const reportingDates = new Set<string>();
 
 export function useTeamStreak(date: string) {
   const { catalogs, loading: catalogsLoading } = useCatalogs();
@@ -38,6 +39,13 @@ export function useTeamStreak(date: string) {
   const protectedDateSet = useMemo(() => new Set(protectedDays.map(day => day.date)), [protectedDays]);
   const reportsForDate = useMemo(() => reports.filter(report => report.date === date), [reports, date]);
   const protectedToday = protectedDateSet.has(date);
+  const contributingSupervisorIds = useMemo(() => [...new Set(
+    programmings
+      .filter(programming => programming.status === 'CONFIRMADA')
+      .map(programming => programming.idSupervisor || programming.supervisorId || programming.id_supervisor || programming.supervisor_id)
+      .filter(Boolean)
+      .map(String),
+  )], [programmings]);
 
   useEffect(() => {
     if (catalogsLoading || !progress.achieved || protectedToday) return;
@@ -59,6 +67,20 @@ export function useTeamStreak(date: string) {
       protectingDates.delete(date);
     });
   }, [catalogsLoading, date, progress.achieved, progress.availableCount, progress.programmedCount, protectedToday]);
+
+  useEffect(() => {
+    if (!protectedToday || contributingSupervisorIds.length === 0 || reportingDates.has(date)) return;
+    const reportedIds = new Set(reportsForDate.map(report => String(report.supervisorId)));
+    const missingSupervisorIds = contributingSupervisorIds.filter(id => !reportedIds.has(id));
+    if (missingSupervisorIds.length === 0) return;
+
+    reportingDates.add(date);
+    repository.recordAutomaticTeamReports({ date, supervisorIds: missingSupervisorIds })
+      .then(result => {
+        if (!result.ok) console.warn('No fue posible acreditar la racha automáticamente:', result.error);
+      })
+      .finally(() => reportingDates.delete(date));
+  }, [date, protectedToday, contributingSupervisorIds, reportsForDate]);
 
   const reportedSupervisorIds = new Set(reportsForDate.map(report => String(report.supervisorId)));
   const activeReportsForDate = reportsForDate.filter(report => supervisors.some(supervisor => supervisor.id === String(report.supervisorId)));
@@ -82,16 +104,5 @@ export function useTeamStreak(date: string) {
     activeReportsForDate,
     pendingSupervisors,
     ranking,
-    report: async (supervisorId: string) => {
-      if (progress.achieved && !protectedToday) {
-        const protectedResult = await repository.protectTeamDay({
-          date,
-          totalPersonnel: progress.availableCount,
-          programmedPersonnel: progress.programmedCount,
-        });
-        if (!protectedResult.ok) return protectedResult;
-      }
-      return repository.reportTeamProgramming({ date, supervisorId });
-    },
   };
 }

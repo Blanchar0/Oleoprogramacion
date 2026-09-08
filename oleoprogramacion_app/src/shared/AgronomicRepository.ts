@@ -31,7 +31,7 @@ export interface AgronomicRepository {
   subscribeCatalogs(callback: (data: any) => void): Unsubscribe;
   subscribeTeamStreak(callback: (data: { protectedDays: ProgrammingStreakDay[]; reports: ProgrammingReport[] }) => void): Unsubscribe;
   protectTeamDay(input: { date: string; totalPersonnel: number; programmedPersonnel: number }): Promise<Result>;
-  reportTeamProgramming(input: { date: string; supervisorId: string }): Promise<Result>;
+  recordAutomaticTeamReports(input: { date: string; supervisorIds: string[] }): Promise<Result>;
   createPerformanceReference(input: any): Promise<Result>;
   updatePerformanceReference(id: string, input: any): Promise<Result>;
   deletePerformanceReference(id: string): Promise<Result>;
@@ -755,21 +755,22 @@ class SupabaseRepository implements AgronomicRepository {
     }
   }
 
-  async reportTeamProgramming(input: { date: string; supervisorId: string }): Promise<Result> {
-    if (!input.date || !input.supervisorId) {
-      return { ok: false, error: 'Falta la fecha o el supervisor para registrar el reporte.' };
-    }
+  async recordAutomaticTeamReports(input: { date: string; supervisorIds: string[] }): Promise<Result> {
+    const supervisorIds = [...new Set(input.supervisorIds.map(id => String(id).trim()).filter(Boolean))];
+    if (!input.date || supervisorIds.length === 0) return { ok: true };
 
     try {
-      const { error } = await supabase.from('programming_reports').insert({
-        date: input.date,
-        supervisor_id: input.supervisorId,
-        reported_at: new Date().toISOString(),
-      });
+      const { error } = await supabase.from('programming_reports').upsert(
+        supervisorIds.map(supervisorId => ({
+          date: input.date,
+          supervisor_id: supervisorId,
+          reported_at: new Date().toISOString(),
+        })),
+        { onConflict: 'date,supervisor_id', ignoreDuplicates: true },
+      );
       if (error) {
-        if (error.code === '23505') return { ok: true };
         if (error.code === '23503') {
-          return { ok: false, error: 'El día aún no está protegido. El reporte se habilita al alcanzar el 100% global.' };
+          return { ok: false, error: 'El día aún no está protegido.' };
         }
         throw error;
       }
