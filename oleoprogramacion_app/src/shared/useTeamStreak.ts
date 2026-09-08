@@ -7,6 +7,8 @@ import { calculateTeamProgress, getActiveSupervisors } from './teamStreak';
 const EMPTY_HISTORY = { protectedDays: [] as ProgrammingStreakDay[], reports: [] as ProgrammingReport[] };
 
 export function useTeamStreak(date: string) {
+  const currentColombiaDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+  const isCurrentOperationalDay = date === currentColombiaDate;
   const { catalogs, loading: catalogsLoading } = useCatalogs();
   const [programmings, setProgrammings] = useState<any[]>([]);
   const [absences, setAbsences] = useState<any[]>([]);
@@ -47,7 +49,9 @@ export function useTeamStreak(date: string) {
   )], [programmings]);
 
   useEffect(() => {
-    if (catalogsLoading || !progress.achieved || protectedToday) return;
+    // La fecha elegida puede servir para consultar programación futura, pero
+    // nunca para proteger una racha: esta se gana exclusivamente hoy.
+    if (!isCurrentOperationalDay || catalogsLoading || !progress.achieved || protectedToday) return;
     const protectKey = `${date}:${progress.availableCount}:${progress.programmedCount}`;
     if (lastProtectKey.current === protectKey) return;
 
@@ -78,10 +82,12 @@ export function useTeamStreak(date: string) {
               }, ...current.protectedDays],
             });
       });
-  }, [catalogsLoading, date, progress.achieved, progress.availableCount, progress.programmedCount, protectedToday]);
+  }, [catalogsLoading, date, isCurrentOperationalDay, progress.achieved, progress.availableCount, progress.programmedCount, protectedToday]);
 
   useEffect(() => {
-    if (!protectedToday || contributingSupervisorIds.length === 0) return;
+    // El reporte individual se registra al confirmar programación HOY. El
+    // ranking solo lo contará si posteriormente el día queda protegido.
+    if (!isCurrentOperationalDay || contributingSupervisorIds.length === 0) return;
     const reportedIds = new Set(reportsForDate.map(report => String(report.supervisorId)));
     const missingSupervisorIds = contributingSupervisorIds.filter(id => !reportedIds.has(id));
     if (missingSupervisorIds.length === 0) return;
@@ -104,7 +110,7 @@ export function useTeamStreak(date: string) {
           ],
         }));
       });
-  }, [date, protectedToday, contributingSupervisorIds, reportsForDate]);
+  }, [date, isCurrentOperationalDay, contributingSupervisorIds, reportsForDate]);
 
   const reportedSupervisorIds = new Set(reportsForDate.map(report => String(report.supervisorId)));
   const activeReportsForDate = reportsForDate.filter(report => supervisors.some(supervisor => supervisor.id === String(report.supervisorId)));
@@ -123,6 +129,7 @@ export function useTeamStreak(date: string) {
     progress,
     protectedDays,
     protectedToday,
+    isCurrentOperationalDay,
     supervisors,
     reportsForDate,
     activeReportsForDate,

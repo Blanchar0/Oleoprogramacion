@@ -119,7 +119,7 @@ export function TeamStreakCard({ date }: { date: string }) {
         </div>
 
         <div className="mt-4 rounded-xl border border-amber-200 bg-white/65 p-3.5">
-          <div className="flex items-center gap-2 text-sm font-bold text-amber-950"><UsersRound size={17} /><span>Racha activada para {activeReportsForDate.length} de {supervisors.length} supervisores</span></div>
+          <div className="flex items-center gap-2 text-sm font-bold text-amber-950"><UsersRound size={17} /><span>Activación individual hoy: {activeReportsForDate.length} de {supervisors.length} supervisores</span></div>
           {pendingSupervisors.length > 0 && <p className="mt-2 text-sm text-amber-900"><span className="font-bold">Sin programación confirmada: </span>{pendingSupervisors.map(supervisor => supervisor.name).join(', ')}</p>}
           {isAchieved && pendingSupervisors.length === 0 && <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-emerald-800"><CheckCircle2 size={16} /> Todos acreditaron racha hoy.</p>}
         </div>

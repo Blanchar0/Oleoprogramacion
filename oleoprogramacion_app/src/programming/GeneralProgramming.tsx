@@ -11,7 +11,8 @@ import { TeamStreakCard } from '../shared/components/TeamStreakCard';
 export default function GeneralProgramming({ overrideDate }: { overrideDate?: string }) {
   const { user } = useAuth();
   const { catalogs, loading } = useCatalogs();
-  const [date, setDate] = useState(overrideDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }));
+  const operationalDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+  const [date, setDate] = useState(overrideDate || operationalDate);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [expandedRowPersonnel, setExpandedRowPersonnel] = useState<Record<string, boolean>>({});
@@ -363,7 +364,8 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
         </div>
       </div>
 
-      <TeamStreakCard date={date} />
+      {/* La tabla puede consultar cualquier fecha; racha y ranking siempre son del día operativo actual. */}
+      <TeamStreakCard date={operationalDate} />
       
       {groupedProgrammings.length === 0 ? (
         <div className="p-8 text-center bg-white rounded-xl border border-gray-200 text-gray-400 text-sm">
