@@ -6,6 +6,7 @@ import { repository } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
 import { useNavigate } from 'react-router-dom';
 import { calculateDuration } from '../machinery/Machinery';
+import { TeamStreakCard } from '../shared/components/TeamStreakCard';
 
 export default function GeneralProgramming({ overrideDate }: { overrideDate?: string }) {
   const { user } = useAuth();
@@ -35,9 +36,9 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
   const [absences, setAbsences] = useState<any[]>([]);
 
   useEffect(() => {
-    const progFilters: any = { date };
-    if (user?.role === 'SUPERVISOR') progFilters.supervisorId = user.idSupervisor;
-    const unsub1 = repository.subscribeProgramming(progFilters, setProgrammings);
+    // Esta es una vista global compartida: el personal rota entre supervisores,
+    // por lo que nunca se filtra la programación por el supervisor autenticado.
+    const unsub1 = repository.subscribeProgramming({ date }, setProgrammings);
     const unsub2 = repository.subscribeMachinery({ date }, setMachineries);
     const unsub3 = repository.subscribeAbsences({ date }, setAbsences);
     return () => { unsub1(); unsub2(); unsub3(); };
@@ -48,7 +49,7 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
   const toggleRowLotes = (progId: string) => setExpandedRowLotes(p => ({ ...p, [progId]: !p[progId] }));
 
   const validProgrammings = programmings.filter(p => p.status === 'CONFIRMADA');
-  const filteredProgrammings = user?.role === 'SUPERVISOR' ? validProgrammings.filter(p => p.idSupervisor === user.idSupervisor) : validProgrammings;
+  const filteredProgrammings = validProgrammings;
   const filteredMachineries = machineries;
 
   const groupedProgrammings = useMemo(() => {
@@ -60,11 +61,8 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
     });
     return Object.entries(groups).map(([supId, progs]) => {
       const sup = catalogs.supervisors?.find((s:any) => s.id === supId);
-      const uniquePersonnel = new Set();
       
       const enrichedProgs = progs.map(p => {
-        (p.personnelIds||[]).forEach((id: string) => uniquePersonnel.add(id));
-        
         const labor = catalogs.labors?.find((l:any) => l.id === p.laborId);
         const activity = catalogs.activities?.find((a:any) => a.id === p.activityId);
         const ref = catalogs.performanceReferences?.find((r:any) => r.activityId === p.activityId);
@@ -131,7 +129,7 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
         };
       });
 
-      return { supervisorId: supId, supervisorName: sup?.name || 'Otro', programmings: enrichedProgs, personnelCount: uniquePersonnel.size };
+      return { supervisorId: supId, supervisorName: sup?.name || 'Otro', programmings: enrichedProgs };
     });
   }, [filteredProgrammings, catalogs]);
 
@@ -241,7 +239,7 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
         <!-- SUPERVISOR BANNER -->
         <tr>
           <td colspan="10" class="sup-row">
-            &nbsp;SUPERVISOR: ${group.supervisorName.toUpperCase()} &nbsp;|&nbsp; ${group.personnelCount} PERSONAS ASIGNADAS
+            &nbsp;SUPERVISOR: ${group.supervisorName.toUpperCase()}
           </td>
         </tr>
         <!-- ENCABEZADOS DE COLUMNA -->
@@ -259,10 +257,7 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
         </tr>
       `;
 
-      let groupPersonnelSum = 0;
-
       group.programmings.forEach((p: any, idx: number) => {
-        groupPersonnelSum += p.numPeople;
         const rowClass = idx % 2 === 1 ? 'alt-row' : '';
 
         // Nombres completos, documento y cargo de cada persona asignada
@@ -295,21 +290,7 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
         `;
       });
 
-      // Subtotal de asignaciones del supervisor
-      html += `
-        <tr>
-          <td colspan="4" class="subtotal-row" style="text-align: right;">
-            TOTAL ASIGNACIONES DE ${group.supervisorName.toUpperCase()}:
-          </td>
-          <td class="subtotal-row" style="text-align: center;">
-            ${groupPersonnelSum}
-          </td>
-          <td colspan="5" class="subtotal-row">
-            ${group.personnelCount} colaboradores únicos
-          </td>
-        </tr>
-        <tr><td colspan="10" style="height: 10px; border: none;"></td></tr>
-      `;
+      html += `<tr><td colspan="10" style="height: 10px; border: none;"></td></tr>`;
     });
 
     // Total general
@@ -375,6 +356,8 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
           </div>
         </div>
       </div>
+
+      <TeamStreakCard date={date} />
       
       {groupedProgrammings.length === 0 ? (
         <div className="p-8 text-center bg-white rounded-xl border border-gray-200 text-gray-400 text-sm">
@@ -395,9 +378,6 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
                 )}
                 <span className="tracking-wide">Supervisor: {group.supervisorName.toUpperCase()}</span>
               </div>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-[#1B5E20]/15 text-[#1B5E20]">
-                {group.personnelCount} personas asignadas
-              </span>
             </div>
 
             {expandedGroups[group.supervisorId] !== false && (

@@ -3,6 +3,7 @@ import { SyncStatusBadge } from './SyncStatusBadge';
 import { InstallPrompt } from './InstallPrompt';
 import NotificationCenter from './NotificationCenter';
 import SupervisorAlertBanner from './SupervisorAlertBanner';
+import { TeamStreakIndicator } from './TeamStreakIndicator';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { Navigate, Outlet, Link, useLocation } from 'react-router-dom';
@@ -173,6 +174,7 @@ export default function MainLayout() {
           <SyncIndicator />
         </div>
         <div className="flex items-center gap-2">
+          <TeamStreakIndicator />
           <NotificationCenter />
           <button onClick={() => logout()} className="text-gray-300 hover:text-white p-1 cursor-pointer" title="Cerrar sesión">
             <LogOut size={20} />
@@ -251,6 +253,7 @@ export default function MainLayout() {
             {filteredNav.find(n => n.href === location.pathname)?.name || 'Oleoflores'}
           </h1>
           <div className="flex items-center gap-3">
+            <TeamStreakIndicator />
             <NotificationCenter />
             <SyncStatusBadge />
             <div className="text-sm text-gray-500">

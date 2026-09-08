@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { offlineStore } from './offlineStore';
 import { syncManager } from './syncManager';
+import type { ProgrammingReport, ProgrammingStreakDay } from '../types';
 
 export interface Result {
   ok: boolean;
@@ -28,6 +29,9 @@ export interface AgronomicRepository {
   deleteMachineryOperation(id: string): Promise<Result>;
 
   subscribeCatalogs(callback: (data: any) => void): Unsubscribe;
+  subscribeTeamStreak(callback: (data: { protectedDays: ProgrammingStreakDay[]; reports: ProgrammingReport[] }) => void): Unsubscribe;
+  protectTeamDay(input: { date: string; totalPersonnel: number; programmedPersonnel: number }): Promise<Result>;
+  reportTeamProgramming(input: { date: string; supervisorId: string }): Promise<Result>;
   createPerformanceReference(input: any): Promise<Result>;
   updatePerformanceReference(id: string, input: any): Promise<Result>;
   deletePerformanceReference(id: string): Promise<Result>;
@@ -681,6 +685,100 @@ class SupabaseRepository implements AgronomicRepository {
     }
   }
 
+  // -- SHARED TEAM STREAK --
+  // Tablas: public.programming_streak_days y public.programming_reports.
+  // Los reportes tienen FK a un día ya protegido; no se actualizan totales ni fechas.
+  subscribeTeamStreak(callback: (data: { protectedDays: ProgrammingStreakDay[]; reports: ProgrammingReport[] }) => void): Unsubscribe {
+    const fetchData = async () => {
+      const [protectedDaysResult, reportsResult] = await Promise.all([
+        supabase.from('programming_streak_days').select('date,total_personnel,programmed_personnel,completed_at').order('date', { ascending: false }),
+        supabase.from('programming_reports').select('date,supervisor_id,reported_at'),
+      ]);
+
+      if (protectedDaysResult.error || reportsResult.error) {
+        console.warn(
+          'Error al cargar la racha compartida:',
+          protectedDaysResult.error?.message || reportsResult.error?.message,
+        );
+        return;
+      }
+
+      callback({
+        protectedDays: (protectedDaysResult.data || []).map((row: any) => ({
+          date: String(row.date),
+          totalPersonnel: Number(row.total_personnel),
+          programmedPersonnel: Number(row.programmed_personnel),
+          completedAt: row.completed_at,
+        })),
+        reports: (reportsResult.data || []).map((row: any) => ({
+          date: String(row.date),
+          supervisorId: String(row.supervisor_id),
+          reportedAt: row.reported_at,
+        })),
+      });
+    };
+
+    fetchData();
+
+    const channelId = `public:programming-streak:${crypto.randomUUID()}`;
+    const channel = supabase
+      .channel(channelId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'programming_streak_days' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'programming_reports' }, fetchData)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }
+
+  async protectTeamDay(input: { date: string; totalPersonnel: number; programmedPersonnel: number }): Promise<Result> {
+    if (!input.date || input.totalPersonnel <= 0 || input.programmedPersonnel !== input.totalPersonnel) {
+      return { ok: false, error: 'Solo se protege un día cuando todo el personal disponible está programado.' };
+    }
+
+    try {
+      // INSERT (no UPDATE): el trigger lock_programming_streak_day impide mutar un día ya protegido.
+      const { error } = await supabase.from('programming_streak_days').insert({
+        date: input.date,
+        total_personnel: input.totalPersonnel,
+        programmed_personnel: input.programmedPersonnel,
+        completed_at: new Date().toISOString(),
+      });
+      if (error) {
+        if (error.code === '23505') return { ok: true };
+        throw error;
+      }
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  async reportTeamProgramming(input: { date: string; supervisorId: string }): Promise<Result> {
+    if (!input.date || !input.supervisorId) {
+      return { ok: false, error: 'Falta la fecha o el supervisor para registrar el reporte.' };
+    }
+
+    try {
+      const { error } = await supabase.from('programming_reports').insert({
+        date: input.date,
+        supervisor_id: input.supervisorId,
+        reported_at: new Date().toISOString(),
+      });
+      if (error) {
+        if (error.code === '23505') return { ok: true };
+        if (error.code === '23503') {
+          return { ok: false, error: 'El día aún no está protegido. El reporte se habilita al alcanzar el 100% global.' };
+        }
+        throw error;
+      }
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  }
+
   // -- CATALOGS --
   subscribeCatalogs(callback: (data: any) => void): Unsubscribe {
     // 1. Cargar inmediatamente catálogos de IndexedDB si existen
@@ -716,8 +814,8 @@ class SupabaseRepository implements AgronomicRepository {
 
         const mappedUsers = (users || []).map((u: any) => ({
           ...u,
-          idSupervisor: u.id_supervisor,
-          supervisorId: u.supervisor_id,
+          idSupervisor: u.id_supervisor || u.supervisor_id,
+          supervisorId: u.supervisor_id || u.id_supervisor,
         }));
 
         const mappedActivities = (activities || []).map((a: any) => ({

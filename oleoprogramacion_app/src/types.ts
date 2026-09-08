@@ -96,6 +96,19 @@ export interface Location {
 
 export type ProgrammingStatus = 'PENDIENTE' | 'CONFIRMADA' | 'RECHAZADA';
 
+export interface ProgrammingStreakDay {
+  date: string;
+  totalPersonnel: number;
+  programmedPersonnel: number;
+  completedAt: string;
+}
+
+export interface ProgrammingReport {
+  date: string;
+  supervisorId: string;
+  reportedAt: string;
+}
+
 export interface Programming {
   id: string;
   date: string; // YYYY-MM-DD
