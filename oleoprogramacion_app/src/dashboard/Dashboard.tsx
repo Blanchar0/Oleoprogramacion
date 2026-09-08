@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, CartesianGrid
+  PieChart, Pie, Cell, CartesianGrid, Legend
 } from 'recharts';
 import { 
   getSupervisorsReportingStatus, 
@@ -746,6 +746,59 @@ export default function Dashboard() {
         .filter(item => item.value > 0)
         .sort((a, b) => b.value - a.value);
 
+      // Un único gráfico apilado: cada zona conserva el total de personas y el
+      // color de cada tramo revela cómo se distribuyen por labor. Una persona se
+      // cuenta una sola vez dentro de la misma zona, aun si aparece en varios
+      // registros confirmados de esa zona.
+      const zoneAssignments = new Map<string, Map<string, { laborName: string; personnel: Map<string, string> }>>();
+      const getProgrammingZone = (programming: any) => {
+        const snapshotZone = String(programming.zoneSnapshot || '').split(' - ')[0].trim();
+        if (snapshotZone) return snapshotZone;
+
+        const locationIds = programming.locationIds || String(programming.locationId || '').split(',').map((id: string) => id.trim()).filter(Boolean);
+        const location = (catalogs.locations || []).find((item: any) => locationIds.includes(item.id));
+        return location?.zone || 'Sin zona';
+      };
+
+      filteredProgrammings.forEach(programming => {
+        const zone = getProgrammingZone(programming);
+        const labor = (catalogs.labors || []).find((item: any) => item.id === programming.laborId);
+        const laborId = String(programming.laborId || 'SIN_LABOR');
+        const laborName = labor?.name || 'Otra labor';
+        if (!zoneAssignments.has(zone)) zoneAssignments.set(zone, new Map());
+        const byLabor = zoneAssignments.get(zone)!;
+        if (!byLabor.has(laborId)) byLabor.set(laborId, { laborName, personnel: new Map() });
+
+        (programming.personnelIds || []).forEach((rawId: string) => {
+          const person = activeProgrammableList.find((item: any) => matchPerson(item, rawId));
+          const personKey = String(person?.documento || person?.id || rawId);
+          // El primer registro confirmado asigna la labor para evitar duplicar
+          // una persona dentro de la misma zona.
+          const alreadyAssigned = [...byLabor.values()].some(entry => entry.personnel.has(personKey));
+          if (!alreadyAssigned) byLabor.get(laborId)?.personnel.set(personKey, personKey);
+        });
+      });
+
+      const zoneLaborIds = [...new Set(
+        [...zoneAssignments.values()].flatMap(byLabor => [...byLabor.keys()]),
+      )];
+      const zoneLaborSeries = zoneLaborIds.map((laborId, index) => {
+        const sample = [...zoneAssignments.values()].map(byLabor => byLabor.get(laborId)).find(Boolean);
+        return { key: `labor_${index}`, laborId, name: sample?.laborName || 'Otra labor', fill: palette[index % palette.length] };
+      });
+      const chartZoneLabor = [...zoneAssignments.entries()]
+        .map(([zone, byLabor]) => {
+          const row: Record<string, string | number> = { zone, total: 0 };
+          zoneLaborSeries.forEach(series => {
+            const count = byLabor.get(series.laborId)?.personnel.size || 0;
+            row[series.key] = count;
+            row.total = Number(row.total) + count;
+          });
+          return row;
+        })
+        .filter(row => Number(row.total) > 0)
+        .sort((a, b) => Number(b.total) - Number(a.total));
+
       // 2. Chart: Despliegue por Supervisor
       const bySupMap = new Map<string, Set<string>>();
       filteredProgrammings.forEach(p => {
@@ -856,6 +909,8 @@ export default function Dashboard() {
         programmedCount,
         utilRate: Number(utilRate.toFixed(1)),
         chartLabor,
+        chartZoneLabor,
+        zoneLaborSeries,
         chartAbsences,
         chartMachinery,
         chartBySup,
@@ -1082,6 +1137,47 @@ export default function Dashboard() {
 
         {/* Active Novelties Banner */}
         <NovedadesPanel />
+
+        {/* Distribución consolidada por zona y labor */}
+        <Card className="border-forest-900/10 shadow-xs">
+          <CardHeader className="pb-2 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+            <div>
+              <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
+                <Layers size={18} className="text-forest-700" /> Personal programado por zona y labor
+              </CardTitle>
+              <p className="text-xs text-gray-500 mt-0.5">La longitud total muestra personas por zona; cada color representa su labor programada.</p>
+            </div>
+            <span className="w-fit px-2.5 py-1 rounded-lg text-xs font-bold bg-forest-50 text-forest-800 border border-forest-200">
+              {stats.chartZoneLabor.length} zona{stats.chartZoneLabor.length === 1 ? '' : 's'}
+            </span>
+          </CardHeader>
+          <CardContent className="pt-2">
+            {stats.chartZoneLabor.length === 0 ? (
+              <div className="h-[280px] flex items-center justify-center text-sm text-gray-400">
+                No hay personal confirmado por zona para esta fecha.
+              </div>
+            ) : (
+              <div className="w-full" style={{ height: Math.max(300, stats.chartZoneLabor.length * 52 + 95) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.chartZoneLabor} layout="vertical" margin={{ top: 8, right: 24, left: 24, bottom: 26 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis dataKey="zone" type="category" width={120} tick={{ fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#123C2E', color: '#fff', borderRadius: '8px', border: 'none' }}
+                      formatter={(value: any, name: any) => [`${value} persona${Number(value) === 1 ? '' : 's'}`, name]}
+                      labelFormatter={(zone: string) => `Zona: ${zone}`}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
+                    {stats.zoneLaborSeries.map((series: any) => (
+                      <Bar key={series.key} dataKey={series.key} name={series.name} stackId="labor" fill={series.fill} radius={[0, 0, 0, 0]} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Charts Row 1: Personas por Labor & Resumen de Ausentismo */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
