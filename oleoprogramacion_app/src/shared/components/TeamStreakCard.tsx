@@ -1,4 +1,4 @@
-import { CheckCircle2, Flame, Snowflake, Trophy, UsersRound } from 'lucide-react';
+import { CheckCircle2, Flame, Snowflake, TriangleAlert, Trophy, UsersRound } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { useTeamStreak } from '../useTeamStreak';
 
@@ -19,6 +19,19 @@ function Ranking({ ranking, limit }: { ranking: Array<{ id: string; name: string
   );
 }
 
+function StreakStatusIcon({ achieved, compact = false }: { achieved: boolean; compact?: boolean }) {
+  const iconSize = compact ? 25 : 36;
+  if (achieved) return <Flame size={iconSize} fill="currentColor" aria-hidden="true" className="text-orange-500" style={{ animation: 'streak-flame 1.4s ease-in-out infinite' }} />;
+
+  return (
+    <div className={`relative flex items-center justify-center ${compact ? 'h-8 w-8' : 'h-11 w-11'}`} aria-hidden="true">
+      <Flame size={iconSize} fill="currentColor" className="text-sky-500" />
+      <Snowflake size={compact ? 14 : 19} className="absolute -bottom-1 -left-1 text-blue-700 drop-shadow-sm" />
+      <TriangleAlert size={compact ? 13 : 16} className="absolute -right-2 -top-2 rounded-full bg-amber-100 text-amber-700" />
+    </div>
+  );
+}
+
 export function TeamStreakCard({ date }: { date: string }) {
   const { user } = useAuth();
   const {
@@ -30,11 +43,11 @@ export function TeamStreakCard({ date }: { date: string }) {
     activeReportsForDate,
     pendingSupervisors,
     ranking,
+    persistenceError,
   } = useTeamStreak(date);
 
   const isSupervisor = user?.role === 'SUPERVISOR';
   const isAchieved = progress.achieved || protectedToday;
-  const FlameIcon = isAchieved ? Flame : Snowflake;
 
   // Los supervisores ven únicamente el resumen útil para iniciar su jornada.
   if (isSupervisor) {
@@ -43,7 +56,7 @@ export function TeamStreakCard({ date }: { date: string }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${isAchieved ? 'bg-orange-100 text-orange-500' : 'bg-slate-100 text-slate-500'}`}>
-              <FlameIcon size={25} fill={isAchieved ? 'currentColor' : 'none'} aria-hidden="true" className={isAchieved ? '' : 'text-slate-500'} style={isAchieved ? { animation: 'streak-flame 1.4s ease-in-out infinite' } : undefined} />
+              <StreakStatusIcon achieved={isAchieved} compact />
             </div>
             <div>
               <h2 className="font-extrabold text-amber-950">Racha del equipo</h2>
@@ -67,6 +80,8 @@ export function TeamStreakCard({ date }: { date: string }) {
           <p className="mt-1.5 text-xs font-semibold text-amber-950">{progress.programmedCount} de {progress.availableCount} personas disponibles programadas</p>
         </div>
 
+        {persistenceError && <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">No se pudo sincronizar la racha: {persistenceError}</p>}
+
         <div className="mt-4 border-t border-amber-200 pt-3">
           <div className="mb-2 flex items-center gap-2 text-sm font-extrabold text-amber-950"><Trophy size={17} className="text-amber-500" /> Top 3 de la racha</div>
           <Ranking ranking={ranking} limit={3} />
@@ -81,7 +96,7 @@ export function TeamStreakCard({ date }: { date: string }) {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 items-start gap-4">
             <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 shadow-sm ${isAchieved ? 'border-orange-300 bg-orange-100' : 'border-slate-300 bg-slate-100'}`}>
-              <FlameIcon aria-hidden="true" className={isAchieved ? 'h-9 w-9 text-orange-500' : 'h-8 w-8 text-slate-500'} fill={isAchieved ? 'currentColor' : 'none'} style={isAchieved ? { animation: 'streak-flame 1.4s ease-in-out infinite' } : undefined} />
+              <StreakStatusIcon achieved={isAchieved} />
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -108,6 +123,7 @@ export function TeamStreakCard({ date }: { date: string }) {
           {pendingSupervisors.length > 0 && <p className="mt-2 text-sm text-amber-900"><span className="font-bold">Sin programación confirmada: </span>{pendingSupervisors.map(supervisor => supervisor.name).join(', ')}</p>}
           {isAchieved && pendingSupervisors.length === 0 && <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-emerald-800"><CheckCircle2 size={16} /> Todos acreditaron racha hoy.</p>}
         </div>
+        {persistenceError && <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">No se pudo sincronizar la racha: {persistenceError}</p>}
       </div>
 
       <div className="border-t border-amber-200 bg-white/70 p-5 md:px-6">

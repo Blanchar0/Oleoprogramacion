@@ -746,10 +746,10 @@ class SupabaseRepository implements AgronomicRepository {
         completed_at: new Date().toISOString(),
       });
       if (error) {
-        if (error.code === '23505') return { ok: true };
+        if (error.code === '23505') return { ok: true, data: { date: input.date, totalPersonnel: input.totalPersonnel, programmedPersonnel: input.programmedPersonnel } };
         throw error;
       }
-      return { ok: true };
+      return { ok: true, data: { date: input.date, totalPersonnel: input.totalPersonnel, programmedPersonnel: input.programmedPersonnel } };
     } catch (e: any) {
       return { ok: false, error: e.message };
     }
@@ -757,7 +757,7 @@ class SupabaseRepository implements AgronomicRepository {
 
   async recordAutomaticTeamReports(input: { date: string; supervisorIds: string[] }): Promise<Result> {
     const supervisorIds = [...new Set(input.supervisorIds.map(id => String(id).trim()).filter(Boolean))];
-    if (!input.date || supervisorIds.length === 0) return { ok: true };
+    if (!input.date || supervisorIds.length === 0) return { ok: true, data: [] };
 
     try {
       const { error } = await supabase.from('programming_reports').upsert(
@@ -774,7 +774,7 @@ class SupabaseRepository implements AgronomicRepository {
         }
         throw error;
       }
-      return { ok: true };
+      return { ok: true, data: supervisorIds };
     } catch (e: any) {
       return { ok: false, error: e.message };
     }

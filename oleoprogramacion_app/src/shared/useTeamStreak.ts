@@ -5,8 +5,6 @@ import { useCatalogs } from './useCatalogs';
 import { calculateTeamProgress, getActiveSupervisors } from './teamStreak';
 
 const EMPTY_HISTORY = { protectedDays: [] as ProgrammingStreakDay[], reports: [] as ProgrammingReport[] };
-const protectingDates = new Set<string>();
-const reportingDates = new Set<string>();
 
 export function useTeamStreak(date: string) {
   const { catalogs, loading: catalogsLoading } = useCatalogs();
@@ -14,6 +12,7 @@ export function useTeamStreak(date: string) {
   const [absences, setAbsences] = useState<any[]>([]);
   const [machineries, setMachineries] = useState<any[]>([]);
   const [history, setHistory] = useState(EMPTY_HISTORY);
+  const [persistenceError, setPersistenceError] = useState('');
   const lastProtectKey = useRef('');
 
   useEffect(() => {
@@ -50,36 +49,61 @@ export function useTeamStreak(date: string) {
   useEffect(() => {
     if (catalogsLoading || !progress.achieved || protectedToday) return;
     const protectKey = `${date}:${progress.availableCount}:${progress.programmedCount}`;
-    if (lastProtectKey.current === protectKey || protectingDates.has(date)) return;
+    if (lastProtectKey.current === protectKey) return;
 
     lastProtectKey.current = protectKey;
-    protectingDates.add(date);
     repository.protectTeamDay({
       date,
       totalPersonnel: progress.availableCount,
       programmedPersonnel: progress.programmedCount,
-    }).then(result => {
-      if (!result.ok) {
-        lastProtectKey.current = '';
-        console.warn('No fue posible proteger la racha:', result.error);
-      }
-    }).finally(() => {
-      protectingDates.delete(date);
-    });
+      }).then(result => {
+        if (!result.ok) {
+          lastProtectKey.current = '';
+          console.warn('No fue posible proteger la racha:', result.error);
+          setPersistenceError(result.error || 'No fue posible guardar la racha en Supabase.');
+          return;
+        }
+        // La fila ya fue confirmada en Supabase. Esto evita depender
+        // exclusivamente de la notificación Realtime para actualizar el contador.
+        setPersistenceError('');
+        setHistory(current => current.protectedDays.some(day => day.date === date)
+          ? current
+          : {
+              ...current,
+              protectedDays: [{
+                date,
+                totalPersonnel: progress.availableCount,
+                programmedPersonnel: progress.programmedCount,
+                completedAt: new Date().toISOString(),
+              }, ...current.protectedDays],
+            });
+      });
   }, [catalogsLoading, date, progress.achieved, progress.availableCount, progress.programmedCount, protectedToday]);
 
   useEffect(() => {
-    if (!protectedToday || contributingSupervisorIds.length === 0 || reportingDates.has(date)) return;
+    if (!protectedToday || contributingSupervisorIds.length === 0) return;
     const reportedIds = new Set(reportsForDate.map(report => String(report.supervisorId)));
     const missingSupervisorIds = contributingSupervisorIds.filter(id => !reportedIds.has(id));
     if (missingSupervisorIds.length === 0) return;
 
-    reportingDates.add(date);
     repository.recordAutomaticTeamReports({ date, supervisorIds: missingSupervisorIds })
       .then(result => {
-        if (!result.ok) console.warn('No fue posible acreditar la racha automáticamente:', result.error);
-      })
-      .finally(() => reportingDates.delete(date));
+        if (!result.ok) {
+          console.warn('No fue posible acreditar la racha automáticamente:', result.error);
+          setPersistenceError(result.error || 'No fue posible acreditar la racha de los supervisores.');
+          return;
+        }
+        setPersistenceError('');
+        setHistory(current => ({
+          ...current,
+          reports: [
+            ...current.reports,
+            ...missingSupervisorIds
+              .filter(id => !current.reports.some(report => report.date === date && String(report.supervisorId) === id))
+              .map(supervisorId => ({ date, supervisorId, reportedAt: new Date().toISOString() })),
+          ],
+        }));
+      });
   }, [date, protectedToday, contributingSupervisorIds, reportsForDate]);
 
   const reportedSupervisorIds = new Set(reportsForDate.map(report => String(report.supervisorId)));
@@ -104,5 +128,6 @@ export function useTeamStreak(date: string) {
     activeReportsForDate,
     pendingSupervisors,
     ranking,
+    persistenceError,
   };
 }
