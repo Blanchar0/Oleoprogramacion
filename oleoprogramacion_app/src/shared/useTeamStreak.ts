@@ -35,7 +35,13 @@ export function useTeamStreak(date: string) {
     [date, catalogs, programmings, absences, machineries],
   );
   const supervisors = useMemo(() => getActiveSupervisors(catalogs), [catalogs]);
-  const protectedDays = history.protectedDays || [];
+  // Nunca se cuentan días futuros, incluso si quedaron registros históricos
+  // creados antes de aplicar el bloqueo de base de datos. El día se gana en su
+  // propia fecha, al alcanzar allí el 100%.
+  const protectedDays = useMemo(
+    () => (history.protectedDays || []).filter(day => day.date <= currentColombiaDate),
+    [history.protectedDays, currentColombiaDate],
+  );
   const reports = history.reports || [];
   const protectedDateSet = useMemo(() => new Set(protectedDays.map(day => day.date)), [protectedDays]);
   const reportsForDate = useMemo(() => reports.filter(report => report.date === date), [reports, date]);
