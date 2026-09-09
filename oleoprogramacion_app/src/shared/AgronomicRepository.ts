@@ -12,6 +12,12 @@ export interface Result {
 
 export type Unsubscribe = () => void;
 
+function colombiaDateFromTimestamp(value: string | null | undefined) {
+  const timestamp = new Date(value || '');
+  if (Number.isNaN(timestamp.getTime())) return '';
+  return timestamp.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+}
+
 export interface AgronomicRepository {
   subscribeProgramming(filters: any, callback: (data: any[]) => void): Unsubscribe;
   createProgramming(input: any): Promise<Result>;
@@ -31,7 +37,7 @@ export interface AgronomicRepository {
   subscribeCatalogs(callback: (data: any) => void): Unsubscribe;
   subscribeTeamStreak(callback: (data: { protectedDays: ProgrammingStreakDay[]; reports: ProgrammingReport[] }) => void): Unsubscribe;
   protectTeamDay(input: { date: string; totalPersonnel: number; programmedPersonnel: number }): Promise<Result>;
-  recordAutomaticTeamReports(input: { date: string; supervisorIds: string[] }): Promise<Result>;
+  recordAutomaticTeamReports(input: { date: string; reports: Array<{ supervisorId: string; reportedAt: string }> }): Promise<Result>;
   createPerformanceReference(input: any): Promise<Result>;
   updatePerformanceReference(id: string, input: any): Promise<Result>;
   deletePerformanceReference(id: string): Promise<Result>;
@@ -738,15 +744,37 @@ class SupabaseRepository implements AgronomicRepository {
     }
 
     try {
-      // INSERT (no UPDATE): el trigger lock_programming_streak_day impide mutar un día ya protegido.
-      const { error } = await supabase.from('programming_streak_days').insert({
+      const insertProtectedDay = () => supabase.from('programming_streak_days').insert({
         date: input.date,
         total_personnel: input.totalPersonnel,
         programmed_personnel: input.programmedPersonnel,
         completed_at: new Date().toISOString(),
       });
+      // INSERT (no UPDATE): un día protegido no se puede mutar.
+      let { error } = await insertProtectedDay();
       if (error) {
-        if (error.code === '23505') return { ok: true, data: { date: input.date, totalPersonnel: input.totalPersonnel, programmedPersonnel: input.programmedPersonnel } };
+        if (error.code === '23505') {
+          const { data: existing, error: existingError } = await supabase
+            .from('programming_streak_days')
+            .select('completed_at')
+            .eq('date', input.date)
+            .maybeSingle();
+          if (existingError) throw existingError;
+
+          // Corrige exclusivamente un residuo de la versión anterior: una fila
+          // creada antes de la fecha que pretendía proteger. Nunca se toca una
+          // protección registrada en su propio día.
+          if (existing && colombiaDateFromTimestamp(existing.completed_at) < input.date) {
+            const { error: deleteError } = await supabase
+              .from('programming_streak_days')
+              .delete()
+              .eq('date', input.date);
+            if (deleteError) throw deleteError;
+            ({ error } = await insertProtectedDay());
+            if (error) throw error;
+          }
+          return { ok: true, data: { date: input.date, totalPersonnel: input.totalPersonnel, programmedPersonnel: input.programmedPersonnel } };
+        }
         throw error;
       }
       return { ok: true, data: { date: input.date, totalPersonnel: input.totalPersonnel, programmedPersonnel: input.programmedPersonnel } };
@@ -755,16 +783,25 @@ class SupabaseRepository implements AgronomicRepository {
     }
   }
 
-  async recordAutomaticTeamReports(input: { date: string; supervisorIds: string[] }): Promise<Result> {
-    const supervisorIds = [...new Set(input.supervisorIds.map(id => String(id).trim()).filter(Boolean))];
-    if (!input.date || supervisorIds.length === 0) return { ok: true, data: [] };
+  async recordAutomaticTeamReports(input: { date: string; reports: Array<{ supervisorId: string; reportedAt: string }> }): Promise<Result> {
+    const reportsBySupervisor = new Map<string, string>();
+    input.reports.forEach(report => {
+      const supervisorId = String(report.supervisorId || '').trim();
+      if (!supervisorId) return;
+      const reportedAt = report.reportedAt || new Date().toISOString();
+      const previous = reportsBySupervisor.get(supervisorId);
+      if (!previous || new Date(reportedAt).getTime() < new Date(previous).getTime()) {
+        reportsBySupervisor.set(supervisorId, reportedAt);
+      }
+    });
+    if (!input.date || reportsBySupervisor.size === 0) return { ok: true, data: [] };
 
     try {
       const { error } = await supabase.from('programming_reports').upsert(
-        supervisorIds.map(supervisorId => ({
+        [...reportsBySupervisor.entries()].map(([supervisorId, reportedAt]) => ({
           date: input.date,
           supervisor_id: supervisorId,
-          reported_at: new Date().toISOString(),
+          reported_at: reportedAt,
         })),
         { onConflict: 'date,supervisor_id', ignoreDuplicates: true },
       );
@@ -774,7 +811,7 @@ class SupabaseRepository implements AgronomicRepository {
         }
         throw error;
       }
-      return { ok: true, data: supervisorIds };
+      return { ok: true, data: [...reportsBySupervisor.keys()] };
     } catch (e: any) {
       return { ok: false, error: e.message };
     }

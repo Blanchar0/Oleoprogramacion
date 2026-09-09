@@ -6,6 +6,20 @@ import { calculateTeamProgress, getActiveSupervisors } from './teamStreak';
 
 const EMPTY_HISTORY = { protectedDays: [] as ProgrammingStreakDay[], reports: [] as ProgrammingReport[] };
 
+function colombiaDateFromTimestamp(value: string) {
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return '';
+  return timestamp.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+}
+
+function earliestTimestamp(first: string, candidate: string) {
+  const firstTime = new Date(first).getTime();
+  const candidateTime = new Date(candidate).getTime();
+  if (Number.isNaN(firstTime)) return candidate;
+  if (Number.isNaN(candidateTime)) return first;
+  return candidateTime < firstTime ? candidate : first;
+}
+
 export function useTeamStreak(date: string) {
   const currentColombiaDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
   const isCurrentOperationalDay = date === currentColombiaDate;
@@ -35,24 +49,34 @@ export function useTeamStreak(date: string) {
     [date, catalogs, programmings, absences, machineries],
   );
   const supervisors = useMemo(() => getActiveSupervisors(catalogs), [catalogs]);
-  // Nunca se cuentan días futuros, incluso si quedaron registros históricos
-  // creados antes de aplicar el bloqueo de base de datos. El día se gana en su
-  // propia fecha, al alcanzar allí el 100%.
+  // Nunca se cuentan días futuros ni filas imposibles creadas antes de su
+  // propia fecha. Estas últimas provenían de la versión anterior y no son una
+  // meta realmente cumplida.
   const protectedDays = useMemo(
-    () => (history.protectedDays || []).filter(day => day.date <= currentColombiaDate),
+    () => (history.protectedDays || []).filter(day => (
+      day.date <= currentColombiaDate
+      && colombiaDateFromTimestamp(day.completedAt) >= day.date
+    )),
     [history.protectedDays, currentColombiaDate],
   );
   const reports = history.reports || [];
   const protectedDateSet = useMemo(() => new Set(protectedDays.map(day => day.date)), [protectedDays]);
   const reportsForDate = useMemo(() => reports.filter(report => report.date === date), [reports, date]);
   const protectedToday = protectedDateSet.has(date);
-  const contributingSupervisorIds = useMemo(() => [...new Set(
+  const contributingReports = useMemo(() => {
+    const firstReportBySupervisor = new Map<string, string>();
     programmings
       .filter(programming => programming.status === 'CONFIRMADA')
-      .map(programming => programming.idSupervisor || programming.supervisorId || programming.id_supervisor || programming.supervisor_id)
-      .filter(Boolean)
-      .map(String),
-  )], [programmings]);
+      .forEach(programming => {
+        const supervisorId = programming.idSupervisor || programming.supervisorId || programming.id_supervisor || programming.supervisor_id;
+        if (!supervisorId) return;
+        const id = String(supervisorId);
+        const reportedAt = programming.updatedAt || programming.updated_at || programming.createdAt || programming.created_at || new Date().toISOString();
+        const current = firstReportBySupervisor.get(id);
+        firstReportBySupervisor.set(id, current ? earliestTimestamp(current, reportedAt) : reportedAt);
+      });
+    return [...firstReportBySupervisor.entries()].map(([supervisorId, reportedAt]) => ({ supervisorId, reportedAt }));
+  }, [programmings]);
 
   useEffect(() => {
     // La fecha elegida puede servir para consultar programación futura, pero
@@ -76,29 +100,27 @@ export function useTeamStreak(date: string) {
         // La fila ya fue confirmada en Supabase. Esto evita depender
         // exclusivamente de la notificación Realtime para actualizar el contador.
         setPersistenceError('');
-        setHistory(current => current.protectedDays.some(day => day.date === date)
-          ? current
-          : {
-              ...current,
-              protectedDays: [{
-                date,
-                totalPersonnel: progress.availableCount,
-                programmedPersonnel: progress.programmedCount,
-                completedAt: new Date().toISOString(),
-              }, ...current.protectedDays],
-            });
+        setHistory(current => ({
+          ...current,
+          protectedDays: [{
+            date,
+            totalPersonnel: progress.availableCount,
+            programmedPersonnel: progress.programmedCount,
+            completedAt: new Date().toISOString(),
+          }, ...current.protectedDays.filter(day => day.date !== date)],
+        }));
       });
   }, [catalogsLoading, date, isCurrentOperationalDay, progress.achieved, progress.availableCount, progress.programmedCount, protectedToday]);
 
   useEffect(() => {
     // El reporte individual se registra al confirmar programación HOY. El
     // ranking solo lo contará si posteriormente el día queda protegido.
-    if (!isCurrentOperationalDay || contributingSupervisorIds.length === 0) return;
+    if (!isCurrentOperationalDay || contributingReports.length === 0) return;
     const reportedIds = new Set(reportsForDate.map(report => String(report.supervisorId)));
-    const missingSupervisorIds = contributingSupervisorIds.filter(id => !reportedIds.has(id));
-    if (missingSupervisorIds.length === 0) return;
+    const missingReports = contributingReports.filter(report => !reportedIds.has(report.supervisorId));
+    if (missingReports.length === 0) return;
 
-    repository.recordAutomaticTeamReports({ date, supervisorIds: missingSupervisorIds })
+    repository.recordAutomaticTeamReports({ date, reports: missingReports })
       .then(result => {
         if (!result.ok) {
           console.warn('No fue posible acreditar la racha automáticamente:', result.error);
@@ -110,25 +132,46 @@ export function useTeamStreak(date: string) {
           ...current,
           reports: [
             ...current.reports,
-            ...missingSupervisorIds
-              .filter(id => !current.reports.some(report => report.date === date && String(report.supervisorId) === id))
-              .map(supervisorId => ({ date, supervisorId, reportedAt: new Date().toISOString() })),
+            ...missingReports
+              .filter(item => !current.reports.some(report => report.date === date && String(report.supervisorId) === item.supervisorId))
+              .map(item => ({ date, supervisorId: item.supervisorId, reportedAt: item.reportedAt })),
           ],
         }));
       });
-  }, [date, isCurrentOperationalDay, contributingSupervisorIds, reportsForDate]);
+  }, [date, isCurrentOperationalDay, contributingReports, reportsForDate]);
 
   const reportedSupervisorIds = new Set(reportsForDate.map(report => String(report.supervisorId)));
   const activeReportsForDate = reportsForDate.filter(report => supervisors.some(supervisor => supervisor.id === String(report.supervisorId)));
   const pendingSupervisors = supervisors.filter(supervisor => !reportedSupervisorIds.has(supervisor.id));
-  const nameForSupervisor = (id: string) => supervisors.find(supervisor => supervisor.id === id)?.name || id;
-  const scoreBySupervisor = new Map<string, number>();
+  const scoreBySupervisor = new Map<string, { score: number; firstReportedAt?: string }>();
   reports
     .filter(report => protectedDateSet.has(report.date))
-    .forEach(report => scoreBySupervisor.set(String(report.supervisorId), (scoreBySupervisor.get(String(report.supervisorId)) || 0) + 1));
+    .forEach(report => {
+      const supervisorId = String(report.supervisorId);
+      const current = scoreBySupervisor.get(supervisorId) || { score: 0 };
+      scoreBySupervisor.set(supervisorId, {
+        score: current.score + 1,
+        firstReportedAt: current.firstReportedAt
+          ? earliestTimestamp(current.firstReportedAt, report.reportedAt)
+          : report.reportedAt,
+      });
+    });
   const ranking = supervisors
-    .map(supervisor => ({ id: supervisor.id, name: supervisor.name, score: scoreBySupervisor.get(supervisor.id) || 0 }))
-    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+    .map(supervisor => {
+      const score = scoreBySupervisor.get(supervisor.id);
+      return score && score.score > 0
+        ? { id: supervisor.id, name: supervisor.name, score: score.score, firstReportedAt: score.firstReportedAt }
+        : null;
+    })
+    .filter((supervisor): supervisor is { id: string; name: string; score: number; firstReportedAt?: string } => supervisor !== null)
+    .sort((a, b) => {
+      const scoreDifference = b.score - a.score;
+      if (scoreDifference !== 0) return scoreDifference;
+      const aTime = a.firstReportedAt ? new Date(a.firstReportedAt).getTime() : Number.POSITIVE_INFINITY;
+      const bTime = b.firstReportedAt ? new Date(b.firstReportedAt).getTime() : Number.POSITIVE_INFINITY;
+      if (aTime !== bTime) return aTime - bTime;
+      return a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
+    });
 
   return {
     catalogsLoading,

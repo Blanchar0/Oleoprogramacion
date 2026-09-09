@@ -158,6 +158,24 @@ function markSlotSentToday(slotKey: string) {
   }
 }
 
+function programmingSupervisorId(programming: any) {
+  return String(
+    programming.idSupervisor
+    || programming.supervisorId
+    || programming.id_supervisor
+    || programming.supervisor_id
+    || '',
+  ).trim();
+}
+
+function isConfirmedForSupervisor(programming: any, supervisorId: string, date: string) {
+  return (
+    programmingSupervisorId(programming) === String(supervisorId)
+    && programming.date === date
+    && programming.status === 'CONFIRMADA'
+  );
+}
+
 // Evaluación periódica de recordatorios y advertencias para el supervisor
 export function evaluateSupervisorSchedule(
   supervisorId: string,
@@ -180,12 +198,12 @@ export function evaluateSupervisorSchedule(
 
   // ¿El supervisor ya tiene programaciones para hoy?
   const hasProgrammingToday = programmings.some(
-    p => p.idSupervisor === supervisorId && p.date === todayStr && p.status !== 'CANCELADA'
+    p => isConfirmedForSupervisor(p, supervisorId, todayStr)
   );
 
   // ¿El supervisor ya tiene programaciones para mañana?
   const hasProgrammingTomorrow = programmings.some(
-    p => p.idSupervisor === supervisorId && p.date === tomorrowStr && p.status !== 'CANCELADA'
+    p => isConfirmedForSupervisor(p, supervisorId, tomorrowStr)
   );
 
   let activeAlert: {
@@ -307,9 +325,9 @@ export function getSupervisorsReportingStatus(
   const tomorrowStr = getColombiaDateString(1);
 
   return (supervisors || []).map(sup => {
-    const supId = sup.id || sup.idSupervisor;
-    const todayProgs = programmings.filter(p => p.idSupervisor === supId && p.date === todayStr && p.status !== 'CANCELADA');
-    const tomorrowProgs = programmings.filter(p => p.idSupervisor === supId && p.date === tomorrowStr && p.status !== 'CANCELADA');
+    const supId = String(sup.id || sup.idSupervisor || '');
+    const todayProgs = programmings.filter(p => isConfirmedForSupervisor(p, supId, todayStr));
+    const tomorrowProgs = programmings.filter(p => isConfirmedForSupervisor(p, supId, tomorrowStr));
 
     const hasToday = todayProgs.length > 0;
     const hasTomorrow = tomorrowProgs.length > 0;

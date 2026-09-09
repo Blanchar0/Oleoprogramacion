@@ -175,7 +175,7 @@ export default function MainLayout() {
         </div>
         <div className="flex items-center gap-2">
           <TeamStreakIndicator />
-          <NotificationCenter />
+          {user.role !== 'DIRECTIVO' && <NotificationCenter />}
           <button onClick={() => logout()} className="text-gray-300 hover:text-white p-1 cursor-pointer" title="Cerrar sesión">
             <LogOut size={20} />
           </button>
@@ -254,7 +254,7 @@ export default function MainLayout() {
           </h1>
           <div className="flex items-center gap-3">
             <TeamStreakIndicator />
-            <NotificationCenter />
+            {user.role !== 'DIRECTIVO' && <NotificationCenter />}
             <SyncStatusBadge />
             <div className="text-sm text-gray-500">
               {new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Bogota' })}

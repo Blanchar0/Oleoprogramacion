@@ -127,7 +127,7 @@ export function TeamStreakCard({ date }: { date: string }) {
       </div>
 
       <div className="border-t border-amber-200 bg-white/70 p-5 md:px-6">
-        <div className="mb-3 flex items-center gap-2 text-amber-950"><Trophy size={20} className="text-amber-500" /><h3 className="font-extrabold">Ranking amistoso</h3><span className="text-xs font-medium text-amber-900/75">por días protegidos programados</span></div>
+        <div className="mb-3 flex items-center gap-2 text-amber-950"><Trophy size={20} className="text-amber-500" /><h3 className="font-extrabold">Ranking amistoso</h3><span className="text-xs font-medium text-amber-900/75">por días protegidos; empates por primer reporte</span></div>
         <Ranking ranking={ranking} />
       </div>
     </section>

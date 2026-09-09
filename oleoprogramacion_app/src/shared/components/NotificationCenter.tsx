@@ -6,6 +6,7 @@ import {
   Bell, CheckCheck, Clock, AlertTriangle, ShieldAlert, Sparkles, Smartphone, Check, ExternalLink, Trash2 
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../auth/AuthContext';
 import { 
   getStoredNotifications, 
   markAllNotificationsAsRead, 
@@ -15,6 +16,7 @@ import {
 } from '../notificationService';
 
 export default function NotificationCenter() {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>(getNotificationPermission());
@@ -58,6 +60,9 @@ export default function NotificationCenter() {
       navigate(notif.actionUrl);
     }
   };
+
+  if (user?.role === 'DIRECTIVO') return null;
+  const isSupervisor = user?.role === 'SUPERVISOR';
 
   return (
     <div className="relative" ref={panelRef}>
@@ -116,7 +121,7 @@ export default function NotificationCenter() {
             </div>
 
             {/* Banner de Permiso de Notificaciones del Teléfono si no está activado */}
-            {permission !== 'granted' && (
+            {isSupervisor && permission === 'default' && (
               <div className="p-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between gap-2 text-xs shrink-0">
                 <div className="flex items-center gap-2 text-amber-900 font-medium">
                   <Smartphone size={16} className="shrink-0 text-amber-700" />
