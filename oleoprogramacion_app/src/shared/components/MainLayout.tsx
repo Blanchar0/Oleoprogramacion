@@ -105,7 +105,7 @@ export default function MainLayout() {
       shortName: 'Prog. General', 
       href: '/programming/all', 
       icon: Clock, 
-      roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'],
+      roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR', 'REVISOR'],
       activeBg: 'bg-blue-600 text-white shadow-md',
       activeText: 'text-blue-950 font-bold',
       iconColor: 'text-blue-700'
@@ -153,7 +153,7 @@ export default function MainLayout() {
   ];
 
   const filteredNav = navigation.filter(item => item.roles.includes(user.role));
-  const homePath = user.role === 'SUPERVISOR' ? '/programming/all' : '/';
+  const homePath = user.role === 'SUPERVISOR' || user.role === 'REVISOR' ? '/programming/all' : '/';
 
   return (
     <div className="min-h-screen bg-bg-light flex flex-col md:flex-row pb-20 md:pb-0">
@@ -175,7 +175,7 @@ export default function MainLayout() {
         </div>
         <div className="flex items-center gap-2">
           <TeamStreakIndicator />
-          {user.role !== 'DIRECTIVO' && <NotificationCenter />}
+          {['ADMIN', 'SUPERVISOR'].includes(user.role) && <NotificationCenter />}
           <button onClick={() => logout()} className="text-gray-300 hover:text-white p-1 cursor-pointer" title="Cerrar sesión">
             <LogOut size={20} />
           </button>
@@ -254,7 +254,7 @@ export default function MainLayout() {
           </h1>
           <div className="flex items-center gap-3">
             <TeamStreakIndicator />
-            {user.role !== 'DIRECTIVO' && <NotificationCenter />}
+            {['ADMIN', 'SUPERVISOR'].includes(user.role) && <NotificationCenter />}
             <SyncStatusBadge />
             <div className="text-sm text-gray-500">
               {new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Bogota' })}

@@ -20,7 +20,7 @@ import { Loader2 } from 'lucide-react';
 function RoleGuard({ children, roles }: { children: React.ReactNode, roles: string[] }) {
   const { user } = useAuth();
   if (!user || !roles.includes(user.role)) {
-    if (user?.role === 'SUPERVISOR') {
+    if (user?.role === 'SUPERVISOR' || user?.role === 'REVISOR') {
       return <Navigate to="/programming/all" replace />;
     }
     return <Navigate to="/" replace />;
@@ -30,7 +30,7 @@ function RoleGuard({ children, roles }: { children: React.ReactNode, roles: stri
 
 function HomeRoute() {
   const { user } = useAuth();
-  if (user?.role === 'SUPERVISOR') {
+  if (user?.role === 'SUPERVISOR' || user?.role === 'REVISOR') {
     return <Navigate to="/programming/all" replace />;
   }
   return <Dashboard />;
@@ -200,7 +200,7 @@ function AppContent() {
               } />
               {/* General Programming Route (All roles) */}
               <Route path="/programming/all" element={
-                <RoleGuard roles={['ADMIN', 'DIRECTIVO', 'SUPERVISOR']}>
+                <RoleGuard roles={['ADMIN', 'DIRECTIVO', 'SUPERVISOR', 'REVISOR']}>
                   <GeneralProgramming />
                 </RoleGuard>
               } />

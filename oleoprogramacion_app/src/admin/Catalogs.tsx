@@ -534,7 +534,7 @@ export default function Catalogs() {
                 <div>
                   <Label>Rol</Label>
                   <Combobox 
-                    options={[{value:'ADMIN', label:'ADMIN'}, {value:'DIRECTIVO', label:'DIRECTIVO'}, {value:'SUPERVISOR', label:'SUPERVISOR'}]} 
+                    options={[{value:'ADMIN', label:'ADMIN'}, {value:'DIRECTIVO', label:'DIRECTIVO'}, {value:'SUPERVISOR', label:'SUPERVISOR'}, {value:'REVISOR', label:'REVISOR'}]}
                     value={formData.role || ''} 
                     onChange={v => setFormData({...formData, role: v})} 
                     placeholder="Seleccione rol"

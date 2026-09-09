@@ -935,10 +935,12 @@ class SupabaseRepository implements AgronomicRepository {
       const payload = {
         id: crypto.randomUUID(),
         username: input.username,
-        password: input.password,
+        username_key: String(input.username || '').trim().toLowerCase(),
         name: input.name,
         role: input.role,
         id_supervisor: input.idSupervisor || null,
+        supervisor_id: input.idSupervisor || null,
+        pin: input.pin || input.password,
         active: input.active ?? true,
       };
       const { data, error } = await supabase.from('users').insert(payload).select().single();
@@ -953,9 +955,11 @@ class SupabaseRepository implements AgronomicRepository {
     try {
       const payload = {
         username: input.username,
+        username_key: String(input.username || '').trim().toLowerCase(),
         name: input.name,
         role: input.role,
         id_supervisor: input.idSupervisor || null,
+        supervisor_id: input.idSupervisor || null,
         active: input.active,
       };
       const { data, error } = await supabase.from('users').update(payload).eq('id', id).select().single();

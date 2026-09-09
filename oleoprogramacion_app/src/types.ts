@@ -15,7 +15,7 @@ export interface PersonnelImportConflict {
   registroPendiente: any;
 }
 
-export type Role = 'ADMIN' | 'DIRECTIVO' | 'SUPERVISOR';
+export type Role = 'ADMIN' | 'DIRECTIVO' | 'SUPERVISOR' | 'REVISOR';
 
 export interface User {
   id: string;
