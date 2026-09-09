@@ -136,7 +136,11 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
         };
       });
 
-      return { supervisorId: supId, supervisorName: sup?.name || 'Otro', programmings: enrichedProgs };
+      const personnelCount = new Set(
+        enrichedProgs.flatMap(programming => programming.personnelIds || []),
+      ).size;
+
+      return { supervisorId: supId, supervisorName: sup?.name || 'Otro', programmings: enrichedProgs, personnelCount };
     });
   }, [filteredProgrammings, catalogs]);
 
@@ -386,6 +390,9 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
                 )}
                 <span className="tracking-wide">Supervisor: {group.supervisorName.toUpperCase()}</span>
               </div>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-[#1B5E20]/15 text-[#1B5E20]">
+                {group.personnelCount} personas asignadas
+              </span>
             </div>
 
             {expandedGroups[group.supervisorId] !== false && (
