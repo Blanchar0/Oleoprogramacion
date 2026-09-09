@@ -364,8 +364,8 @@ export default function GeneralProgramming({ overrideDate }: { overrideDate?: st
         </div>
       </div>
 
-      {/* La tabla puede consultar cualquier fecha; racha y ranking siempre son del día operativo actual. */}
-      <TeamStreakCard date={operationalDate} />
+      {/* El revisor consulta únicamente la programación, sin el panel de racha. */}
+      {user?.role !== 'REVISOR' && <TeamStreakCard date={operationalDate} />}
       
       {groupedProgrammings.length === 0 ? (
         <div className="p-8 text-center bg-white rounded-xl border border-gray-200 text-gray-400 text-sm">
