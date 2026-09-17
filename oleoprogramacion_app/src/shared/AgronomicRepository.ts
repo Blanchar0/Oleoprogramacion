@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { offlineStore } from './offlineStore';
 import { syncManager } from './syncManager';
-import type { ProgrammingReport, ProgrammingStreakDay } from '../types';
+import type { CycleExecution, CycleImport, CycleLaborRule, ProductivityImport, ProductivityRecord, ProgrammingReport, ProgrammingStreakDay } from '../types';
 
 export interface Result {
   ok: boolean;
@@ -44,6 +44,12 @@ export interface AgronomicRepository {
   createLocation(input: any): Promise<Result>;
   updateLocation(id: string, input: any): Promise<Result>;
   deleteLocation(id: string): Promise<Result>;
+
+  subscribeCycles(callback: (data: { rules: CycleLaborRule[]; executions: CycleExecution[]; imports: CycleImport[] }) => void): Unsubscribe;
+  importCycleExecutions(input: { fileName: string; fileType: string; importedBy: string; rows: Array<Pick<CycleExecution, 'executionDate' | 'loteCode' | 'laborCode' | 'personnelCount'>>; errors: string[] }): Promise<Result>;
+  subscribeProductivity(callback: (data: { records: ProductivityRecord[]; imports: ProductivityImport[] }) => void): Unsubscribe;
+  importProductivityRecords(input: { fileName: string; fileType: string; importedBy: string; rows: Array<Omit<ProductivityRecord, 'id' | 'source' | 'importId' | 'createdAt' | 'updatedAt'>>; errors: string[] }): Promise<Result>;
+  saveProductivityRecord(input: Omit<ProductivityRecord, 'id' | 'source' | 'importId' | 'createdAt' | 'updatedAt'>): Promise<Result>;
 }
 
 class SupabaseRepository implements AgronomicRepository {
@@ -814,6 +820,223 @@ class SupabaseRepository implements AgronomicRepository {
       return { ok: true, data: [...reportsBySupervisor.keys()] };
     } catch (e: any) {
       return { ok: false, error: e.message };
+    }
+  }
+
+  // -- CYCLES AND PRODUCTIVITY --
+  subscribeCycles(callback: (data: { rules: CycleLaborRule[]; executions: CycleExecution[]; imports: CycleImport[] }) => void): Unsubscribe {
+    const fetchCycles = async () => {
+      const [{ data: rules, error: rulesError }, { data: executions, error: executionsError }, { data: imports, error: importsError }] = await Promise.all([
+        supabase.from('cycle_labor_rules').select('*').order('sort_order'),
+        supabase.from('cycle_executions').select('*').order('execution_date', { ascending: false }),
+        supabase.from('cycle_imports').select('*').order('imported_at', { ascending: false }).limit(12),
+      ]);
+
+      const sourceError = rulesError || executionsError || importsError;
+      if (sourceError) {
+        console.warn('Error al cargar ciclos:', sourceError.message);
+        callback({ rules: [], executions: [], imports: [] });
+        return;
+      }
+
+      callback({
+        rules: (rules || []).map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          scheduleGranularity: row.schedule_granularity,
+          normalDays: Number(row.normal_days),
+          alertDays: Number(row.alert_days),
+          restartDays: Number(row.restart_days),
+          active: row.active,
+          sortOrder: Number(row.sort_order),
+        })),
+        executions: (executions || []).map((row: any) => ({
+          id: row.id,
+          executionDate: row.execution_date,
+          loteCode: row.lote_code,
+          laborCode: row.labor_code,
+          personnelCount: Number(row.personnel_count),
+          importId: row.import_id,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
+        imports: (imports || []).map((row: any) => ({
+          id: row.id,
+          fileName: row.file_name,
+          fileType: row.file_type,
+          importedBy: row.imported_by,
+          importedAt: row.imported_at,
+          totalRows: Number(row.total_rows),
+          acceptedRows: Number(row.accepted_rows),
+          rejectedRows: Number(row.rejected_rows),
+          errors: Array.isArray(row.errors) ? row.errors : [],
+        })),
+      });
+    };
+
+    fetchCycles();
+    const channel = supabase
+      .channel(`public:cycles:${crypto.randomUUID()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cycle_labor_rules' }, fetchCycles)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cycle_executions' }, fetchCycles)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cycle_imports' }, fetchCycles)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }
+
+  async importCycleExecutions(input: { fileName: string; fileType: string; importedBy: string; rows: Array<Pick<CycleExecution, 'executionDate' | 'loteCode' | 'laborCode' | 'personnelCount'>>; errors: string[] }): Promise<Result> {
+    const importId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const importPayload = {
+      id: importId,
+      file_name: input.fileName,
+      file_type: input.fileType,
+      imported_by: input.importedBy,
+      imported_at: now,
+      total_rows: input.rows.length + input.errors.length,
+      accepted_rows: input.rows.length,
+      rejected_rows: input.errors.length,
+      errors: input.errors.slice(0, 100),
+    };
+
+    try {
+      const { error: importError } = await supabase.from('cycle_imports').insert(importPayload);
+      if (importError) throw importError;
+
+      if (input.rows.length) {
+        const rows = input.rows.map((row) => ({
+          id: `cycle:${row.executionDate}:${row.loteCode}:${row.laborCode}`,
+          execution_date: row.executionDate,
+          lote_code: row.loteCode,
+          labor_code: row.laborCode,
+          personnel_count: row.personnelCount,
+          import_id: importId,
+          updated_at: now,
+        }));
+        const { error: executionError } = await supabase
+          .from('cycle_executions')
+          .upsert(rows, { onConflict: 'execution_date,lote_code,labor_code' });
+        if (executionError) throw executionError;
+      }
+      return { ok: true, data: { importId } };
+    } catch (error: any) {
+      return { ok: false, error: error.message || 'No fue posible importar los ciclos.' };
+    }
+  }
+
+  subscribeProductivity(callback: (data: { records: ProductivityRecord[]; imports: ProductivityImport[] }) => void): Unsubscribe {
+    const fetchProductivity = async () => {
+      const [{ data: records, error: recordsError }, { data: imports, error: importsError }] = await Promise.all([
+        supabase.from('productivity_records').select('*').order('period', { ascending: false }),
+        supabase.from('productivity_imports').select('*').order('imported_at', { ascending: false }).limit(12),
+      ]);
+      const sourceError = recordsError || importsError;
+      if (sourceError) {
+        console.warn('Error al cargar productividad:', sourceError.message);
+        callback({ records: [], imports: [] });
+        return;
+      }
+      callback({
+        records: (records || []).map((row: any) => ({
+          id: row.id,
+          period: String(row.period).slice(0, 7),
+          loteCode: row.lote_code,
+          zonaSnapshot: row.zona_snapshot,
+          siembraSnapshot: row.siembra_snapshot === null ? null : Number(row.siembra_snapshot),
+          racimos: row.racimos === null ? null : Number(row.racimos),
+          kilograms: row.kilograms === null ? null : Number(row.kilograms),
+          tons: row.tons === null ? null : Number(row.tons),
+          averageWeight: row.average_weight === null ? null : Number(row.average_weight),
+          source: row.source,
+          importId: row.import_id,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
+        imports: (imports || []).map((row: any) => ({
+          id: row.id,
+          fileName: row.file_name,
+          fileType: row.file_type,
+          importedBy: row.imported_by,
+          importedAt: row.imported_at,
+          totalRows: Number(row.total_rows),
+          acceptedRows: Number(row.accepted_rows),
+          rejectedRows: Number(row.rejected_rows),
+          errors: Array.isArray(row.errors) ? row.errors : [],
+        })),
+      });
+    };
+
+    fetchProductivity();
+    const channel = supabase
+      .channel(`public:productivity:${crypto.randomUUID()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'productivity_records' }, fetchProductivity)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'productivity_imports' }, fetchProductivity)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }
+
+  async importProductivityRecords(input: { fileName: string; fileType: string; importedBy: string; rows: Array<Omit<ProductivityRecord, 'id' | 'source' | 'importId' | 'createdAt' | 'updatedAt'>>; errors: string[] }): Promise<Result> {
+    const importId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    try {
+      const { error: importError } = await supabase.from('productivity_imports').insert({
+        id: importId,
+        file_name: input.fileName,
+        file_type: input.fileType,
+        imported_by: input.importedBy,
+        imported_at: now,
+        total_rows: input.rows.length + input.errors.length,
+        accepted_rows: input.rows.length,
+        rejected_rows: input.errors.length,
+        errors: input.errors.slice(0, 100),
+      });
+      if (importError) throw importError;
+      if (input.rows.length) {
+        const rows = input.rows.map((row) => ({
+          id: `productivity:${row.period}:${row.loteCode}`,
+          period: `${row.period}-01`,
+          lote_code: row.loteCode,
+          zona_snapshot: row.zonaSnapshot || null,
+          siembra_snapshot: row.siembraSnapshot ?? null,
+          racimos: row.racimos,
+          kilograms: row.kilograms,
+          tons: row.tons,
+          average_weight: row.averageWeight,
+          source: 'IMPORTACION',
+          import_id: importId,
+          updated_at: now,
+        }));
+        const { error: recordsError } = await supabase.from('productivity_records').upsert(rows, { onConflict: 'period,lote_code' });
+        if (recordsError) throw recordsError;
+      }
+      return { ok: true, data: { importId } };
+    } catch (error: any) {
+      return { ok: false, error: error.message || 'No fue posible importar la productividad.' };
+    }
+  }
+
+  async saveProductivityRecord(input: Omit<ProductivityRecord, 'id' | 'source' | 'importId' | 'createdAt' | 'updatedAt'>): Promise<Result> {
+    const now = new Date().toISOString();
+    const payload = {
+      id: `productivity:${input.period}:${input.loteCode}`,
+      period: `${input.period}-01`,
+      lote_code: input.loteCode,
+      zona_snapshot: input.zonaSnapshot || null,
+      siembra_snapshot: input.siembraSnapshot ?? null,
+      racimos: input.racimos,
+      kilograms: input.kilograms,
+      tons: input.tons,
+      average_weight: input.averageWeight,
+      source: 'MANUAL',
+      updated_at: now,
+    };
+    try {
+      const { error } = await supabase.from('productivity_records').upsert(payload, { onConflict: 'period,lote_code' });
+      if (error) throw error;
+      return { ok: true };
+    } catch (error: any) {
+      return { ok: false, error: error.message || 'No fue posible guardar la productividad.' };
     }
   }
 

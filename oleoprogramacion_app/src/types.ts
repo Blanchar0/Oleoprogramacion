@@ -94,6 +94,72 @@ export interface Location {
   updatedAt?: string;
 }
 
+export type CycleStatus = 'AL_DIA' | 'ALERTA' | 'CRITICO' | 'SIN_DATOS';
+
+export type CycleScheduleGranularity = 'DIA' | 'SEMANA';
+
+export interface CycleLaborRule {
+  id: string;
+  name: string;
+  scheduleGranularity: CycleScheduleGranularity;
+  normalDays: number;
+  alertDays: number;
+  restartDays: number;
+  active: boolean;
+  sortOrder: number;
+}
+
+export interface CycleExecution {
+  id: string;
+  executionDate: string;
+  loteCode: string;
+  laborCode: string;
+  personnelCount: number;
+  importId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CycleImport {
+  id: string;
+  fileName: string;
+  fileType: string;
+  importedBy: string;
+  importedAt: string;
+  totalRows: number;
+  acceptedRows: number;
+  rejectedRows: number;
+  errors: string[];
+}
+
+export interface ProductivityRecord {
+  id: string;
+  period: string;
+  loteCode: string;
+  zonaSnapshot?: string | null;
+  siembraSnapshot?: number | null;
+  racimos: number | null;
+  kilograms: number | null;
+  tons: number | null;
+  averageWeight: number | null;
+  source: 'MANUAL' | 'IMPORTACION';
+  importId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ProductivityImport {
+  id: string;
+  fileName: string;
+  fileType: string;
+  importedBy: string;
+  importedAt: string;
+  totalRows: number;
+  acceptedRows: number;
+  rejectedRows: number;
+  errors: string[];
+}
+
 export type ProgrammingStatus = 'PENDIENTE' | 'CONFIRMADA' | 'RECHAZADA';
 
 export interface ProgrammingStreakDay {

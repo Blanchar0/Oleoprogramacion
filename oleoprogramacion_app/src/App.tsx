@@ -11,6 +11,8 @@ import Absences from './absences/Absences';
 import Machinery from './machinery/Machinery';
 import Catalogs from './admin/Catalogs';
 import Novedades from './admin/Novedades';
+import Cycles from './cycles/Cycles';
+import Productivity from './productivity/Productivity';
 import { Leaf } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'motion/react';
@@ -202,6 +204,17 @@ function AppContent() {
               <Route path="/programming/all" element={
                 <RoleGuard roles={['ADMIN', 'DIRECTIVO', 'SUPERVISOR', 'REVISOR']}>
                   <GeneralProgramming />
+                </RoleGuard>
+              } />
+
+              <Route path="/cycles" element={
+                <RoleGuard roles={['ADMIN', 'DIRECTIVO']}>
+                  <Cycles />
+                </RoleGuard>
+              } />
+              <Route path="/productivity" element={
+                <RoleGuard roles={['ADMIN', 'DIRECTIVO']}>
+                  <Productivity />
                 </RoleGuard>
               } />
               

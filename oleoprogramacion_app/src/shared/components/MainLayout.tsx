@@ -9,7 +9,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { Navigate, Outlet, Link, useLocation } from 'react-router-dom';
 import { 
   Menu, X, Home, CalendarPlus, CheckSquare, 
-  Clock, UserX, Tractor, Users, Settings, LogOut, Activity, CalendarDays
+  Clock, UserX, Tractor, Users, Settings, LogOut, Activity, CalendarDays, TrendingUp
 } from 'lucide-react';
 import { cn } from '@/src/components/ui';
 
@@ -79,6 +79,26 @@ export default function MainLayout() {
       activeBg: 'bg-forest-900 text-white shadow-md',
       activeText: 'text-forest-950 font-bold',
       iconColor: 'text-forest-800'
+    },
+    {
+      name: 'Ciclos',
+      shortName: 'Ciclos',
+      href: '/cycles',
+      icon: Activity,
+      roles: ['ADMIN', 'DIRECTIVO'],
+      activeBg: 'bg-emerald-700 text-white shadow-md',
+      activeText: 'text-emerald-950 font-bold',
+      iconColor: 'text-emerald-700'
+    },
+    {
+      name: 'Productividad',
+      shortName: 'Productiv.',
+      href: '/productivity',
+      icon: TrendingUp,
+      roles: ['ADMIN', 'DIRECTIVO'],
+      activeBg: 'bg-lime-700 text-white shadow-md',
+      activeText: 'text-lime-900 font-bold',
+      iconColor: 'text-lime-700'
     },
     { 
       name: 'Nueva Programación', 
