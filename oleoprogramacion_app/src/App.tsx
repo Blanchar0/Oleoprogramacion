@@ -208,7 +208,7 @@ function AppContent() {
               } />
 
               <Route path="/cycles" element={
-                <RoleGuard roles={['ADMIN', 'DIRECTIVO']}>
+                <RoleGuard roles={['ADMIN', 'DIRECTIVO', 'SUPERVISOR']}>
                   <Cycles />
                 </RoleGuard>
               } />

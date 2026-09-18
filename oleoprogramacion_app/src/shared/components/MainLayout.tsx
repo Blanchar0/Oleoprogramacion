@@ -85,7 +85,7 @@ export default function MainLayout() {
       shortName: 'Ciclos',
       href: '/cycles',
       icon: Activity,
-      roles: ['ADMIN', 'DIRECTIVO'],
+      roles: ['ADMIN', 'DIRECTIVO', 'SUPERVISOR'],
       activeBg: 'bg-emerald-700 text-white shadow-md',
       activeText: 'text-emerald-950 font-bold',
       iconColor: 'text-emerald-700'
