@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { offlineStore } from './offlineStore';
 import { syncManager } from './syncManager';
-import type { CycleExecution, CycleImport, CycleLaborRule, ProductivityImport, ProductivityRecord, ProgrammingReport, ProgrammingStreakDay } from '../types';
+import type { CycleExecution, CycleImport, CycleLaborRule, ProductivityImport, ProductivityProjection, ProductivityRecord, ProgrammingReport, ProgrammingStreakDay } from '../types';
 
 export interface Result {
   ok: boolean;
@@ -47,9 +47,10 @@ export interface AgronomicRepository {
 
   subscribeCycles(callback: (data: { rules: CycleLaborRule[]; executions: CycleExecution[]; imports: CycleImport[] }) => void): Unsubscribe;
   importCycleExecutions(input: { fileName: string; fileType: string; importedBy: string; rows: Array<Pick<CycleExecution, 'executionDate' | 'loteCode' | 'laborCode' | 'personnelCount'>>; errors: string[] }): Promise<Result>;
-  subscribeProductivity(callback: (data: { records: ProductivityRecord[]; imports: ProductivityImport[] }) => void): Unsubscribe;
+  subscribeProductivity(callback: (data: { records: ProductivityRecord[]; imports: ProductivityImport[]; projections: ProductivityProjection[] }) => void): Unsubscribe;
   importProductivityRecords(input: { fileName: string; fileType: string; importedBy: string; rows: Array<Omit<ProductivityRecord, 'id' | 'source' | 'importId' | 'createdAt' | 'updatedAt'>>; errors: string[] }): Promise<Result>;
   saveProductivityRecord(input: Omit<ProductivityRecord, 'id' | 'source' | 'importId' | 'createdAt' | 'updatedAt'>): Promise<Result>;
+  saveProductivityProjection(input: Omit<ProductivityProjection, 'id' | 'createdAt' | 'updatedAt'>): Promise<Result>;
 }
 
 class SupabaseRepository implements AgronomicRepository {
@@ -922,7 +923,7 @@ class SupabaseRepository implements AgronomicRepository {
     }
   }
 
-  subscribeProductivity(callback: (data: { records: ProductivityRecord[]; imports: ProductivityImport[] }) => void): Unsubscribe {
+  subscribeProductivity(callback: (data: { records: ProductivityRecord[]; imports: ProductivityImport[]; projections: ProductivityProjection[] }) => void): Unsubscribe {
     const fetchProductivity = async () => {
       const [{ data: records, error: recordsError }, { data: imports, error: importsError }] = await Promise.all([
         supabase.from('productivity_records').select('*').order('period', { ascending: false }),
@@ -931,9 +932,14 @@ class SupabaseRepository implements AgronomicRepository {
       const sourceError = recordsError || importsError;
       if (sourceError) {
         console.warn('Error al cargar productividad:', sourceError.message);
-        callback({ records: [], imports: [] });
+        callback({ records: [], imports: [], projections: [] });
         return;
       }
+      const { data: projections, error: projectionsError } = await supabase
+        .from('productivity_projections')
+        .select('*')
+        .order('period', { ascending: false });
+      if (projectionsError) console.warn('No fue posible cargar las proyecciones de productividad:', projectionsError.message);
       callback({
         records: (records || []).map((row: any) => ({
           id: row.id,
@@ -961,6 +967,15 @@ class SupabaseRepository implements AgronomicRepository {
           rejectedRows: Number(row.rejected_rows),
           errors: Array.isArray(row.errors) ? row.errors : [],
         })),
+        projections: (projections || []).map((row: any) => ({
+          id: row.id,
+          period: String(row.period).slice(0, 7),
+          scope: row.scope,
+          scopeValue: row.scope_value,
+          projectedTons: Number(row.projected_tons),
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
       });
     };
 
@@ -969,6 +984,7 @@ class SupabaseRepository implements AgronomicRepository {
       .channel(`public:productivity:${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'productivity_records' }, fetchProductivity)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'productivity_imports' }, fetchProductivity)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'productivity_projections' }, fetchProductivity)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }
@@ -1034,6 +1050,28 @@ class SupabaseRepository implements AgronomicRepository {
       return { ok: true };
     } catch (error: any) {
       return { ok: false, error: error.message || 'No fue posible guardar la productividad.' };
+    }
+  }
+
+  async saveProductivityProjection(input: Omit<ProductivityProjection, 'id' | 'createdAt' | 'updatedAt'>): Promise<Result> {
+    const now = new Date().toISOString();
+    const scopeValue = input.scope === 'GLOBAL' ? 'GLOBAL' : input.scopeValue;
+    const payload = {
+      id: `productivity-projection:${input.period}:${input.scope}:${scopeValue}`,
+      period: `${input.period}-01`,
+      scope: input.scope,
+      scope_value: scopeValue,
+      projected_tons: input.projectedTons,
+      updated_at: now,
+    };
+    try {
+      const { error } = await supabase
+        .from('productivity_projections')
+        .upsert(payload, { onConflict: 'period,scope,scope_value' });
+      if (error) throw error;
+      return { ok: true };
+    } catch (error: any) {
+      return { ok: false, error: error.message || 'No fue posible guardar la proyección.' };
     }
   }
 

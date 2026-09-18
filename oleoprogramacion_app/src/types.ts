@@ -160,6 +160,18 @@ export interface ProductivityImport {
   errors: string[];
 }
 
+export type ProductivityProjectionScope = 'GLOBAL' | 'ZONA' | 'SIEMBRA' | 'LOTE';
+
+export interface ProductivityProjection {
+  id: string;
+  period: string;
+  scope: ProductivityProjectionScope;
+  scopeValue: string;
+  projectedTons: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type ProgrammingStatus = 'PENDIENTE' | 'CONFIRMADA' | 'RECHAZADA';
 
 export interface ProgrammingStreakDay {
