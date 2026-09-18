@@ -551,7 +551,6 @@ class SupabaseRepository implements AgronomicRepository {
       zone_snapshot: input.zoneSnapshot,
       created_by: input.createdBy || null,
       observations: input.observations || '',
-      status: input.status || 'EN_PROGRESO',
       version: 1,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()

@@ -7,7 +7,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter 
 } from '@/src/components/ui';
 import { Combobox } from '@/src/components/ui/combobox';
-import { Play, Square, Tractor, Calendar, MapPin, Check, Pencil, Trash2, AlertCircle, Pause, UserRound } from 'lucide-react';
+import { Tractor, Calendar, MapPin, Check, Pencil, Trash2, AlertCircle, UserRound } from 'lucide-react';
 
 export default function Machinery() {
   const { user } = useAuth();
@@ -32,15 +32,12 @@ export default function Machinery() {
   const [editOperatorId, setEditOperatorId] = useState('');
   const [editLaborId, setEditLaborId] = useState('');
   const [editActivityId, setEditActivityId] = useState('');
-  const [editStatus, setEditStatus] = useState('EN_PROGRESO');
   const [editObservations, setEditObservations] = useState('');
   const [editSelectedZones, setEditSelectedZones] = useState<string[]>([]);
   const [editError, setEditError] = useState('');
   const [editLoading, setEditLoading] = useState(false);
 
-  // Estados para Modales In-App de Detener, Cancelar y Eliminar
-  const [stoppingOp, setStoppingOp] = useState<any | null>(null);
-  const [cancellingOp, setCancellingOp] = useState<any | null>(null);
+  // Estado para el modal de eliminación
   const [deletingOpId, setDeletingOpId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -109,10 +106,6 @@ export default function Machinery() {
     const opObj = catalogs.personnel?.find((p: any) => p.id === operatorId);
     const opName = opObj?.name || opObj?.nombreCompleto || '';
 
-    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-    const isFuture = date > todayStr;
-    const initialStatus = isFuture ? 'PROGRAMADA' : 'EN_PROGRESO';
-
     const payload = {
       date,
       equipmentId,
@@ -126,7 +119,6 @@ export default function Machinery() {
       idSupervisor: user?.idSupervisor || 'SUP001',
       supervisorId: user?.idSupervisor || 'SUP001',
       createdBy: user?.id || null,
-      status: initialStatus,
     };
 
     const res = await repository.createMachineryOperation(payload);
@@ -140,61 +132,6 @@ export default function Machinery() {
       setSelectedZones([]);
     } else {
       setError(res.error || 'Error al guardar');
-    }
-  };
-
-  const handlePause = async (op: any) => {
-    setActionLoading(true);
-    const res = await repository.updateMachineryOperation(op.id, {
-      status: 'PAUSADA',
-    }, op.version);
-    setActionLoading(false);
-    if (!res.ok) alert(res.error || 'Error al pausar operación');
-  };
-
-  const handleResume = async (op: any) => {
-    setActionLoading(true);
-    const res = await repository.updateMachineryOperation(op.id, {
-      status: 'EN_PROGRESO',
-    }, op.version);
-    setActionLoading(false);
-    if (!res.ok) alert(res.error || 'Error al reanudar operación');
-  };
-
-  const handleStartNow = async (op: any) => {
-    setActionLoading(true);
-    const res = await repository.updateMachineryOperation(op.id, {
-      status: 'EN_PROGRESO',
-    }, op.version);
-    setActionLoading(false);
-    if (!res.ok) alert(res.error || 'Error al iniciar operación');
-  };
-
-  const handleConfirmStop = async () => {
-    if (!stoppingOp) return;
-    setActionLoading(true);
-    const res = await repository.updateMachineryOperation(stoppingOp.id, {
-      status: 'FINALIZADA',
-    }, stoppingOp.version);
-    setActionLoading(false);
-    if (res.ok) {
-      setStoppingOp(null);
-    } else {
-      alert(res.error || 'Error al detener operación');
-    }
-  };
-
-  const handleConfirmCancel = async () => {
-    if (!cancellingOp) return;
-    setActionLoading(true);
-    const res = await repository.updateMachineryOperation(cancellingOp.id, {
-      status: 'CANCELADA'
-    }, cancellingOp.version);
-    setActionLoading(false);
-    if (res.ok) {
-      setCancellingOp(null);
-    } else {
-      alert(res.error || 'Error al cancelar operación');
     }
   };
 
@@ -216,7 +153,6 @@ export default function Machinery() {
     setEditOperatorId(op.operatorId || op.operator_id || '');
     setEditLaborId(op.laborId || op.labor_id || '');
     setEditActivityId(op.activityId || op.activity_id || '');
-    setEditStatus(op.status || 'EN_PROGRESO');
     setEditObservations(op.observations || '');
 
     // Parse zones from zoneSnapshot
@@ -246,7 +182,6 @@ export default function Machinery() {
       operatorName: opName,
       laborId: editLaborId,
       activityId: editActivityId,
-      status: editStatus,
       zoneSnapshot: editSelectedZones.join(', '),
       observations: editObservations || '',
     };
@@ -515,31 +450,14 @@ export default function Machinery() {
                 </div>
 
                 <div className="pt-2 pb-6">
-                  {(() => {
-                    const now = new Date();
-                    const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-                    const isFuture = date > todayStr;
-
-                    return (
-                      <Button 
-                        type="submit" 
-                        disabled={loading || !date || !equipmentId || !operatorId || !laborId || !activityId || selectedZones.length === 0}
-                        className={cn(
-                          "w-full min-h-[50px] h-auto py-3 px-4 shadow-xl font-black text-xs sm:text-sm uppercase tracking-wide text-white rounded-xl flex items-center justify-center gap-2 cursor-pointer text-center leading-snug whitespace-normal transition-colors",
-                          isFuture ? "bg-indigo-900 hover:bg-indigo-950" : "bg-purple-900 hover:bg-purple-950"
-                        )}
-                      >
-                        <Play size={18} className="fill-white shrink-0" />
-                        <span>
-                          {loading 
-                            ? 'PROCESANDO...' 
-                            : isFuture 
-                              ? 'PROGRAMAR OPERACIÓN MECANIZADA' 
-                              : 'INICIAR OPERACIÓN MECANIZADA'}
-                        </span>
-                      </Button>
-                    );
-                  })()}
+                  <Button
+                    type="submit"
+                    disabled={loading || !date || !equipmentId || !operatorId || !laborId || !activityId || selectedZones.length === 0}
+                    className="w-full min-h-[50px] h-auto py-3 px-4 shadow-xl font-black text-xs sm:text-sm uppercase tracking-wide text-white rounded-xl flex items-center justify-center gap-2 cursor-pointer text-center leading-snug whitespace-normal bg-purple-900 hover:bg-purple-950"
+                  >
+                    <Check size={18} className="shrink-0" />
+                    <span>{loading ? 'GUARDANDO...' : 'REGISTRAR OPERACIÓN MECANIZADA'}</span>
+                  </Button>
                 </div>
               </form>
             </CardContent>
@@ -559,7 +477,7 @@ export default function Machinery() {
               <div className="text-center py-12 text-gray-500 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
                 <Tractor size={32} className="mx-auto text-gray-400 mb-2" />
                 <p className="font-medium text-sm">No hay operaciones registradas en esta fecha.</p>
-                <p className="text-xs text-gray-400 mt-1">Las operaciones iniciadas aparecerán listadas aquí con seguimiento en tiempo real.</p>
+                <p className="text-xs text-gray-400 mt-1">Los registros de maquinaria de esta fecha aparecerán listados aquí.</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -579,7 +497,7 @@ export default function Machinery() {
                   return (
                     <div key={m.id} className="border border-forest-900/15 rounded-xl p-4 bg-white shadow-xs hover:border-forest-900/30 transition-all space-y-3">
                       {/* Header de la operación */}
-                      <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-2.5">
+                      <div className="flex items-start gap-3 border-b border-gray-100 pb-2.5">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="p-2 bg-forest-50 text-forest-800 rounded-lg shrink-0">
                             <Tractor size={20} className="text-forest-700" />
@@ -594,19 +512,6 @@ export default function Machinery() {
                           </div>
                         </div>
 
-                        <span className={cn(
-                          "px-2.5 py-1 text-xs rounded-full font-bold uppercase tracking-wider shrink-0",
-                          m.status === 'EN_PROGRESO' ? "bg-blue-100 text-blue-800 border border-blue-200" :
-                          m.status === 'PROGRAMADA' ? "bg-indigo-100 text-indigo-800 border border-indigo-200" :
-                          m.status === 'PAUSADA' ? "bg-amber-100 text-amber-900 border border-amber-300" :
-                          m.status === 'FINALIZADA' ? "bg-green-100 text-green-800 border border-green-200" : 
-                          "bg-red-100 text-red-800 border border-red-200"
-                        )}>
-                          {m.status === 'EN_PROGRESO' ? 'EN PROGRESO' :
-                           m.status === 'PROGRAMADA' ? 'PROGRAMADA' :
-                           m.status === 'PAUSADA' ? 'PAUSADA' :
-                           m.status === 'FINALIZADA' ? 'FINALIZADA' : (m.status?.replace('_', ' ') || 'EN PROGRESO')}
-                        </span>
                       </div>
 
                       {/* Detalles: Labor y Zonas */}
@@ -641,71 +546,6 @@ export default function Machinery() {
                         {/* Botones de Acción */}
                         {!isDirectivo && (
                           <div className="flex items-center gap-1.5">
-                            {m.status === 'PROGRAMADA' && (
-                              <>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  className="text-red-700 border border-red-300 hover:bg-red-50 text-xs h-7 px-2.5 font-bold cursor-pointer" 
-                                  onClick={() => setCancellingOp(m)}
-                                  title="Cancelar programación"
-                                >
-                                  Cancelar
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  className="bg-indigo-700 hover:bg-indigo-800 text-white text-xs h-7 px-3 font-bold flex items-center gap-1 cursor-pointer" 
-                                  onClick={() => handleStartNow(m)}
-                                  title="Iniciar ahora la operación"
-                                >
-                                  <Play size={12} className="fill-white" /> Iniciar Ahora
-                                </Button>
-                              </>
-                            )}
-
-                            {m.status === 'EN_PROGRESO' && (
-                              <>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  className="text-amber-800 border border-amber-300 hover:bg-amber-50 text-xs h-7 px-2.5 font-bold flex items-center gap-1 cursor-pointer" 
-                                  onClick={() => handlePause(m)}
-                                  title="Pausar operación"
-                                >
-                                  <Pause size={12} /> Pausar
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  className="bg-forest-900 hover:bg-forest-950 text-white text-xs h-7 px-3 font-bold flex items-center gap-1 cursor-pointer" 
-                                  onClick={() => setStoppingOp(m)}
-                                  title="Finalizar operación"
-                                >
-                                  <Square size={12} className="fill-white" /> Finalizar
-                                </Button>
-                              </>
-                            )}
-
-                            {m.status === 'PAUSADA' && (
-                              <>
-                                <Button 
-                                  size="sm" 
-                                  className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs h-7 px-3 font-bold flex items-center gap-1 cursor-pointer" 
-                                  onClick={() => handleResume(m)}
-                                  title="Reanudar operación"
-                                >
-                                  <Play size={12} className="fill-white" /> Reanudar
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  className="bg-forest-900 hover:bg-forest-950 text-white text-xs h-7 px-3 font-bold flex items-center gap-1 cursor-pointer" 
-                                  onClick={() => setStoppingOp(m)}
-                                  title="Finalizar operación"
-                                >
-                                  <Square size={12} className="fill-white" /> Finalizar
-                                </Button>
-                              </>
-                            )}
-
                             <Button
                               size="sm"
                               variant="outline"
@@ -841,21 +681,6 @@ export default function Machinery() {
               </div>
 
               <div>
-                <Label>Estado</Label>
-                <Combobox
-                  options={[
-                    { value: 'PROGRAMADA', label: 'Programada' },
-                    { value: 'EN_PROGRESO', label: 'En Progreso' },
-                    { value: 'PAUSADA', label: 'Pausada' },
-                    { value: 'FINALIZADA', label: 'Finalizada' },
-                    { value: 'CANCELADA', label: 'Cancelada' },
-                  ]}
-                  value={editStatus}
-                  onChange={setEditStatus}
-                />
-              </div>
-
-              <div>
                 <Label htmlFor="edit-obs">Observaciones</Label>
                 <Input
                   id="edit-obs"
@@ -883,66 +708,6 @@ export default function Machinery() {
                 </Button>
               </DialogFooter>
             </form>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal In-App para Finalizar Operación */}
-      <Dialog open={!!stoppingOp} onOpenChange={(open) => !open && setStoppingOp(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-forest-950 font-bold">
-              <Square size={18} className="text-red-600 fill-red-600" /> Finalizar Operación Mecanizada
-            </DialogTitle>
-          </DialogHeader>
-          {stoppingOp && (
-            <div className="space-y-4 pt-2">
-              <p className="text-sm text-gray-700">
-                ¿Desea marcar como finalizada la labor del operador <strong className="text-forest-950">{stoppingOp.operatorName}</strong>?
-              </p>
-              <DialogFooter className="gap-2 pt-2">
-                <Button variant="outline" onClick={() => setStoppingOp(null)} disabled={actionLoading}>
-                  Cancelar
-                </Button>
-                <Button 
-                  onClick={handleConfirmStop} 
-                  disabled={actionLoading}
-                  className="bg-red-700 hover:bg-red-800 text-white font-bold cursor-pointer"
-                >
-                  {actionLoading ? 'Finalizando...' : 'Confirmar Finalización'}
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal In-App para Cancelar Operación */}
-      <Dialog open={!!cancellingOp} onOpenChange={(open) => !open && setCancellingOp(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-700 font-bold">
-              <AlertCircle size={18} /> Cancelar Operación Mecanizada
-            </DialogTitle>
-          </DialogHeader>
-          {cancellingOp && (
-            <div className="space-y-4 pt-2">
-              <p className="text-sm text-gray-700">
-                ¿Está seguro de marcar como <strong className="text-red-700 uppercase">CANCELADA</strong> la operación del operador <strong>{cancellingOp.operatorName}</strong>?
-              </p>
-              <DialogFooter className="gap-2 pt-2">
-                <Button variant="outline" onClick={() => setCancellingOp(null)} disabled={actionLoading}>
-                  Volver
-                </Button>
-                <Button 
-                  onClick={handleConfirmCancel} 
-                  disabled={actionLoading}
-                  className="bg-red-700 hover:bg-red-800 text-white font-bold cursor-pointer"
-                >
-                  {actionLoading ? 'Cancelando...' : 'Confirmar Cancelación'}
-                </Button>
-              </DialogFooter>
-            </div>
           )}
         </DialogContent>
       </Dialog>
