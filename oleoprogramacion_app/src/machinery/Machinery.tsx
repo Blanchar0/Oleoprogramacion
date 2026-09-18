@@ -7,116 +7,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter 
 } from '@/src/components/ui';
 import { Combobox } from '@/src/components/ui/combobox';
-import { Play, Square, Tractor, Calendar, MapPin, Check, Layers, Clock, Pencil, Trash2, X, AlertCircle, Pause } from 'lucide-react';
-
-export function normalizeTimeForInput(timeStr?: string): string {
-  if (!timeStr) return '';
-  const trimmed = timeStr.trim();
-  if (/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(trimmed)) {
-    return trimmed.substring(0, 5);
-  }
-  const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([aApP])\.?\s*[mM]?\.?$/i);
-  if (match) {
-    let hours = parseInt(match[1], 10);
-    const minutes = match[2];
-    const isPM = match[3].toLowerCase() === 'p';
-    if (isPM && hours < 12) hours += 12;
-    if (!isPM && hours === 12) hours = 0;
-    return `${hours.toString().padStart(2, '0')}:${minutes}`;
-  }
-  return trimmed;
-}
-
-export function getMaxShiftHoursForDate(dateStr?: string): number {
-  if (!dateStr) return 8;
-  const [y, m, d] = dateStr.split('-').map(Number);
-  if (!y || !m || !d) return 8;
-  const dateObj = new Date(y, m - 1, d, 12, 0, 0);
-  const dayOfWeek = dateObj.getDay(); // 0 = Domingo, 6 = Sábado
-  if (dayOfWeek === 6) {
-    return 6; // Sábados: jornada máxima de 6 horas
-  }
-  return 8; // Lunes a Viernes: jornada máxima de 8 horas
-}
-
-export function getAutoEndTimeForDate(dateStr: string, startTime?: string): string {
-  if (!startTime) return '17:00';
-  const parts = startTime.split(':').map(Number);
-  if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return '17:00';
-  const maxHours = getMaxShiftHoursForDate(dateStr);
-  let endHour = parts[0] + maxHours;
-  let endMin = parts[1];
-  if (endHour >= 24) endHour = endHour - 24;
-  return `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
-}
-
-export function isOverShiftLimit(dateStr: string, startTime?: string): boolean {
-  if (!startTime || !dateStr) return false;
-  const parts = startTime.split(':').map(Number);
-  if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return false;
-  
-  const [y, m, d] = dateStr.split('-').map(Number);
-  if (!y || !m || !d) return false;
-  const startDate = new Date(y, m - 1, d, parts[0], parts[1], 0);
-  const now = new Date();
-  const diffMs = now.getTime() - startDate.getTime();
-  const diffHours = diffMs / (1000 * 60 * 60);
-  const maxHours = getMaxShiftHoursForDate(dateStr);
-  return diffHours >= maxHours;
-}
-
-export function shouldAutoStartOperation(dateStr: string, startTime?: string): boolean {
-  if (!dateStr || !startTime) return false;
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const parts = startTime.split(':').map(Number);
-  if (!y || !m || !d || parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return false;
-
-  const scheduledStart = new Date(y, m - 1, d, parts[0], parts[1], 0);
-  const now = new Date();
-  return now.getTime() >= scheduledStart.getTime();
-}
-
-export function calculateDuration(startTime?: string, endTime?: string, dateStr?: string): string | null {
-  if (!startTime) return null;
-  const partsStart = startTime.split(':').map(Number);
-  if (partsStart.length < 2 || isNaN(partsStart[0]) || isNaN(partsStart[1])) return null;
-
-  let endH: number;
-  let endM: number;
-
-  if (endTime) {
-    const partsEnd = endTime.split(':').map(Number);
-    if (partsEnd.length < 2 || isNaN(partsEnd[0]) || isNaN(partsEnd[1])) return null;
-    endH = partsEnd[0];
-    endM = partsEnd[1];
-  } else {
-    const now = new Date();
-    endH = now.getHours();
-    endM = now.getMinutes();
-  }
-
-  let startMins = partsStart[0] * 60 + partsStart[1];
-  let endMins = endH * 60 + endM;
-
-  let diffMins = endMins - startMins;
-  if (diffMins < 0) {
-    diffMins = 0;
-  }
-
-  const maxHours = getMaxShiftHoursForDate(dateStr);
-  const maxMins = maxHours * 60;
-  if (diffMins > maxMins) {
-    diffMins = maxMins;
-  }
-
-  const hours = Math.floor(diffMins / 60);
-  const mins = diffMins % 60;
-
-  if (hours === 0 && mins === 0) return '0 min';
-  if (hours === 0) return `${mins} min`;
-  if (mins === 0) return `${hours}h`;
-  return `${hours}h ${mins}m`;
-}
+import { Play, Square, Tractor, Calendar, MapPin, Check, Pencil, Trash2, AlertCircle, Pause, UserRound } from 'lucide-react';
 
 export default function Machinery() {
   const { user } = useAuth();
@@ -128,9 +19,6 @@ export default function Machinery() {
   const [laborId, setLaborId] = useState('');
   const [activityId, setActivityId] = useState('');
   const [observations, setObservations] = useState('');
-  const [startTime, setStartTime] = useState(() => 
-    new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
-  );
   const [selectedZones, setSelectedZones] = useState<string[]>([]);
 
   const [error, setError] = useState('');
@@ -144,8 +32,6 @@ export default function Machinery() {
   const [editOperatorId, setEditOperatorId] = useState('');
   const [editLaborId, setEditLaborId] = useState('');
   const [editActivityId, setEditActivityId] = useState('');
-  const [editStartTime, setEditStartTime] = useState('');
-  const [editEndTime, setEditEndTime] = useState('');
   const [editStatus, setEditStatus] = useState('EN_PROGRESO');
   const [editObservations, setEditObservations] = useState('');
   const [editSelectedZones, setEditSelectedZones] = useState<string[]>([]);
@@ -153,80 +39,27 @@ export default function Machinery() {
   const [editLoading, setEditLoading] = useState(false);
 
   // Estados para Modales In-App de Detener, Cancelar y Eliminar
-  const [stoppingOp, setStoppingOp] = useState<{ op: any; endTime: string } | null>(null);
+  const [stoppingOp, setStoppingOp] = useState<any | null>(null);
   const [cancellingOp, setCancellingOp] = useState<any | null>(null);
   const [deletingOpId, setDeletingOpId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   const isDirectivo = user?.role === 'DIRECTIVO';
 
-  // Chequeo periódico y sincronización automática de operaciones:
-  // 1. Activa automáticamente a EN_PROGRESO si llegó la hora de una operación PROGRAMADA
-  // 2. Auto-pausa a PAUSADA si excede la jornada máxima (8h lun-vie, 6h sábados)
-  const checkAndAutoManageOperations = (items: any[]) => {
-    items.forEach((m) => {
-      if (m.status === 'CANCELADA' || m.status === 'FINALIZADA') return;
-
-      // Regla 1: Si está PROGRAMADA y ya llegó la hora establecida, pasa automáticamente a EN_PROGRESO
-      if (m.status === 'PROGRAMADA' && m.startTime && shouldAutoStartOperation(m.date, m.startTime)) {
-        repository.updateMachineryOperation(m.id, {
-          status: 'EN_PROGRESO',
-        }, m.version);
-        return;
-      }
-
-      // Regla 2: Si está EN_PROGRESO y supera la jornada máxima (8h de lunes a viernes, 6h los sábados), se auto-pausa
-      if (m.status === 'EN_PROGRESO' && m.startTime && isOverShiftLimit(m.date, m.startTime)) {
-        const autoEndTime = getAutoEndTimeForDate(m.date, m.startTime);
-        const maxH = getMaxShiftHoursForDate(m.date);
-        const autoNote = m.observations 
-          ? (m.observations.includes('Auto-pausada') ? m.observations : `${m.observations} (Auto-pausada por límite de jornada de ${maxH}h)`)
-          : `Auto-pausada por límite de jornada laboral (${maxH}h)`;
-
-        repository.updateMachineryOperation(m.id, {
-          status: 'PAUSADA',
-          endTime: autoEndTime,
-          observations: autoNote
-        }, m.version);
-      }
-    });
-  };
-
   // Suscribirse a TODAS las operaciones de la fecha sin filtrar por supervisor
   useEffect(() => {
     const filters: any = { date };
     const unsub = repository.subscribeMachinery(filters, (items) => {
       setTodaysMachinery(items);
-      checkAndAutoManageOperations(items);
     });
     return () => unsub();
   }, [date]);
-
-  // Chequeo periódico cada 60s
-  useEffect(() => {
-    const interval = setInterval(() => {
-      checkAndAutoManageOperations(todaysMachinery);
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [todaysMachinery]);
-
-  const isTractorista = (person: any): boolean => {
-    if (!person) return false;
-    const cargo = (person.jobTitle || person.laborCargo || person.cargo || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const cuadrilla = (person.cuadrilla || person.zona || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    return cargo.includes('TRACTOR') || cargo.includes('MAQUIN') || cargo.includes('OPERADOR') ||
-           cuadrilla.includes('TRACTOR') || cuadrilla.includes('MAQUIN');
-  };
-
-  const machineryLabor = (catalogs.labors || []).find((l: any) => 
-    (l.name || '').toUpperCase().includes('MAQUINARIA')
-  );
 
   const tractors = (catalogs.equipment || []).filter((e: any) => e.active);
   const operatorOptions = (catalogs.personnel || []).filter((p: any) => p.active);
   const labors = (catalogs.labors || []).filter((l: any) => l.active);
 
-  const effectiveLaborForActivities = editLaborId || laborId || (machineryLabor ? machineryLabor.id : '');
+  const effectiveLaborForActivities = editLaborId || laborId;
   const activities = (catalogs.activities || []).filter((a: any) => 
     a.active && (!effectiveLaborForActivities || a.laborId === effectiveLaborForActivities)
   );
@@ -266,9 +99,8 @@ export default function Machinery() {
 
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
-    const effectiveLaborId = laborId || machineryLabor?.id;
-    if (!equipmentId || !operatorId || !effectiveLaborId || selectedZones.length === 0 || !startTime) {
-      setError('Complete los campos obligatorios (*) y seleccione al menos una zona');
+    if (!date || !equipmentId || !operatorId || !laborId || !activityId || selectedZones.length === 0) {
+      setError('Seleccione fecha, equipo, operador, labor, actividad y al menos una zona antes de registrar.');
       return;
     }
     setError('');
@@ -277,12 +109,8 @@ export default function Machinery() {
     const opObj = catalogs.personnel?.find((p: any) => p.id === operatorId);
     const opName = opObj?.name || opObj?.nombreCompleto || '';
 
-    const now = new Date();
-    const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-    const currentTimeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
-
-    // Si la fecha es posterior a hoy, o si es hoy pero la hora es futura:
-    const isFuture = date > todayStr || (date === todayStr && startTime > currentTimeStr);
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+    const isFuture = date > todayStr;
     const initialStatus = isFuture ? 'PROGRAMADA' : 'EN_PROGRESO';
 
     const payload = {
@@ -290,15 +118,15 @@ export default function Machinery() {
       equipmentId,
       operatorId,
       operatorName: opName,
-      laborId: effectiveLaborId,
-      activityId: activityId || null,
+      laborId,
+      activityId,
       observations: observations || '',
       locationId: null,
       zoneSnapshot: selectedZones.join(', '),
       idSupervisor: user?.idSupervisor || 'SUP001',
       supervisorId: user?.idSupervisor || 'SUP001',
+      createdBy: user?.id || null,
       status: initialStatus,
-      startTime: startTime || currentTimeStr
     };
 
     const res = await repository.createMachineryOperation(payload);
@@ -306,11 +134,10 @@ export default function Machinery() {
     if (res.ok) {
       setEquipmentId('');
       setOperatorId('');
-      setLaborId(machineryLabor ? machineryLabor.id : '');
+      setLaborId('');
       setActivityId('');
       setObservations('');
       setSelectedZones([]);
-      setStartTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' }));
     } else {
       setError(res.error || 'Error al guardar');
     }
@@ -318,10 +145,8 @@ export default function Machinery() {
 
   const handlePause = async (op: any) => {
     setActionLoading(true);
-    const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
     const res = await repository.updateMachineryOperation(op.id, {
       status: 'PAUSADA',
-      endTime: nowTime
     }, op.version);
     setActionLoading(false);
     if (!res.ok) alert(res.error || 'Error al pausar operación');
@@ -331,7 +156,6 @@ export default function Machinery() {
     setActionLoading(true);
     const res = await repository.updateMachineryOperation(op.id, {
       status: 'EN_PROGRESO',
-      endTime: null
     }, op.version);
     setActionLoading(false);
     if (!res.ok) alert(res.error || 'Error al reanudar operación');
@@ -339,10 +163,8 @@ export default function Machinery() {
 
   const handleStartNow = async (op: any) => {
     setActionLoading(true);
-    const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
     const res = await repository.updateMachineryOperation(op.id, {
       status: 'EN_PROGRESO',
-      startTime: nowTime
     }, op.version);
     setActionLoading(false);
     if (!res.ok) alert(res.error || 'Error al iniciar operación');
@@ -351,11 +173,9 @@ export default function Machinery() {
   const handleConfirmStop = async () => {
     if (!stoppingOp) return;
     setActionLoading(true);
-    const cleanEndTime = normalizeTimeForInput(stoppingOp.endTime);
-    const res = await repository.updateMachineryOperation(stoppingOp.op.id, {
+    const res = await repository.updateMachineryOperation(stoppingOp.id, {
       status: 'FINALIZADA',
-      endTime: cleanEndTime
-    }, stoppingOp.op.version);
+    }, stoppingOp.version);
     setActionLoading(false);
     if (res.ok) {
       setStoppingOp(null);
@@ -394,10 +214,8 @@ export default function Machinery() {
     setEditingOp(op);
     setEditEquipmentId(op.equipmentId || op.equipment_id || '');
     setEditOperatorId(op.operatorId || op.operator_id || '');
-    setEditLaborId(op.laborId || op.labor_id || (machineryLabor ? machineryLabor.id : ''));
+    setEditLaborId(op.laborId || op.labor_id || '');
     setEditActivityId(op.activityId || op.activity_id || '');
-    setEditStartTime(normalizeTimeForInput(op.startTime || op.start_time || ''));
-    setEditEndTime(normalizeTimeForInput(op.endTime || op.end_time || ''));
     setEditStatus(op.status || 'EN_PROGRESO');
     setEditObservations(op.observations || '');
 
@@ -412,12 +230,8 @@ export default function Machinery() {
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const effectiveLaborId = editLaborId || (machineryLabor ? machineryLabor.id : null);
-    const cleanStartTime = normalizeTimeForInput(editStartTime);
-    const cleanEndTime = normalizeTimeForInput(editEndTime);
-
-    if (!editEquipmentId || !editOperatorId || !effectiveLaborId || editSelectedZones.length === 0 || !cleanStartTime) {
-      setEditError('Complete los campos obligatorios (*) y seleccione al menos una zona');
+    if (!editEquipmentId || !editOperatorId || !editLaborId || !editActivityId || editSelectedZones.length === 0) {
+      setEditError('Seleccione equipo, operador, labor, actividad y al menos una zona antes de guardar.');
       return;
     }
     setEditError('');
@@ -430,10 +244,8 @@ export default function Machinery() {
       equipmentId: editEquipmentId,
       operatorId: editOperatorId,
       operatorName: opName,
-      laborId: effectiveLaborId,
-      activityId: editActivityId || null,
-      startTime: cleanStartTime,
-      endTime: cleanEndTime || null,
+      laborId: editLaborId,
+      activityId: editActivityId,
       status: editStatus,
       zoneSnapshot: editSelectedZones.join(', '),
       observations: editObservations || '',
@@ -493,7 +305,7 @@ export default function Machinery() {
               {(() => {
                 const currentEq = tractors.find((t: any) => t.id === equipmentId);
                 const currentOp = operatorOptions.find((p: any) => p.id === operatorId);
-                const currentLabor = labors.find((l: any) => l.id === (laborId || machineryLabor?.id));
+                const currentLabor = labors.find((l: any) => l.id === laborId);
                 const currentAct = activities.find((a: any) => a.id === activityId);
                 return (
                   <div className="bg-gradient-to-r from-purple-800 to-indigo-950 text-white p-3 rounded-xl shadow-xs mb-4">
@@ -524,36 +336,22 @@ export default function Machinery() {
               <form onSubmit={handleStart} className="space-y-4">
                 {error && <div className="text-sm text-negative bg-negative/10 p-2.5 rounded-md">{error}</div>}
                 
-                {/* 1️⃣ PASO 1: Fecha y Horario */}
+                {/* 1️⃣ PASO 1: Fecha */}
                 <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200/80 space-y-2">
                   <div className="flex items-center justify-between">
                     <Label className="font-black text-blue-950 flex items-center gap-1.5 text-xs uppercase tracking-wide">
                       <span className="w-5 h-5 rounded-full bg-blue-600 text-white inline-flex items-center justify-center text-xs font-black">1</span>
-                      FECHA Y HORA DE INICIO *
+                      FECHA DE LA OPERACIÓN *
                     </Label>
-                    {date && startTime && (
+                    {date && (
                       <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
                         <Check size={11} className="text-emerald-700 stroke-[3]" /> LISTO
                       </span>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs text-blue-950 font-black uppercase tracking-wide">FECHA *</Label>
-                      <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-white font-bold text-sm h-10 border-blue-300" />
-                    </div>
-                    <div>
-                      <Label className="flex items-center gap-1 text-xs text-blue-950 font-black uppercase tracking-wide">
-                        <Clock size={13} className="text-blue-700" /> HORA INICIO *
-                      </Label>
-                      <Input 
-                        type="time" 
-                        value={startTime} 
-                        onChange={e => setStartTime(e.target.value)} 
-                        required 
-                        className="w-full font-bold text-sm h-10 bg-white border-blue-300"
-                      />
-                    </div>
+                  <div>
+                    <Label className="text-xs text-blue-950 font-black uppercase tracking-wide">FECHA *</Label>
+                    <Input type="date" value={date} onChange={e => setDate(e.target.value)} required className="w-full bg-white font-bold text-sm h-10 border-blue-300" />
                   </div>
                 </div>
 
@@ -606,20 +404,33 @@ export default function Machinery() {
                 {/* 3️⃣ PASO 3: Labor, Actividad y Zonas */}
                 <div className={cn(
                   "p-3.5 rounded-xl border space-y-2 transition-all",
-                  activityId && selectedZones.length > 0 ? "bg-emerald-50/60 border-emerald-200/80" : "bg-gray-50 border-gray-200"
+                  laborId && activityId && selectedZones.length > 0 ? "bg-emerald-50/60 border-emerald-200/80" : "bg-gray-50 border-gray-200"
                 )}>
                   <div className="flex items-center justify-between">
                     <Label className="font-black text-emerald-950 flex items-center gap-1.5 text-xs uppercase tracking-wide">
                       <span className="w-5 h-5 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center text-xs font-black">3</span>
                       LABOR Y ZONAS DE OPERACIÓN *
                     </Label>
-                    {activityId && selectedZones.length > 0 ? (
+                    {laborId && activityId && selectedZones.length > 0 ? (
                       <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
                         <Check size={11} className="text-emerald-700 stroke-[3]" /> LISTO
                       </span>
                     ) : (
                       <span className="text-[10px] text-emerald-800 font-bold italic uppercase">PENDIENTE</span>
                     )}
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] text-emerald-950 font-black uppercase tracking-wide">LABOR *</Label>
+                    <Combobox
+                      options={labors.map((l: any) => ({ value: l.id, label: l.name }))}
+                      value={laborId}
+                      onChange={(value) => {
+                        setLaborId(value);
+                        setActivityId('');
+                      }}
+                      placeholder="SELECCIONE LABOR..."
+                    />
                   </div>
 
                   <div>
@@ -707,13 +518,12 @@ export default function Machinery() {
                   {(() => {
                     const now = new Date();
                     const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-                    const currentTimeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
-                    const isFuture = date > todayStr || (date === todayStr && startTime > currentTimeStr);
+                    const isFuture = date > todayStr;
 
                     return (
                       <Button 
                         type="submit" 
-                        disabled={loading || !equipmentId || !operatorId || selectedZones.length === 0} 
+                        disabled={loading || !date || !equipmentId || !operatorId || !laborId || !activityId || selectedZones.length === 0}
                         className={cn(
                           "w-full min-h-[50px] h-auto py-3 px-4 shadow-xl font-black text-xs sm:text-sm uppercase tracking-wide text-white rounded-xl flex items-center justify-center gap-2 cursor-pointer text-center leading-snug whitespace-normal transition-colors",
                           isFuture ? "bg-indigo-900 hover:bg-indigo-950" : "bg-purple-900 hover:bg-purple-950"
@@ -758,7 +568,13 @@ export default function Machinery() {
                   const op = catalogs.personnel?.find((p: any) => p.id === m.operatorId);
                   const labor = catalogs.labors?.find((l: any) => l.id === (m.laborId || m.labor_id));
                   const act = catalogs.activities?.find((a: any) => a.id === (m.activityId || m.activity_id));
-                  const duration = calculateDuration(m.startTime, m.endTime, m.date);
+                  const registeredBy = catalogs.users?.find((u: any) =>
+                    u.id === m.createdBy ||
+                    u.id === m.created_by ||
+                    u.idSupervisor === m.supervisorId ||
+                    u.supervisorId === m.supervisorId
+                  );
+                  const registeredByName = registeredBy?.name || m.supervisorName || m.supervisorId || 'No disponible';
 
                   return (
                     <div key={m.id} className="border border-forest-900/15 rounded-xl p-4 bg-white shadow-xs hover:border-forest-900/30 transition-all space-y-3">
@@ -794,7 +610,7 @@ export default function Machinery() {
                       </div>
 
                       {/* Detalles: Labor y Zonas */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                         <div className="flex items-center gap-1.5 text-forest-900 bg-forest-50/60 px-2.5 py-1.5 rounded-lg border border-forest-100">
                           <span className="font-semibold text-gray-600">Labor:</span>
                           <span className="font-bold text-forest-950 truncate">{labor?.name || 'Maquinaria'}</span>
@@ -806,6 +622,12 @@ export default function Machinery() {
                           <span className="font-semibold text-gray-600">Zonas:</span>
                           <span className="font-bold text-gray-900 truncate">{m.zoneSnapshot || 'No especificada'}</span>
                         </div>
+
+                        <div className="flex items-center gap-1.5 text-gray-700 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-200/70">
+                          <UserRound size={13} className="text-forest-700 shrink-0" />
+                          <span className="font-semibold text-gray-600">Registró:</span>
+                          <span className="font-bold text-gray-900 truncate">{registeredByName}</span>
+                        </div>
                       </div>
 
                       {/* Observaciones si existen */}
@@ -815,25 +637,10 @@ export default function Machinery() {
                         </div>
                       )}
 
-                      {/* Footer: Horario a la izquierda, Acciones alineadas a la derecha */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100">
-                        {/* Horario */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <div className="text-xs font-mono text-gray-700 bg-gray-100 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200">
-                            <Clock size={13} className="text-gray-500" />
-                            <span>Inicio: <strong>{m.startTime || '--:--'}</strong></span>
-                            {m.endTime && <span>| Fin: <strong>{m.endTime}</strong></span>}
-                          </div>
-                          {duration && (
-                            <span className="text-xs font-bold text-forest-900 bg-lime-100/90 border border-lime-300 px-2 py-0.5 rounded-full">
-                              ⏱️ {duration}
-                            </span>
-                          )}
-                        </div>
-
+                      <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-gray-100">
                         {/* Botones de Acción */}
                         {!isDirectivo && (
-                          <div className="flex items-center gap-1.5 ml-auto">
+                          <div className="flex items-center gap-1.5">
                             {m.status === 'PROGRAMADA' && (
                               <>
                                 <Button 
@@ -870,11 +677,8 @@ export default function Machinery() {
                                 <Button 
                                   size="sm" 
                                   className="bg-forest-900 hover:bg-forest-950 text-white text-xs h-7 px-3 font-bold flex items-center gap-1 cursor-pointer" 
-                                  onClick={() => {
-                                    const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
-                                    setStoppingOp({ op: m, endTime: nowTime });
-                                  }}
-                                  title="Finalizar operación y registrar hora de fin"
+                                  onClick={() => setStoppingOp(m)}
+                                  title="Finalizar operación"
                                 >
                                   <Square size={12} className="fill-white" /> Finalizar
                                 </Button>
@@ -894,10 +698,7 @@ export default function Machinery() {
                                 <Button 
                                   size="sm" 
                                   className="bg-forest-900 hover:bg-forest-950 text-white text-xs h-7 px-3 font-bold flex items-center gap-1 cursor-pointer" 
-                                  onClick={() => {
-                                    const nowTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
-                                    setStoppingOp({ op: m, endTime: nowTime });
-                                  }}
+                                  onClick={() => setStoppingOp(m)}
                                   title="Finalizar operación"
                                 >
                                   <Square size={12} className="fill-white" /> Finalizar
@@ -984,7 +785,7 @@ export default function Machinery() {
                 <Label>Labor *</Label>
                 <Combobox
                   options={labors.map((l: any) => ({ value: l.id, label: l.name }))}
-                  value={editLaborId || machineryLabor?.id || ''}
+                  value={editLaborId}
                   onChange={(val) => {
                     setEditLaborId(val);
                     setEditActivityId('');
@@ -994,7 +795,7 @@ export default function Machinery() {
               </div>
 
               <div>
-                <Label>Actividad</Label>
+                <Label>Actividad *</Label>
                 <Combobox
                   options={(catalogs.activities || [])
                     .filter((a: any) => a.active && (!editLaborId || a.laborId === editLaborId))
@@ -1039,39 +840,19 @@ export default function Machinery() {
                 </div>
               </div>
 
-              {/* Horarios y Estado */}
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <Label>Hora Inicio *</Label>
-                  <Input
-                    type="time"
-                    value={editStartTime}
-                    onChange={(e) => setEditStartTime(e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label>Hora Fin</Label>
-                  <Input
-                    type="time"
-                    value={editEndTime}
-                    onChange={(e) => setEditEndTime(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label>Estado</Label>
-                  <Combobox
-                    options={[
-                      { value: 'PROGRAMADA', label: 'Programada' },
-                      { value: 'EN_PROGRESO', label: 'En Progreso' },
-                      { value: 'PAUSADA', label: 'Pausada' },
-                      { value: 'FINALIZADA', label: 'Finalizada' },
-                      { value: 'CANCELADA', label: 'Cancelada' },
-                    ]}
-                    value={editStatus}
-                    onChange={setEditStatus}
-                  />
-                </div>
+              <div>
+                <Label>Estado</Label>
+                <Combobox
+                  options={[
+                    { value: 'PROGRAMADA', label: 'Programada' },
+                    { value: 'EN_PROGRESO', label: 'En Progreso' },
+                    { value: 'PAUSADA', label: 'Pausada' },
+                    { value: 'FINALIZADA', label: 'Finalizada' },
+                    { value: 'CANCELADA', label: 'Cancelada' },
+                  ]}
+                  value={editStatus}
+                  onChange={setEditStatus}
+                />
               </div>
 
               <div>
@@ -1106,39 +887,29 @@ export default function Machinery() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal In-App para Detener / Finalizar Operación */}
+      {/* Modal In-App para Finalizar Operación */}
       <Dialog open={!!stoppingOp} onOpenChange={(open) => !open && setStoppingOp(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-forest-950 font-bold">
-              <Square size={18} className="text-red-600 fill-red-600" /> Detener Operación Mecanizada
+              <Square size={18} className="text-red-600 fill-red-600" /> Finalizar Operación Mecanizada
             </DialogTitle>
           </DialogHeader>
           {stoppingOp && (
             <div className="space-y-4 pt-2">
               <p className="text-sm text-gray-700">
-                ¿Desea registrar la finalización de la labor para el operador <strong className="text-forest-950">{stoppingOp.op.operatorName}</strong>?
+                ¿Desea marcar como finalizada la labor del operador <strong className="text-forest-950">{stoppingOp.operatorName}</strong>?
               </p>
-              <div>
-                <Label className="text-xs font-black uppercase text-gray-800 tracking-wide">HORA DE FINALIZACIÓN *</Label>
-                <Input 
-                  type="time" 
-                  value={stoppingOp.endTime} 
-                  onChange={e => setStoppingOp(prev => prev ? { ...prev, endTime: e.target.value } : null)} 
-                  className="bg-white font-bold text-base h-11 border-gray-300 mt-1"
-                  required
-                />
-              </div>
               <DialogFooter className="gap-2 pt-2">
                 <Button variant="outline" onClick={() => setStoppingOp(null)} disabled={actionLoading}>
                   Cancelar
                 </Button>
                 <Button 
                   onClick={handleConfirmStop} 
-                  disabled={actionLoading || !stoppingOp.endTime}
+                  disabled={actionLoading}
                   className="bg-red-700 hover:bg-red-800 text-white font-bold cursor-pointer"
                 >
-                  {actionLoading ? 'Finalizando...' : 'Confirmar y Detener'}
+                  {actionLoading ? 'Finalizando...' : 'Confirmar Finalización'}
                 </Button>
               </DialogFooter>
             </div>

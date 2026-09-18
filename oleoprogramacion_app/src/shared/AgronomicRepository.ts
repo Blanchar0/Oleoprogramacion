@@ -476,36 +476,20 @@ class SupabaseRepository implements AgronomicRepository {
       }
       const mapped = (data || []).map((item: any) => {
         let zoneSnap = item.zone_snapshot;
-        let sTime = item.start_time || item.startTime;
-        let eTime = item.end_time || item.endTime;
         let obs = item.observations || '';
 
-        // Extract metadata if it was stored in observations during schema fallback
+        // Compatibilidad con registros antiguos que guardaban la zona dentro de observaciones.
         if (obs) {
           if (!zoneSnap && obs.includes('[Zonas:')) {
             const matchZ = obs.match(/\[Zonas:\s*([^\]]+)\]/i);
             if (matchZ) zoneSnap = matchZ[1];
           }
-          if (!sTime && obs.includes('[Inicio:')) {
-            const matchI = obs.match(/\[Inicio:\s*([^\]]+)\]/i);
-            if (matchI) sTime = matchI[1];
-          }
-          if (!eTime && obs.includes('[Fin:')) {
-            const matchF = obs.match(/\[Fin:\s*([^\]]+)\]/i);
-            if (matchF) eTime = matchF[1];
-          }
-          // Clean fallback tags from user-facing observations
+          // Los metadatos históricos de horario no se exponen en la nueva vista.
           obs = obs
             .replace(/\[Zonas:\s*[^\]]+\]/gi, '')
             .replace(/\[Inicio:\s*[^\]]+\]/gi, '')
             .replace(/\[Fin:\s*[^\]]+\]/gi, '')
             .trim();
-        }
-
-        if (!sTime && item.created_at) {
-          try {
-            sTime = new Date(item.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
-          } catch (e) { }
         }
 
         return {
@@ -517,14 +501,13 @@ class SupabaseRepository implements AgronomicRepository {
           operatorName: item.operator_name,
           laborId: item.labor_id || item.laborId,
           activityId: item.activity_id || item.activityId,
+          createdBy: item.created_by || null,
           locationId: item.location_id,
           zoneSnapshot: zoneSnap,
           initialHourMeter: item.initial_hour_meter,
           finalHourMeter: item.final_hour_meter,
           effectiveHours: item.effective_hours,
           observations: obs,
-          startTime: sTime,
-          endTime: eTime,
         };
       });
 
@@ -553,15 +536,6 @@ class SupabaseRepository implements AgronomicRepository {
   async createMachineryOperation(input: any): Promise<Result> {
     const supId = input.supervisorId || input.idSupervisor || 'SUP001';
     const opName = input.operatorName || input.operatorId || 'Operador';
-    const sTime = input.startTime || new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
-    const eTime = input.endTime || input.end_time || '';
-
-    const combinedObservations = [
-      input.zoneSnapshot ? `[Zonas: ${input.zoneSnapshot}]` : '',
-      sTime ? `[Inicio: ${sTime}]` : '',
-      eTime ? `[Fin: ${eTime}]` : '',
-      input.observations || ''
-    ].filter(Boolean).join(' ').trim();
 
     const payload: Record<string, any> = {
       id: crypto.randomUUID(),
@@ -569,10 +543,14 @@ class SupabaseRepository implements AgronomicRepository {
       supervisor_id: supId,
       id_supervisor: supId,
       equipment_id: input.equipmentId,
+      operator_id: input.operatorId,
       operator_name: opName,
-      activity_id: input.activityId || input.activity_id || null,
+      labor_id: input.laborId || input.labor_id,
+      activity_id: input.activityId || input.activity_id,
       location_id: input.locationId || null,
-      observations: combinedObservations,
+      zone_snapshot: input.zoneSnapshot,
+      created_by: input.createdBy || null,
+      observations: input.observations || '',
       status: input.status || 'EN_PROGRESO',
       version: 1,
       created_at: new Date().toISOString(),
@@ -606,30 +584,11 @@ class SupabaseRepository implements AgronomicRepository {
   }
 
   async updateMachineryOperation(id: string, input: any, expectedVersion?: number): Promise<Result> {
-    let existingZone = '';
-    let existingStart = '';
-    let existingEnd = '';
-    let existingObs = '';
-
-    if (input.observations) existingObs = input.observations;
-
-    const zonePart = input.zoneSnapshot !== undefined ? input.zoneSnapshot : existingZone;
-    const startPart = input.startTime !== undefined ? input.startTime : (input.start_time !== undefined ? input.start_time : existingStart);
-    const endPart = input.endTime !== undefined ? input.endTime : (input.end_time !== undefined ? input.end_time : existingEnd);
-    const userObsPart = input.observations !== undefined ? input.observations : existingObs;
-
-    const combinedObservations = [
-      zonePart ? `[Zonas: ${zonePart}]` : '',
-      startPart ? `[Inicio: ${startPart}]` : '',
-      endPart ? `[Fin: ${endPart}]` : '',
-      userObsPart || ''
-    ].filter(Boolean).join(' ').trim();
-
     const payload: any = {
       updated_at: new Date().toISOString(),
-      observations: combinedObservations
     };
 
+    if (input.observations !== undefined) payload.observations = input.observations || '';
     if (input.status !== undefined) payload.status = input.status;
     if (input.date !== undefined) payload.date = input.date;
     if (input.equipmentId !== undefined || input.equipment_id !== undefined) {
@@ -638,11 +597,20 @@ class SupabaseRepository implements AgronomicRepository {
     if (input.operatorName !== undefined || input.operator_name !== undefined || input.operatorId !== undefined) {
       payload.operator_name = input.operatorName || input.operator_name || input.operatorId;
     }
+    if (input.operatorId !== undefined || input.operator_id !== undefined) {
+      payload.operator_id = input.operatorId || input.operator_id;
+    }
+    if (input.laborId !== undefined || input.labor_id !== undefined) {
+      payload.labor_id = input.laborId || input.labor_id;
+    }
     if (input.activityId !== undefined || input.activity_id !== undefined) {
       payload.activity_id = input.activityId || input.activity_id;
     }
     if (input.locationId !== undefined || input.location_id !== undefined) {
       payload.location_id = input.locationId || input.location_id;
+    }
+    if (input.zoneSnapshot !== undefined || input.zone_snapshot !== undefined) {
+      payload.zone_snapshot = input.zoneSnapshot || input.zone_snapshot;
     }
 
     if (typeof navigator !== 'undefined' && !navigator.onLine) {

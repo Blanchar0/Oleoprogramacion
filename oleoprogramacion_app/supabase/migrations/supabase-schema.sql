@@ -173,6 +173,7 @@ CREATE TABLE IF NOT EXISTS public.machinery_operations (
   initial_hour_meter NUMERIC,
   final_hour_meter NUMERIC,
   effective_hours NUMERIC,
+  created_by TEXT,
   observations TEXT,
   start_time TEXT,
   end_time TEXT,

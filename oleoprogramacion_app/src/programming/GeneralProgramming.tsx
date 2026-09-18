@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { repository } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
 import { useNavigate } from 'react-router-dom';
-import { calculateDuration } from '../machinery/Machinery';
+import { calculateDuration } from '../shared/time';
 import { TeamStreakCard } from '../shared/components/TeamStreakCard';
 
 export default function GeneralProgramming({ overrideDate }: { overrideDate?: string }) {

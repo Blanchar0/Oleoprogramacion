@@ -233,7 +233,7 @@ export interface MachineryOperator {
   orden: number;
 }
 
-export type MachineryStatus = 'PROGRAMADA' | 'EN CURSO' | 'FINALIZADA' | 'CANCELADA';
+export type MachineryStatus = 'PROGRAMADA' | 'EN_PROGRESO' | 'PAUSADA' | 'FINALIZADA' | 'CANCELADA';
 
 export interface Machinery {
   id: string;
@@ -245,10 +245,8 @@ export interface Machinery {
   loteSnapshot?: string;
   operatorId: string; // personnelId
   equipmentId: string;
-  startTime: string; // HH:mm
-  endTime?: string; // HH:mm
   supervisorId: string;
-  createdBy: string;
+  createdBy?: string;
   observations: string;
   status: MachineryStatus;
   createdAt: string;
