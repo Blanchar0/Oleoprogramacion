@@ -13,6 +13,7 @@ import Catalogs from './admin/Catalogs';
 import Novedades from './admin/Novedades';
 import Cycles from './cycles/Cycles';
 import Productivity from './productivity/Productivity';
+import { canAccessProductivity } from './auth/access';
 import { Leaf } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'motion/react';
@@ -36,6 +37,12 @@ function HomeRoute() {
     return <Navigate to="/programming/all" replace />;
   }
   return <Dashboard />;
+}
+
+function ProductivityGuard({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!canAccessProductivity(user)) return <Navigate to="/" replace />;
+  return <>{children}</>;
 }
 
 function LoadingScreen({ hasLongWait }: { hasLongWait: boolean }) {
@@ -213,9 +220,9 @@ function AppContent() {
                 </RoleGuard>
               } />
               <Route path="/productivity" element={
-                <RoleGuard roles={['ADMIN', 'DIRECTIVO']}>
+                <ProductivityGuard>
                   <Productivity />
-                </RoleGuard>
+                </ProductivityGuard>
               } />
               
               {/* Shared Operational Routes */}
