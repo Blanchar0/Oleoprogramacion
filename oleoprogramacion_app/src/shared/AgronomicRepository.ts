@@ -826,11 +826,30 @@ class SupabaseRepository implements AgronomicRepository {
   // -- CYCLES AND PRODUCTIVITY --
   subscribeCycles(callback: (data: { rules: CycleLaborRule[]; executions: CycleExecution[]; imports: CycleImport[] }) => void): Unsubscribe {
     const fetchCycles = async () => {
-      const [{ data: rules, error: rulesError }, { data: executions, error: executionsError }, { data: imports, error: importsError }] = await Promise.all([
+      const fetchAllExecutions = async () => {
+        const pageSize = 1000;
+        const rows: any[] = [];
+        for (let from = 0; ; from += pageSize) {
+          const { data, error } = await supabase
+            .from('cycle_executions')
+            .select('*')
+            .order('execution_date', { ascending: false })
+            .order('lote_code')
+            .order('labor_code')
+            .range(from, from + pageSize - 1);
+          if (error) return { data: null, error };
+          rows.push(...(data || []));
+          if ((data || []).length < pageSize) return { data: rows, error: null };
+        }
+      };
+
+      const [{ data: rules, error: rulesError }, executionsResult, { data: imports, error: importsError }] = await Promise.all([
         supabase.from('cycle_labor_rules').select('*').order('sort_order'),
-        supabase.from('cycle_executions').select('*').order('execution_date', { ascending: false }),
+        fetchAllExecutions(),
         supabase.from('cycle_imports').select('*').order('imported_at', { ascending: false }).limit(12),
       ]);
+      const executions = executionsResult.data;
+      const executionsError = executionsResult.error;
 
       const sourceError = rulesError || executionsError || importsError;
       if (sourceError) {
@@ -874,15 +893,26 @@ class SupabaseRepository implements AgronomicRepository {
       });
     };
 
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(fetchCycles, 500);
+    };
+
     fetchCycles();
     const channel = supabase
       .channel(`public:cycles:${crypto.randomUUID()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cycle_labor_rules' }, fetchCycles)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cycle_executions' }, fetchCycles)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cycle_imports' }, fetchCycles)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cycle_labor_rules' }, scheduleRefresh)
+      // Una importación masiva puede generar miles de eventos de fila. Se
+      // espera a que termine el lote antes de volver a consultar.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cycle_executions' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cycle_imports' }, scheduleRefresh)
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      supabase.removeChannel(channel);
+    };
   }
 
   async importCycleExecutions(input: { fileName: string; fileType: string; importedBy: string; rows: Array<Pick<CycleExecution, 'executionDate' | 'loteCode' | 'laborCode' | 'personnelCount'>>; errors: string[] }): Promise<Result> {

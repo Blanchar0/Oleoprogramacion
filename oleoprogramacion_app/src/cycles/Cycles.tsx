@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { repository } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
 import { parseCycleFile } from '../shared/spreadsheetImport';
-import { buildCycleCards, cycleAgeValue, cycleStateLabel, DEFAULT_CYCLE_RULES, differenceInDays, fromIsoDate, getCycleState, toIsoDate, type CycleCard } from './cycleLogic';
+import { buildCycleCards, cycleAgeValue, cycleStateLabel, DEFAULT_CYCLE_RULES, differenceInDays, fromIsoDate, getCycleProgress, getCycleState, normalizeLotCode, toIsoDate, type CycleCard } from './cycleLogic';
 import type { CycleExecution, CycleImport, CycleLaborRule, CycleStatus } from '../types';
 
 type View = 'resumen' | 'kanban' | 'cronograma' | 'historial';
@@ -41,11 +41,9 @@ function cycleValueAtDate(executions: CycleExecution[], loteCode: string, laborC
     item.executionDate <= endValue,
   );
   if (executedDuringPeriod) return 0;
-  const last = executions
-    .filter((item) => item.loteCode === loteCode && item.laborCode === laborCode && item.executionDate <= endValue)
-    .sort((a, b) => b.executionDate.localeCompare(a.executionDate))[0];
-  if (!last) return null;
-  return cycleAgeValue(differenceInDays(last.executionDate, end), rule.scheduleGranularity);
+  const { cycleStartDate } = getCycleProgress(executions, loteCode, laborCode, end, rule);
+  if (!cycleStartDate) return null;
+  return cycleAgeValue(differenceInDays(cycleStartDate, end), rule.scheduleGranularity);
 }
 
 export default function Cycles() {
@@ -99,7 +97,16 @@ export default function Cycles() {
     setNotice(null);
     try {
       const parsed = await parseCycleFile(file);
-      setUploadPreview({ ...parsed, file });
+      const catalogLots = new Set((catalogs.locations || [])
+        .filter((location: any) => location.active !== false)
+        .map((location: any) => normalizeLotCode(location.name)));
+      const rows = parsed.rows.filter((row) => catalogLots.has(row.loteCode));
+      const unknownLots = [...new Set(parsed.rows.filter((row) => !catalogLots.has(row.loteCode)).map((row) => row.loteCode))];
+      const errors = [
+        ...parsed.errors,
+        ...unknownLots.map((loteCode) => `Lote ${loteCode}: no existe o está inactivo en Catálogos.`),
+      ];
+      setUploadPreview({ ...parsed, rows, errors, file });
     } catch {
       setNotice('No se pudo leer el archivo. Selecciona un Excel o CSV con la hoja Ciclos.');
     }
@@ -217,6 +224,15 @@ function Timeline({ cards, executions, rule, asOf, onLaborChange, rules }: { car
 }
 
 function HistoryTable({ executions, rules, zonesByLot }: { executions: CycleExecution[]; rules: CycleLaborRule[]; zonesByLot: Map<string, string> }) {
+  const [year, setYear] = useState('TODOS');
+  const [page, setPage] = useState(0);
+  const pageSize = 100;
   const ruleNames = new Map(rules.map((rule) => [rule.id, rule.name]));
-  return <Card><CardHeader className="pb-2"><CardTitle className="text-base text-forest-950">Historial de ejecuciones importadas</CardTitle><p className="text-xs text-gray-500">Cada fila proviene de la hoja Ciclos cargada por el administrador.</p></CardHeader><CardContent><div className="overflow-auto rounded-xl border"><table className="w-full text-sm"><thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="text-left p-3">Fecha</th><th className="text-left p-3">Zona</th><th className="text-left p-3">Lote</th><th className="text-left p-3">Labor</th><th className="text-right p-3">Personas</th></tr></thead><tbody>{executions.slice(0, 300).map((execution) => <tr key={execution.id} className="border-t border-gray-100"><td className="p-3 text-gray-700">{formatDate(execution.executionDate)}</td><td className="p-3 text-gray-500">{zonesByLot.get(execution.loteCode) || 'Sin zona'}</td><td className="p-3 font-bold text-forest-950">{execution.loteCode}</td><td className="p-3">{ruleNames.get(execution.laborCode) || execution.laborCode}</td><td className="p-3 text-right font-mono">{numberFormatter.format(execution.personnelCount)}</td></tr>)}{executions.length === 0 && <tr><td colSpan={5} className="p-12 text-center text-gray-500">Aún no hay ejecuciones importadas.</td></tr>}</tbody></table></div>{executions.length > 300 && <p className="text-xs text-gray-500 mt-3">Mostrando los 300 registros más recientes.</p>}</CardContent></Card>;
+  const years = [...new Set(executions.map((execution) => execution.executionDate.slice(0, 4)))].sort((a, b) => b.localeCompare(a));
+  const filtered = year === 'TODOS' ? executions : executions.filter((execution) => execution.executionDate.startsWith(year));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, pageCount - 1);
+  const rows = filtered.slice(safePage * pageSize, (safePage + 1) * pageSize);
+
+  return <Card><CardHeader className="gap-3 pb-2 md:flex-row md:items-end md:justify-between"><div><CardTitle className="text-base text-forest-950">Historial de ejecuciones importadas</CardTitle><p className="text-xs text-gray-500 mt-1">Consulta el histórico por año sin limitarlo a los registros recientes.</p></div><label className="text-xs font-bold text-gray-600 flex flex-col gap-1">Año<select value={year} onChange={(event) => { setYear(event.target.value); setPage(0); }} className="h-9 rounded-lg border border-gray-300 px-3 text-sm font-medium text-forest-950 bg-white"><option value="TODOS">Todos los años</option>{years.map((item) => <option key={item} value={item}>{item}</option>)}</select></label></CardHeader><CardContent><div className="overflow-auto rounded-xl border"><table className="w-full text-sm"><thead className="bg-gray-50 text-xs uppercase text-gray-500"><tr><th className="text-left p-3">Fecha</th><th className="text-left p-3">Zona</th><th className="text-left p-3">Lote</th><th className="text-left p-3">Labor</th><th className="text-right p-3">Personas</th></tr></thead><tbody>{rows.map((execution) => <tr key={execution.id} className="border-t border-gray-100"><td className="p-3 text-gray-700">{formatDate(execution.executionDate)}</td><td className="p-3 text-gray-500">{zonesByLot.get(execution.loteCode) || 'Sin zona'}</td><td className="p-3 font-bold text-forest-950">{execution.loteCode}</td><td className="p-3">{ruleNames.get(execution.laborCode) || execution.laborCode}</td><td className="p-3 text-right font-mono">{numberFormatter.format(execution.personnelCount)}</td></tr>)}{rows.length === 0 && <tr><td colSpan={5} className="p-12 text-center text-gray-500">No hay ejecuciones para el filtro seleccionado.</td></tr>}</tbody></table></div><div className="mt-3 flex items-center justify-between gap-3 text-xs text-gray-500"><span>{filtered.length} registros · Página {safePage + 1} de {pageCount}</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>Anterior</Button><Button size="sm" variant="outline" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}>Siguiente</Button></div></div></CardContent></Card>;
 }

@@ -13,6 +13,7 @@ export type CycleCard = {
   zone: string;
   labor: CycleLaborRule;
   lastExecution: CycleExecution | null;
+  cycleStartDate: string | null;
   daysElapsed: number | null;
   state: CycleStatus;
   personnelCount: number | null;
@@ -60,6 +61,39 @@ export function getCycleState(daysElapsed: number | null, rule: CycleLaborRule):
   return 'CRITICO';
 }
 
+/**
+ * Reproduce la regla de "Inicio ciclo" del archivo Control_Ciclo_Labores.
+ * Una intervención siempre se dibuja como 0, pero solo inicia un ciclo nuevo
+ * cuando ocurre después del umbral restartDays contado desde el inicio vigente.
+ */
+export function getCycleProgress(
+  executions: CycleExecution[],
+  loteCode: string,
+  laborCode: string,
+  until: Date,
+  rule: CycleLaborRule,
+) {
+  const untilDate = toIsoDate(until);
+  const matching = executions
+    .filter((execution) =>
+      normalizeLotCode(execution.loteCode) === loteCode &&
+      execution.laborCode === laborCode &&
+      execution.executionDate <= untilDate,
+    )
+    .sort((a, b) => a.executionDate.localeCompare(b.executionDate));
+
+  let cycleStartDate: string | null = null;
+  let lastExecution: CycleExecution | null = null;
+  matching.forEach((execution) => {
+    if (!cycleStartDate || differenceInDays(cycleStartDate, fromIsoDate(execution.executionDate)) >= rule.restartDays) {
+      cycleStartDate = execution.executionDate;
+    }
+    lastExecution = execution;
+  });
+
+  return { cycleStartDate, lastExecution };
+}
+
 export function buildCycleCards(
   executions: CycleExecution[],
   locations: Array<{ name?: string; zone?: string; active?: boolean }>,
@@ -72,25 +106,21 @@ export function buildCycleCards(
       .filter((location) => location.active !== false && location.name)
       .map((location) => [normalizeLotCode(location.name), location]),
   );
-  const lotCodes = new Set([...locationsByCode.keys(), ...executions.map((execution) => normalizeLotCode(execution.loteCode))]);
-  const latest = new Map<string, CycleExecution>();
-
-  executions.forEach((execution) => {
-    const key = `${normalizeLotCode(execution.loteCode)}:${execution.laborCode}`;
-    const current = latest.get(key);
-    if (!current || execution.executionDate > current.executionDate) latest.set(key, execution);
-  });
+  // El catálogo es la fuente de lotes operativos. Las importaciones no pueden
+  // crear lotes visibles por sí solas.
+  const lotCodes = [...locationsByCode.keys()];
 
   return Array.from(lotCodes)
     .flatMap((loteCode) => activeRules.map((labor) => {
-      const lastExecution = latest.get(`${loteCode}:${labor.id}`) || null;
-      const daysElapsed = lastExecution ? differenceInDays(lastExecution.executionDate, asOf) : null;
+      const { cycleStartDate, lastExecution } = getCycleProgress(executions, loteCode, labor.id, asOf, labor);
+      const daysElapsed = cycleStartDate ? differenceInDays(cycleStartDate, asOf) : null;
       return {
         key: `${loteCode}:${labor.id}`,
         loteCode,
         zone: locationsByCode.get(loteCode)?.zone || 'Sin zona',
         labor,
         lastExecution,
+        cycleStartDate,
         daysElapsed,
         state: getCycleState(daysElapsed, labor),
         personnelCount: lastExecution?.personnelCount ?? null,
