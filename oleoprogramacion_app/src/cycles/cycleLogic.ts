@@ -20,7 +20,34 @@ export type CycleCard = {
 };
 
 export function normalizeLotCode(value: unknown) {
-  return String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  const code = String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  // Corrección confirmada para archivos de productividad que invierten el prefijo.
+  return code === '09F020' || code === '10F020' ? '01F020' : code;
+}
+
+export function normalizeZoneName(value: unknown) {
+  const key = String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim();
+  const compact = key.replace(/\s+/g, '');
+  const aliases: Record<string, string> = {
+    ELCARMEN: 'EL CARMEN',
+    LASFLORES: 'LAS FLORES',
+    MACHOSOLO: 'MACHO SOLO',
+    SANCARLOS: 'SAN CARLOS',
+    SUHAREZ: 'SUHAREZ',
+  };
+  return aliases[compact] || key;
+}
+
+export function displayZoneName(value: unknown) {
+  return normalizeZoneName(value)
+    .toLocaleLowerCase('es-CO')
+    .replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase('es-CO'));
 }
 
 export function normalizeCycleLabor(value: unknown): string | null {

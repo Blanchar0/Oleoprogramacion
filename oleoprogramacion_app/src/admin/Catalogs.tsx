@@ -102,7 +102,8 @@ export default function Catalogs() {
           name: '',
           anoSiembra: '',
           ha: '',
-          palmasDiferenciadas: ''
+          palmasDiferenciadas: '',
+          palmasTotales: ''
         });
       } else {
         setFormData({ active: true });
@@ -230,6 +231,7 @@ export default function Catalogs() {
                     <>
                       <th className="px-4 py-3">Año Siembra</th>
                       <th className="px-4 py-3">Ha (Netas)</th>
+                      <th className="px-4 py-3">Palmas Totales</th>
                       <th className="px-4 py-3">Palmas Diferenciadas</th>
                     </>
                   )}
@@ -470,6 +472,9 @@ export default function Catalogs() {
                         {l.ha !== null && l.ha !== undefined ? `${l.ha} Ha` : '—'}
                       </td>
                       <td className="px-4 py-3 text-gray-600 font-medium">
+                        {l.palmasTotales ?? l.palmas_totales ?? '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 font-medium">
                         {l.palmasDiferenciadas ?? l.palmas_diferenciadas ?? '—'}
                       </td>
                       <td className="px-4 py-3">
@@ -697,7 +702,7 @@ export default function Catalogs() {
                     placeholder="Ej: 09F014, 03A001, LOTE 5" 
                   />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <Label>Año de Siembra</Label>
                     <Input 
@@ -718,6 +723,16 @@ export default function Catalogs() {
                       value={formData.ha ?? ''} 
                       onChange={e => setFormData({ ...formData, ha: e.target.value })} 
                       placeholder="Ej: 19.16" 
+                    />
+                  </div>
+                  <div>
+                    <Label>Palmas Totales</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={formData.palmasTotales ?? formData.palmas_totales ?? ''}
+                      onChange={e => setFormData({ ...formData, palmasTotales: e.target.value })}
+                      placeholder="Ej: 2740"
                     />
                   </div>
                   <div>

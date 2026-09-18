@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { offlineStore } from './offlineStore';
 import { syncManager } from './syncManager';
 import type { CycleExecution, CycleImport, CycleLaborRule, ProductivityImport, ProductivityProjection, ProductivityRecord, ProgrammingReport, ProgrammingStreakDay } from '../types';
+import { normalizeLotCode, normalizeZoneName } from '../cycles/cycleLogic';
 
 export interface Result {
   ok: boolean;
@@ -944,8 +945,8 @@ class SupabaseRepository implements AgronomicRepository {
         records: (records || []).map((row: any) => ({
           id: row.id,
           period: String(row.period).slice(0, 7),
-          loteCode: row.lote_code,
-          zonaSnapshot: row.zona_snapshot,
+          loteCode: normalizeLotCode(row.lote_code),
+          zonaSnapshot: row.zona_snapshot ? normalizeZoneName(row.zona_snapshot) : null,
           siembraSnapshot: row.siembra_snapshot === null ? null : Number(row.siembra_snapshot),
           racimos: row.racimos === null ? null : Number(row.racimos),
           kilograms: row.kilograms === null ? null : Number(row.kilograms),
@@ -1146,6 +1147,7 @@ class SupabaseRepository implements AgronomicRepository {
           anoSiembra: loc.ano_siembra ?? loc.anoSiembra ?? null,
           ha: loc.ha !== null && loc.ha !== undefined ? Number(loc.ha) : null,
           palmasDiferenciadas: loc.palmas_diferenciadas ?? loc.palmasDiferenciadas ?? null,
+          palmasTotales: loc.palmas_totales ?? loc.palmasTotales ?? null,
         }));
 
         const catalogsPayload = {
@@ -1505,6 +1507,9 @@ class SupabaseRepository implements AgronomicRepository {
       if (input.palmasDiferenciadas !== undefined && input.palmasDiferenciadas !== '' && input.palmasDiferenciadas !== null) {
         payload.palmas_diferenciadas = Number(input.palmasDiferenciadas);
       }
+      if (input.palmasTotales !== undefined && input.palmasTotales !== '' && input.palmasTotales !== null) {
+        payload.palmas_totales = Number(input.palmasTotales);
+      }
 
       const { data, error } = await supabase.from('locations').insert(payload).select().single();
       if (error) {
@@ -1545,6 +1550,9 @@ class SupabaseRepository implements AgronomicRepository {
       }
       if (input.palmasDiferenciadas !== undefined) {
         payload.palmas_diferenciadas = (input.palmasDiferenciadas === '' || input.palmasDiferenciadas === null) ? null : Number(input.palmasDiferenciadas);
+      }
+      if (input.palmasTotales !== undefined) {
+        payload.palmas_totales = (input.palmasTotales === '' || input.palmasTotales === null) ? null : Number(input.palmasTotales);
       }
 
       const { data, error } = await supabase.from('locations').update(payload).eq('id', id).select().single();

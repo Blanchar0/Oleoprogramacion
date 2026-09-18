@@ -73,6 +73,12 @@ CREATE TABLE IF NOT EXISTS public.locations (
   ano_siembra NUMERIC,
   ha NUMERIC,
   palmas_diferenciadas NUMERIC,
+  palmas_totales NUMERIC,
+  palmas_sin_manejo NUMERIC,
+  estado_palma TEXT,
+  ha_brutas NUMERIC,
+  edad NUMERIC,
+  ha_edad_siembra NUMERIC,
   active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

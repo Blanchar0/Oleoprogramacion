@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { ProductivityRecord } from '../types';
-import { normalizeCycleLabor, normalizeLotCode } from '../cycles/cycleLogic';
+import { normalizeCycleLabor, normalizeLotCode, normalizeZoneName } from '../cycles/cycleLogic';
 
 type Row = Record<string, unknown>;
 
@@ -107,7 +107,8 @@ export async function parseProductivityFile(file: File) {
     const racimos = numeric(valueFrom(source, ['RACIMOS', 'RACIMO/LOTE']));
     const averageWeight = numeric(valueFrom(source, ['PESO PROMEDIO', 'PESO PROMEDIO/LOTE']));
     const siembraSnapshot = numeric(valueFrom(source, ['SIEMBRA', 'AÑO SIEMBRA', 'ANO SIEMBRA']));
-    const zonaSnapshot = String(valueFrom(source, ['ZONA']) ?? '').trim() || null;
+    const rawZone = String(valueFrom(source, ['ZONA']) ?? '').trim();
+    const zonaSnapshot = rawZone ? normalizeZoneName(rawZone) : null;
     if (!period || !loteCode) {
       errors.push(`Fila ${rowNumber}: se requiere Periodo (AAAA-MM o fecha) y Lote.`);
       return;

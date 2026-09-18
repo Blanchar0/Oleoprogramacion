@@ -89,6 +89,12 @@ export interface Location {
   anoSiembra?: number | null;
   ha?: number | null;
   palmasDiferenciadas?: number | null;
+  palmasTotales?: number | null;
+  palmasSinManejo?: number | null;
+  estadoPalma?: string | null;
+  haBrutas?: number | null;
+  edad?: number | null;
+  haEdadSiembra?: number | null;
   active: boolean;
   createdAt?: string;
   updatedAt?: string;
