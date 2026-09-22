@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { repository } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
@@ -53,10 +53,24 @@ export default function Machinery() {
   }, [date]);
 
   const tractors = (catalogs.equipment || []).filter((e: any) => e.active);
-  const operatorOptions = (catalogs.personnel || []).filter((p: any) => p.active);
-  const labors = (catalogs.labors || []).filter((l: any) => l.active);
+  const machineryLabor = useMemo(
+    () => (catalogs.labors || []).find((l: any) => String(l.name || '').trim().toUpperCase() === 'MAQUINARIA'),
+    [catalogs.labors]
+  );
+  const operatorOptions = (catalogs.personnel || []).filter((p: any) => {
+    if (!p.active) return false;
+    const tractorRole = [p.jobTitle, p.job_title, p.cuadrilla, p.laborCargo, p.labor_cargo]
+      .filter(Boolean)
+      .join(' ')
+      .toUpperCase();
+    return tractorRole.includes('TRACTOR');
+  });
 
-  const effectiveLaborForActivities = editLaborId || laborId;
+  useEffect(() => {
+    if (machineryLabor?.id) setLaborId(machineryLabor.id);
+  }, [machineryLabor?.id]);
+
+  const effectiveLaborForActivities = machineryLabor?.id || editLaborId || laborId;
   const activities = (catalogs.activities || []).filter((a: any) => 
     a.active && (!effectiveLaborForActivities || a.laborId === effectiveLaborForActivities)
   );
@@ -96,8 +110,8 @@ export default function Machinery() {
 
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!date || !equipmentId || !operatorId || !laborId || !activityId || selectedZones.length === 0) {
-      setError('Seleccione fecha, equipo, operador, labor, actividad y al menos una zona antes de registrar.');
+    if (!date || !equipmentId || !operatorId || !machineryLabor?.id || !activityId || selectedZones.length === 0) {
+      setError('Seleccione fecha, equipo, tractorista, actividad y al menos una zona antes de registrar.');
       return;
     }
     setError('');
@@ -111,7 +125,7 @@ export default function Machinery() {
       equipmentId,
       operatorId,
       operatorName: opName,
-      laborId,
+      laborId: machineryLabor.id,
       activityId,
       observations: observations || '',
       locationId: null,
@@ -126,7 +140,7 @@ export default function Machinery() {
     if (res.ok) {
       setEquipmentId('');
       setOperatorId('');
-      setLaborId('');
+      setLaborId(machineryLabor.id);
       setActivityId('');
       setObservations('');
       setSelectedZones([]);
@@ -151,7 +165,7 @@ export default function Machinery() {
     setEditingOp(op);
     setEditEquipmentId(op.equipmentId || op.equipment_id || '');
     setEditOperatorId(op.operatorId || op.operator_id || '');
-    setEditLaborId(op.laborId || op.labor_id || '');
+    setEditLaborId(machineryLabor?.id || op.laborId || op.labor_id || '');
     setEditActivityId(op.activityId || op.activity_id || '');
     setEditObservations(op.observations || '');
 
@@ -166,8 +180,8 @@ export default function Machinery() {
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editEquipmentId || !editOperatorId || !editLaborId || !editActivityId || editSelectedZones.length === 0) {
-      setEditError('Seleccione equipo, operador, labor, actividad y al menos una zona antes de guardar.');
+    if (!editEquipmentId || !editOperatorId || !machineryLabor?.id || !editActivityId || editSelectedZones.length === 0) {
+      setEditError('Seleccione equipo, tractorista, actividad y al menos una zona antes de guardar.');
       return;
     }
     setEditError('');
@@ -180,7 +194,7 @@ export default function Machinery() {
       equipmentId: editEquipmentId,
       operatorId: editOperatorId,
       operatorName: opName,
-      laborId: editLaborId,
+      laborId: machineryLabor.id,
       activityId: editActivityId,
       zoneSnapshot: editSelectedZones.join(', '),
       observations: editObservations || '',
@@ -240,7 +254,7 @@ export default function Machinery() {
               {(() => {
                 const currentEq = tractors.find((t: any) => t.id === equipmentId);
                 const currentOp = operatorOptions.find((p: any) => p.id === operatorId);
-                const currentLabor = labors.find((l: any) => l.id === laborId);
+                const currentLabor = machineryLabor;
                 const currentAct = activities.find((a: any) => a.id === activityId);
                 return (
                   <div className="bg-gradient-to-r from-purple-800 to-indigo-950 text-white p-3 rounded-xl shadow-xs mb-4">
@@ -339,14 +353,14 @@ export default function Machinery() {
                 {/* 3️⃣ PASO 3: Labor, Actividad y Zonas */}
                 <div className={cn(
                   "p-3.5 rounded-xl border space-y-2 transition-all",
-                  laborId && activityId && selectedZones.length > 0 ? "bg-emerald-50/60 border-emerald-200/80" : "bg-gray-50 border-gray-200"
+                  machineryLabor?.id && activityId && selectedZones.length > 0 ? "bg-emerald-50/60 border-emerald-200/80" : "bg-gray-50 border-gray-200"
                 )}>
                   <div className="flex items-center justify-between">
                     <Label className="font-black text-emerald-950 flex items-center gap-1.5 text-xs uppercase tracking-wide">
                       <span className="w-5 h-5 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center text-xs font-black">3</span>
                       LABOR Y ZONAS DE OPERACIÓN *
                     </Label>
-                    {laborId && activityId && selectedZones.length > 0 ? (
+                    {machineryLabor?.id && activityId && selectedZones.length > 0 ? (
                       <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
                         <Check size={11} className="text-emerald-700 stroke-[3]" /> LISTO
                       </span>
@@ -355,17 +369,9 @@ export default function Machinery() {
                     )}
                   </div>
 
-                  <div>
-                    <Label className="text-[11px] text-emerald-950 font-black uppercase tracking-wide">LABOR *</Label>
-                    <Combobox
-                      options={labors.map((l: any) => ({ value: l.id, label: l.name }))}
-                      value={laborId}
-                      onChange={(value) => {
-                        setLaborId(value);
-                        setActivityId('');
-                      }}
-                      placeholder="SELECCIONE LABOR..."
-                    />
+                  <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2">
+                    <Label className="text-[11px] text-emerald-950 font-black uppercase tracking-wide">LABOR</Label>
+                    <p className="text-sm font-bold text-emerald-950 mt-0.5">{machineryLabor?.name || 'MAQUINARIA'}</p>
                   </div>
 
                   <div>
@@ -452,7 +458,7 @@ export default function Machinery() {
                 <div className="pt-2 pb-6">
                   <Button
                     type="submit"
-                    disabled={loading || !date || !equipmentId || !operatorId || !laborId || !activityId || selectedZones.length === 0}
+                    disabled={loading || !date || !equipmentId || !operatorId || !machineryLabor?.id || !activityId || selectedZones.length === 0}
                     className="w-full min-h-[50px] h-auto py-3 px-4 shadow-xl font-black text-xs sm:text-sm uppercase tracking-wide text-white rounded-xl flex items-center justify-center gap-2 cursor-pointer text-center leading-snug whitespace-normal bg-purple-900 hover:bg-purple-950"
                   >
                     <Check size={18} className="shrink-0" />
@@ -621,24 +627,16 @@ export default function Machinery() {
                 />
               </div>
 
-              <div>
-                <Label>Labor *</Label>
-                <Combobox
-                  options={labors.map((l: any) => ({ value: l.id, label: l.name }))}
-                  value={editLaborId}
-                  onChange={(val) => {
-                    setEditLaborId(val);
-                    setEditActivityId('');
-                  }}
-                  placeholder="Seleccione labor..."
-                />
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <Label>Labor</Label>
+                <p className="text-sm font-bold text-forest-950 mt-0.5">{machineryLabor?.name || 'MAQUINARIA'}</p>
               </div>
 
               <div>
                 <Label>Actividad *</Label>
                 <Combobox
                   options={(catalogs.activities || [])
-                    .filter((a: any) => a.active && (!editLaborId || a.laborId === editLaborId))
+                    .filter((a: any) => a.active && a.laborId === machineryLabor?.id)
                     .map((a: any) => ({ value: a.id, label: a.name }))}
                   value={editActivityId}
                   onChange={setEditActivityId}

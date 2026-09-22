@@ -22,6 +22,10 @@ function isMissingCreatedByColumn(error: any): boolean {
   return error?.code === 'PGRST204' && message.includes('created_by');
 }
 
+function isDuplicateMachineryOperation(error: any): boolean {
+  return error?.code === '23505' && String(error?.message || '').includes('machinery_operations_unique_operation_idx');
+}
+
 class SyncManager {
   private state: SyncState = {
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
@@ -174,13 +178,30 @@ class SyncManager {
         return true;
       }
       case 'MACHINERY_CREATE': {
-        let { error } = await supabase.from('machinery_operations').insert(payload);
+        const machineryPayload = {
+          ...payload,
+          operation_key: payload.operation_key || `${payload.date}|${payload.equipment_id}|${payload.operator_id}`,
+        };
+        const { data: existing, error: existingError } = await supabase
+          .from('machinery_operations')
+          .select('id')
+          .eq('date', machineryPayload.date)
+          .eq('equipment_id', machineryPayload.equipment_id)
+          .eq('operator_id', machineryPayload.operator_id)
+          .limit(1);
+        if (existingError) throw existingError;
+        if (existing && existing.length > 0) return true;
+
+        let { error } = await supabase.from('machinery_operations').insert(machineryPayload);
         // Compatibilidad con registros puestos en cola antes de que la columna
         // created_by existiera en la base de datos remota.
         if (error && isMissingCreatedByColumn(error)) {
-          const { created_by: _createdBy, ...legacyPayload } = payload;
+          const { created_by: _createdBy, ...legacyPayload } = machineryPayload;
           ({ error } = await supabase.from('machinery_operations').insert(legacyPayload));
         }
+        // Si el usuario tocó varias veces guardar mientras no había conexión,
+        // basta conservar la primera operación y retirar la repetida de la cola.
+        if (error && isDuplicateMachineryOperation(error)) return true;
         if (error) throw error;
         return true;
       }

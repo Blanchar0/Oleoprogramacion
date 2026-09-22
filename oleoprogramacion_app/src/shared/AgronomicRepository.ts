@@ -27,6 +27,26 @@ function isMissingCreatedByColumn(error: any): boolean {
   return error?.code === 'PGRST204' && message.includes('created_by');
 }
 
+function isDuplicateMachineryOperation(error: any): boolean {
+  return error?.code === '23505' && String(error?.message || '').includes('machinery_operations_unique_operation_idx');
+}
+
+function deduplicateMachineryOperations(items: any[]): any[] {
+  return Array.from(
+    new Map(
+      items
+        .sort((a: any, b: any) => String(a.created_at || '').localeCompare(String(b.created_at || '')))
+        .map((item: any) => {
+          const hasPair = item.equipmentId && item.operatorId;
+          const key = hasPair
+            ? `${item.date}|${item.equipmentId}|${item.operatorId}`
+            : item.id;
+          return [key, item];
+        })
+    ).values()
+  );
+}
+
 function colombiaDateFromTimestamp(value: string | null | undefined) {
   const timestamp = new Date(value || '');
   if (Number.isNaN(timestamp.getTime())) return '';
@@ -475,7 +495,7 @@ class SupabaseRepository implements AgronomicRepository {
   subscribeMachinery(filters: any, callback: (data: any[]) => void): Unsubscribe {
     if (filters.date) {
       offlineStore.getDailyCache('machinery', filters.date).then(cached => {
-        if (cached && Array.isArray(cached)) callback(cached);
+        if (cached && Array.isArray(cached)) callback(deduplicateMachineryOperations(cached));
       });
     }
 
@@ -527,11 +547,15 @@ class SupabaseRepository implements AgronomicRepository {
         };
       });
 
+      // Los duplicados históricos se conservan en la base para no eliminar datos
+      // sin revisión, pero se muestran como una sola operación por equipo y tractorista.
+      const uniqueOperations = deduplicateMachineryOperations(mapped);
+
       if (filters.date) {
-        offlineStore.saveDailyCache('machinery', filters.date, mapped);
+        offlineStore.saveDailyCache('machinery', filters.date, uniqueOperations);
       }
 
-      callback(mapped);
+      callback(uniqueOperations);
     };
 
     fetchData();
@@ -566,6 +590,7 @@ class SupabaseRepository implements AgronomicRepository {
       location_id: input.locationId || null,
       zone_snapshot: input.zoneSnapshot,
       created_by: input.createdBy || null,
+      operation_key: `${input.date}|${input.equipmentId}|${input.operatorId}`,
       observations: input.observations || '',
       version: 1,
       created_at: new Date().toISOString(),
@@ -583,6 +608,19 @@ class SupabaseRepository implements AgronomicRepository {
     }
 
     try {
+      // Cubre registros creados antes de aplicar el índice único.
+      const { data: existing, error: existingError } = await supabase
+        .from('machinery_operations')
+        .select('id')
+        .eq('date', payload.date)
+        .eq('equipment_id', payload.equipment_id)
+        .eq('operator_id', payload.operator_id)
+        .limit(1);
+      if (existingError) throw existingError;
+      if (existing && existing.length > 0) {
+        return { ok: false, error: 'Esta máquina ya tiene una operación registrada con este tractorista para la fecha seleccionada.' };
+      }
+
       let { data, error } = await supabase.from('machinery_operations').insert(payload).select().single();
 
       // Algunas instalaciones existentes aún no tienen la columna creada_by.
@@ -596,6 +634,9 @@ class SupabaseRepository implements AgronomicRepository {
       if (error) throw error;
       return { ok: true, data };
     } catch (e: any) {
+      if (isDuplicateMachineryOperation(e)) {
+        return { ok: false, error: 'Esta máquina ya tiene una operación registrada con este tractorista para la fecha seleccionada.' };
+      }
       // La cola es exclusiva para una pérdida real de red. Un rechazo de Supabase
       // debe llegar al formulario para no aparentar que el registro fue guardado.
       if (isNetworkPersistenceError(e)) {
