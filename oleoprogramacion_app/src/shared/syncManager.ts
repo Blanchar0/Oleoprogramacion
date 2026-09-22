@@ -13,6 +13,15 @@ export interface SyncState {
 
 type SyncListener = (state: SyncState) => void;
 
+function syncErrorMessage(error: any): string {
+  return error?.message || error?.details || 'No se pudo sincronizar con el servidor.';
+}
+
+function isMissingCreatedByColumn(error: any): boolean {
+  const message = syncErrorMessage(error).toLowerCase();
+  return error?.code === 'PGRST204' && message.includes('created_by');
+}
+
 class SyncManager {
   private state: SyncState = {
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
@@ -98,7 +107,9 @@ class SyncManager {
         }
       } catch (err: any) {
         console.error(`Error sincronizando elemento ${item.id} (${item.type}):`, err);
-        await offlineStore.markOutboxItemError(item.id, err.message || 'Error de red');
+        const message = syncErrorMessage(err);
+        this.state.lastError = message;
+        await offlineStore.markOutboxItemError(item.id, message);
         failed++;
       }
     }
@@ -151,7 +162,13 @@ class SyncManager {
         return true;
       }
       case 'MACHINERY_CREATE': {
-        const { error } = await supabase.from('machinery_operations').insert(payload);
+        let { error } = await supabase.from('machinery_operations').insert(payload);
+        // Compatibilidad con registros puestos en cola antes de que la columna
+        // created_by existiera en la base de datos remota.
+        if (error && isMissingCreatedByColumn(error)) {
+          const { created_by: _createdBy, ...legacyPayload } = payload;
+          ({ error } = await supabase.from('machinery_operations').insert(legacyPayload));
+        }
         if (error) throw error;
         return true;
       }

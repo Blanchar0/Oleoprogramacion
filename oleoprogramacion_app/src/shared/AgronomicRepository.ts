@@ -13,6 +13,20 @@ export interface Result {
 
 export type Unsubscribe = () => void;
 
+function persistenceErrorMessage(error: any): string {
+  return error?.message || error?.details || 'No se pudo guardar el registro en el servidor.';
+}
+
+function isNetworkPersistenceError(error: any): boolean {
+  const message = persistenceErrorMessage(error).toLowerCase();
+  return /failed to fetch|networkerror|network request failed|load failed|fetch failed/.test(message);
+}
+
+function isMissingCreatedByColumn(error: any): boolean {
+  const message = persistenceErrorMessage(error).toLowerCase();
+  return error?.code === 'PGRST204' && message.includes('created_by');
+}
+
 function colombiaDateFromTimestamp(value: string | null | undefined) {
   const timestamp = new Date(value || '');
   if (Number.isNaN(timestamp.getTime())) return '';
@@ -569,18 +583,33 @@ class SupabaseRepository implements AgronomicRepository {
     }
 
     try {
-      const { data, error } = await supabase.from('machinery_operations').insert(payload).select().single();
+      let { data, error } = await supabase.from('machinery_operations').insert(payload).select().single();
+
+      // Algunas instalaciones existentes aún no tienen la columna creada_by.
+      // El supervisor ya queda asociado en las columnas históricas, por lo que el
+      // registro puede guardarse sin bloquear la operación mientras se actualiza el esquema.
+      if (error && isMissingCreatedByColumn(error)) {
+        const { created_by: _createdBy, ...legacyPayload } = payload;
+        ({ data, error } = await supabase.from('machinery_operations').insert(legacyPayload).select().single());
+      }
+
       if (error) throw error;
       return { ok: true, data };
     } catch (e: any) {
-      console.warn("Fallo guardado de maquinaria en Supabase, guardando en Outbox:", e.message);
-      await offlineStore.addOutboxItem({
-        id: payload.id,
-        type: 'MACHINERY_CREATE',
-        payload
-      });
-      syncManager.refreshPendingCount();
-      return { ok: true, data: payload, offline: true };
+      // La cola es exclusiva para una pérdida real de red. Un rechazo de Supabase
+      // debe llegar al formulario para no aparentar que el registro fue guardado.
+      if (isNetworkPersistenceError(e)) {
+        await offlineStore.addOutboxItem({
+          id: payload.id,
+          type: 'MACHINERY_CREATE',
+          payload
+        });
+        syncManager.refreshPendingCount();
+        return { ok: true, data: payload, offline: true };
+      }
+
+      console.error('No se pudo guardar la operación de maquinaria:', e);
+      return { ok: false, error: persistenceErrorMessage(e) };
     }
   }
 
@@ -629,14 +658,17 @@ class SupabaseRepository implements AgronomicRepository {
       if (error) throw error;
       return { ok: true };
     } catch (e: any) {
-      console.warn("Fallo update de maquinaria en Supabase, guardando en Outbox:", e.message);
-      await offlineStore.addOutboxItem({
-        id,
-        type: 'MACHINERY_UPDATE',
-        payload: { id, ...payload }
-      });
-      syncManager.refreshPendingCount();
-      return { ok: true, offline: true };
+      if (isNetworkPersistenceError(e)) {
+        await offlineStore.addOutboxItem({
+          id,
+          type: 'MACHINERY_UPDATE',
+          payload: { id, ...payload }
+        });
+        syncManager.refreshPendingCount();
+        return { ok: true, offline: true };
+      }
+      console.error('No se pudo actualizar la operación de maquinaria:', e);
+      return { ok: false, error: persistenceErrorMessage(e) };
     }
   }
 
@@ -656,13 +688,17 @@ class SupabaseRepository implements AgronomicRepository {
       if (error) throw error;
       return { ok: true };
     } catch (e: any) {
-      await offlineStore.addOutboxItem({
-        id,
-        type: 'MACHINERY_DELETE',
-        payload: { id }
-      });
-      syncManager.refreshPendingCount();
-      return { ok: true, offline: true };
+      if (isNetworkPersistenceError(e)) {
+        await offlineStore.addOutboxItem({
+          id,
+          type: 'MACHINERY_DELETE',
+          payload: { id }
+        });
+        syncManager.refreshPendingCount();
+        return { ok: true, offline: true };
+      }
+      console.error('No se pudo eliminar la operación de maquinaria:', e);
+      return { ok: false, error: persistenceErrorMessage(e) };
     }
   }
 

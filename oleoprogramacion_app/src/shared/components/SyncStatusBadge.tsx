@@ -113,6 +113,16 @@ export const SyncStatusBadge: React.FC = () => {
                 </div>
               )}
 
+              {lastError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 text-[11px] text-red-800 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                  <p>
+                    <span className="font-black">No se pudo enviar un registro.</span>{' '}
+                    {lastError}
+                  </p>
+                </div>
+              )}
+
               {!isOnline && (
                 <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl p-2.5 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
