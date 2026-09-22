@@ -7,7 +7,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from '@/src/components/ui';
 import { Combobox } from '@/src/components/ui/combobox';
-import { Calendar, UserX, AlertCircle, AlertTriangle, CheckCircle2, Tractor, Briefcase, User, MapPin, Check } from 'lucide-react';
+import { Calendar, UserX, AlertCircle, AlertTriangle, CheckCircle2, Tractor, Briefcase, User, MapPin, Check, Pencil, Trash2 } from 'lucide-react';
 
 export default function Absences() {
   const { user } = useAuth();
@@ -29,7 +29,17 @@ export default function Absences() {
   // Estado para el modal de advertencia / desprogramación
   const [showWarningModal, setShowWarningModal] = useState(false);
 
+  // Estados para editar o eliminar un reporte existente.
+  const [editingAbsence, setEditingAbsence] = useState<any | null>(null);
+  const [editReason, setEditReason] = useState('');
+  const [editObservations, setEditObservations] = useState('');
+  const [editError, setEditError] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [deletingAbsenceId, setDeletingAbsenceId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const isDirectivo = user?.role === 'DIRECTIVO';
+  const canModifyAbsences = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
 
   useEffect(() => {
     const filters: any = { date };
@@ -216,6 +226,50 @@ export default function Absences() {
     const userSup = catalogs.users?.find((u: any) => u.idSupervisor === supId || u.id === supId);
     if (userSup) return userSup.name;
     return supId;
+  };
+
+  const openEdit = (absence: any) => {
+    setEditingAbsence(absence);
+    setEditReason(absence.reason || 'Incapacidad');
+    setEditObservations(absence.observations || '');
+    setEditError('');
+  };
+
+  const handleSaveEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingAbsence) return;
+
+    setEditLoading(true);
+    setEditError('');
+    const result = await repository.updateAbsence(editingAbsence.id, {
+      reason: editReason,
+      observations: editObservations,
+    }, editingAbsence.version);
+    setEditLoading(false);
+
+    if (!result.ok) {
+      setEditError(result.error || 'No fue posible actualizar la inasistencia.');
+      return;
+    }
+
+    setEditingAbsence(null);
+    setSuccess('Inasistencia actualizada correctamente.');
+  };
+
+  const handleDelete = async () => {
+    if (!deletingAbsenceId) return;
+
+    setDeleteLoading(true);
+    const result = await repository.deleteAbsence(deletingAbsenceId);
+    setDeleteLoading(false);
+
+    if (!result.ok) {
+      setError(result.error || 'No fue posible eliminar la inasistencia.');
+      return;
+    }
+
+    setDeletingAbsenceId(null);
+    setSuccess('Inasistencia eliminada correctamente.');
   };
 
   if (catLoading) return <div className="p-6 text-gray-500">Cargando catálogo...</div>;
@@ -408,6 +462,7 @@ export default function Absences() {
                       <th className="px-4 py-3">Motivo</th>
                       <th className="px-4 py-3">Supervisor / Creador</th>
                       <th className="px-4 py-3">Observaciones</th>
+                      {canModifyAbsences && <th className="px-4 py-3 text-right">Acciones</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -420,6 +475,32 @@ export default function Absences() {
                           <td className="px-4 py-3"><span className="px-2 py-1 bg-amber-50 text-amber-800 rounded-md text-xs border border-amber-100">{a.reason}</span></td>
                           <td className="px-4 py-3 text-xs text-gray-600">{supervisorName}</td>
                           <td className="px-4 py-3 text-xs text-gray-500">{a.observations || '-'}</td>
+                          {canModifyAbsences && (
+                            <td className="px-4 py-3">
+                              <div className="flex justify-end gap-1.5">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  title="Editar inasistencia"
+                                  onClick={() => openEdit(a)}
+                                  className="h-8 w-8 text-forest-800 hover:bg-forest-50"
+                                >
+                                  <Pencil size={14} />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  title="Eliminar inasistencia"
+                                  onClick={() => setDeletingAbsenceId(a.id)}
+                                  className="h-8 w-8 text-red-700 border-red-200 hover:bg-red-50"
+                                >
+                                  <Trash2 size={14} />
+                                </Button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -534,6 +615,81 @@ export default function Absences() {
               className="w-full sm:w-auto h-auto min-h-[40px] py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs leading-tight whitespace-normal text-center break-words"
             >
               {loading ? 'Procesando...' : 'Sí, eliminar de la programación y reportar inasistencia'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingAbsence} onOpenChange={(open) => !open && setEditingAbsence(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-forest-950">
+              <Pencil size={18} className="text-forest-700" /> Editar inasistencia
+            </DialogTitle>
+            <DialogDescription>
+              Actualiza el motivo u observaciones del reporte seleccionado.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingAbsence && (
+            <form onSubmit={handleSaveEdit} className="space-y-4 pt-2">
+              {editError && (
+                <div className="flex items-center gap-2 rounded-lg bg-red-50 p-2.5 text-sm text-red-700">
+                  <AlertCircle size={16} /> {editError}
+                </div>
+              )}
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+                <span className="text-gray-500">Personal: </span>
+                <span className="font-bold text-gray-900">
+                  {catalogs.personnel.find((p: any) => p.id === editingAbsence.personnelId)?.name || editingAbsence.personnelName || editingAbsence.personnelDoc}
+                </span>
+              </div>
+              <div>
+                <Label>Motivo *</Label>
+                <select
+                  value={editReason}
+                  onChange={(event) => setEditReason(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm font-medium"
+                >
+                  {reasons.map(item => <option key={item} value={item}>{item}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label>Observaciones</Label>
+                <Input
+                  value={editObservations}
+                  onChange={(event) => setEditObservations(event.target.value)}
+                  placeholder="Detalles adicionales..."
+                  className="mt-1"
+                />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditingAbsence(null)} disabled={editLoading}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={editLoading} className="bg-forest-900 hover:bg-forest-950 text-white">
+                  {editLoading ? 'Guardando...' : 'Guardar cambios'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deletingAbsenceId} onOpenChange={(open) => !open && setDeletingAbsenceId(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>¿Eliminar inasistencia?</DialogTitle>
+            <DialogDescription>
+              Esta acción eliminará el reporte de inasistencia y no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeletingAbsenceId(null)} disabled={deleteLoading}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleDelete} disabled={deleteLoading} className="bg-red-700 hover:bg-red-800 text-white">
+              {deleteLoading ? 'Eliminando...' : 'Eliminar reporte'}
             </Button>
           </DialogFooter>
         </DialogContent>

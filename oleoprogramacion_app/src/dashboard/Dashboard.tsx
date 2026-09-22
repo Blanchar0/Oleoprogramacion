@@ -326,10 +326,10 @@ export default function Dashboard() {
       const activeProgrammableList = (catalogs.personnel || []).filter((p: any) => p.active !== false && (isOperative(p) || isReubicado(p)));
       
       return activeProgrammableList.filter((p: any) => {
-        // 1. ¿Está en alguna programación (confirmada o pendiente) de la fecha?
+        // Una programación pendiente no cubre al trabajador hasta confirmarse.
         const inProg = programmings.some((prog: any) => 
           prog.date === date &&
-          prog.status !== 'CANCELADA' && 
+          prog.status === 'CONFIRMADA' &&
           Array.isArray(prog.personnelIds) && 
           prog.personnelIds.some((pId: any) => matchPerson(p, pId))
         );

@@ -1667,23 +1667,4 @@ class SupabaseRepository implements AgronomicRepository {
 
 export const repository = new SupabaseRepository();
 
-export const matchPerson = (person: any, target: any): boolean => {
-  if (!person || !target) return false;
-  const targetStr = String(target).trim().toLowerCase();
-  if (!targetStr) return false;
-
-  if (person.id && String(person.id).trim().toLowerCase() === targetStr) return true;
-  if (person.documento && String(person.documento).trim().toLowerCase() === targetStr) return true;
-  if (person.cedula && String(person.cedula).trim().toLowerCase() === targetStr) return true;
-  if (person.name && String(person.name).trim().toLowerCase() === targetStr) return true;
-  if (person.nombreCompleto && String(person.nombreCompleto).trim().toLowerCase() === targetStr) return true;
-
-  // Clean "PER-" prefix comparison
-  const cleanTarget = targetStr.startsWith('per-') ? targetStr.replace('per-', '') : targetStr;
-  const cleanDoc = person.documento ? String(person.documento).trim().toLowerCase().replace('per-', '') : '';
-  const cleanId = person.id ? String(person.id).trim().toLowerCase().replace('per-', '') : '';
-  if (cleanDoc && cleanDoc === cleanTarget) return true;
-  if (cleanId && cleanId === cleanTarget) return true;
-
-  return false;
-};
+export { matchPerson } from './personIdentity';
