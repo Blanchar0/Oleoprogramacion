@@ -79,6 +79,18 @@ class SyncManager {
     return items.length;
   }
 
+  /** Descarta solamente operaciones de maquinaria guardadas localmente en este equipo. */
+  async discardMachineryPendingItems(): Promise<number> {
+    const removed = await offlineStore.removeOutboxItemsByType([
+      'MACHINERY_CREATE',
+      'MACHINERY_UPDATE',
+      'MACHINERY_DELETE',
+    ]);
+    this.state.lastError = null;
+    await this.refreshPendingCount();
+    return removed;
+  }
+
   async syncNow(): Promise<{ synced: number; failed: number }> {
     if (this.state.isSyncing) return { synced: 0, failed: 0 };
 
@@ -192,7 +204,10 @@ class SyncManager {
 
 export const syncManager = new SyncManager();
 
-export function useSyncStatus(): SyncState & { syncNow: () => Promise<any> } {
+export function useSyncStatus(): SyncState & {
+  syncNow: () => Promise<any>;
+  discardMachineryPendingItems: () => Promise<number>;
+} {
   const [state, setState] = useState<SyncState>({
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
     pendingCount: 0,
@@ -209,5 +224,6 @@ export function useSyncStatus(): SyncState & { syncNow: () => Promise<any> } {
   return {
     ...state,
     syncNow: () => syncManager.syncNow(),
+    discardMachineryPendingItems: () => syncManager.discardMachineryPendingItems(),
   };
 }

@@ -3,14 +3,37 @@ import { useSyncStatus } from '../syncManager';
 import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export const SyncStatusBadge: React.FC = () => {
-  const { isOnline, pendingCount, isSyncing, lastSyncTime, lastError, syncNow } = useSyncStatus();
+  const {
+    isOnline,
+    pendingCount,
+    isSyncing,
+    lastSyncTime,
+    lastError,
+    syncNow,
+    discardMachineryPendingItems,
+  } = useSyncStatus();
   const [showDetails, setShowDetails] = useState(false);
+  const [clearMessage, setClearMessage] = useState<string | null>(null);
 
   const handleManualSync = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isSyncing && isOnline) {
       await syncNow();
     }
+  };
+
+  const handleDiscardMachinery = async () => {
+    const confirmed = window.confirm(
+      'Se eliminarán solo las operaciones de maquinaria pendientes en este dispositivo. No se modificarán programaciones, inasistencias ni registros ya guardados. ¿Deseas continuar?'
+    );
+    if (!confirmed) return;
+
+    const removed = await discardMachineryPendingItems();
+    setClearMessage(
+      removed > 0
+        ? `${removed} pendiente${removed === 1 ? '' : 's'} de maquinaria eliminado${removed === 1 ? '' : 's'} de este dispositivo.`
+        : 'No había pendientes de maquinaria en este dispositivo.'
+    );
   };
 
   return (
@@ -123,6 +146,13 @@ export const SyncStatusBadge: React.FC = () => {
                 </div>
               )}
 
+              {clearMessage && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-[11px] text-emerald-800 flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+                  <p>{clearMessage}</p>
+                </div>
+              )}
+
               {!isOnline && (
                 <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl p-2.5 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
@@ -134,15 +164,27 @@ export const SyncStatusBadge: React.FC = () => {
             </div>
 
             {isOnline && (
-              <button
-                type="button"
-                disabled={isSyncing}
-                onClick={handleManualSync}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black transition-all shadow-sm active:scale-98 cursor-pointer"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? 'Sincronizando datos...' : 'Sincronizar ahora'}
-              </button>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  disabled={isSyncing}
+                  onClick={handleManualSync}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black transition-all shadow-sm active:scale-98 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  {isSyncing ? 'Sincronizando datos...' : 'Sincronizar ahora'}
+                </button>
+                {pendingCount > 0 && (
+                  <button
+                    type="button"
+                    disabled={isSyncing}
+                    onClick={handleDiscardMachinery}
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50 rounded-xl text-xs font-black transition-all cursor-pointer"
+                  >
+                    Descartar pendientes de maquinaria
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </>

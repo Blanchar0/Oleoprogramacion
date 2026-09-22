@@ -162,6 +162,33 @@ class OfflineStore {
     }
   }
 
+  /** Elimina únicamente registros de los tipos indicados en este dispositivo. */
+  async removeOutboxItemsByType(types: OutboxItem['type'][]): Promise<number> {
+    try {
+      const db = await this.getDB();
+      const tx = db.transaction('outbox', 'readwrite');
+      const store = tx.objectStore('outbox');
+      const request = store.getAll();
+
+      const removed = await new Promise<number>((resolve, reject) => {
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const items: OutboxItem[] = request.result || [];
+          const matching = items.filter(item => types.includes(item.type));
+          matching.forEach(item => store.delete(item.id));
+          tx.oncomplete = () => resolve(matching.length);
+          tx.onerror = () => reject(tx.error);
+          tx.onabort = () => reject(tx.error);
+        };
+      });
+
+      return removed;
+    } catch (e) {
+      console.warn('Error limpiando elementos de la cola local:', e);
+      return 0;
+    }
+  }
+
   async markOutboxItemError(id: string, errorMessage: string): Promise<void> {
     try {
       const db = await this.getDB();
