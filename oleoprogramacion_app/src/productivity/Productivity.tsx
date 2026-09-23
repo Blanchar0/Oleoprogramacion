@@ -234,8 +234,8 @@ function PerformanceDashboard({ selectedLabel, selectedYear, laborPerformance, t
       </CardContent>
     </Card>
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <Metric label="Toneladas por hombre" value={tonsPerHarvestWorker === null ? '—' : numberFormatter.format(tonsPerHarvestWorker)} suffix="t/hombre" note="Solo cosecha" />
-      <Metric label="Personas en cosecha" value={numberFormatter.format(harvestWorkers)} suffix="personas" note="Con lote y producción del período" />
+      <Metric label="Toneladas por jornal" value={tonsPerHarvestWorker === null ? '—' : numberFormatter.format(tonsPerHarvestWorker)} suffix="t/jornal" note="Solo cosecha" />
+      <Metric label="Jornales en cosecha" value={numberFormatter.format(harvestWorkers)} suffix="jornales" note="Con lote y producción del período" />
       <Metric label="Hectáreas intervenidas" value={numberFormatter.format(coveredHectares)} suffix="ha" note="Lotes únicos por labor" />
       <Metric label="Personas registradas" value={numberFormatter.format(registeredPeople)} suffix="personas" note="Todas las labores" />
     </div>
@@ -246,8 +246,8 @@ function PerformanceDashboard({ selectedLabel, selectedYear, laborPerformance, t
       <ChartCard title="Recorrido por cuadrilla" description="Hectáreas netas de lotes intervenidos ÷ personas registradas × 2 personas por cuadrilla.">
         {measuredLabors.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={measuredLabors} layout="vertical" margin={{ top: 10, right: 24, left: 14, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" /><YAxis type="category" dataKey="name" width={118} tick={{ fontSize: 11 }} /><Tooltip formatter={(value: number, name: string) => [numberFormatter.format(value), name]} /><Bar dataKey="hectaresPerCrew" name="ha/cuadrilla" fill="#0f766e" radius={[0, 6, 6, 0]} /></BarChart></ResponsiveContainer> : <Empty message="Faltan ejecuciones con personal y hectáreas de lote para calcular el recorrido." />}
       </ChartCard>
-      <ChartCard title="Toneladas por hombre en cosecha" description={`Toneladas cargadas ÷ personas de cosecha en los mismos lotes, por mes de ${selectedYear}.`} className="xl:col-span-2">
-        {monthlyHarvestPerformance.some((item: any) => item.toneladasPorHombre !== null) ? <ResponsiveContainer width="100%" height="100%"><ComposedChart data={monthlyHarvestPerformance} margin={{ top: 10, right: 18, left: -15, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis yAxisId="left" /><YAxis yAxisId="right" orientation="right" /><Tooltip formatter={(value: number, name: string) => [numberFormatter.format(value), name]} /><Legend /><Bar yAxisId="left" dataKey="toneladasPorHombre" name="t/hombre" fill="#f59e0b" radius={[6, 6, 0, 0]} /><Line yAxisId="right" type="monotone" dataKey="personas" name="Personas" stroke="#315D43" strokeWidth={2.5} connectNulls={false} /></ComposedChart></ResponsiveContainer> : <Empty message="Faltan toneladas de productividad o personas registradas en cosecha para calcular este indicador." />}
+      <ChartCard title="Toneladas por jornal en cosecha" description={`Toneladas cargadas ÷ jornales de cosecha en los mismos lotes, por mes de ${selectedYear}.`} className="xl:col-span-2">
+        {monthlyHarvestPerformance.some((item: any) => item.toneladasPorHombre !== null) ? <ResponsiveContainer width="100%" height="100%"><ComposedChart data={monthlyHarvestPerformance} margin={{ top: 10, right: 18, left: -15, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis yAxisId="left" /><YAxis yAxisId="right" orientation="right" /><Tooltip formatter={(value: number, name: string) => [numberFormatter.format(value), name]} /><Legend /><Bar yAxisId="left" dataKey="toneladasPorHombre" name="t/jornal" fill="#f59e0b" radius={[6, 6, 0, 0]} /><Line yAxisId="right" type="monotone" dataKey="personas" name="Jornales" stroke="#315D43" strokeWidth={2.5} connectNulls={false} /></ComposedChart></ResponsiveContainer> : <Empty message="Faltan toneladas de productividad o jornales registrados en cosecha para calcular este indicador." />}
       </ChartCard>
     </div>
   </div>;

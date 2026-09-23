@@ -820,17 +820,25 @@ export default function Dashboard() {
         const zone = getProgrammingZone(programming);
         const activity = (catalogs.activities || []).find((item: any) => item.id === programming.activityId);
         const rawActivityName = String(activity?.name || '').trim();
-        const activityName = rawActivityName || 'Sin actividad registrada';
-        const activityKey = rawActivityName ? rawActivityName.toLocaleUpperCase('es-CO') : 'SIN_ACTIVIDAD_REGISTRADA';
 
         if (!zoneActivityAssignments.has(zone)) zoneActivityAssignments.set(zone, new Map());
         const byActivity = zoneActivityAssignments.get(zone)!;
-        if (!byActivity.has(activityKey)) byActivity.set(activityKey, { activityName, personnel: new Set() });
-        if (!activityPersonnel.has(activityKey)) activityPersonnel.set(activityKey, { activityName, personnel: new Set() });
 
         (programming.personnelIds || []).forEach((rawId: string) => {
           const person = activeProgrammableList.find((item: any) => matchPerson(item, rawId));
           const personKey = String(person?.documento || person?.id || rawId);
+          // Los reubicados no se consideran personal productivo en una
+          // actividad; se concentran bajo una sola categoría para reflejar
+          // su condición sin importar la actividad a la que apoyen.
+          const activityName = person && isReubicado(person)
+            ? 'Reubicados'
+            : (rawActivityName || 'Sin actividad registrada');
+          const activityKey = person && isReubicado(person)
+            ? 'REUBICADOS'
+            : (rawActivityName ? rawActivityName.toLocaleUpperCase('es-CO') : 'SIN_ACTIVIDAD_REGISTRADA');
+
+          if (!byActivity.has(activityKey)) byActivity.set(activityKey, { activityName, personnel: new Set() });
+          if (!activityPersonnel.has(activityKey)) activityPersonnel.set(activityKey, { activityName, personnel: new Set() });
           // El total por actividad es único aunque la persona esté programada
           // en más de una zona para esa misma actividad.
           activityPersonnel.get(activityKey)?.personnel.add(personKey);
@@ -1269,7 +1277,7 @@ export default function Dashboard() {
                 <ListFilter size={18} className="text-forest-700" /> Personal programado por zona y actividad
               </CardTitle>
               <p className="text-xs text-gray-500 mt-0.5">
-                Cada fila es una zona; el color muestra la actividad y el largo de la barra, las personas programadas.
+                Cada fila es una zona; los reubicados se muestran juntos, sin importar la actividad de apoyo asignada.
               </p>
             </div>
             <span className="w-fit px-2.5 py-1 rounded-lg text-xs font-bold bg-forest-50 text-forest-800 border border-forest-200">
@@ -1326,7 +1334,7 @@ export default function Dashboard() {
                 <Users size={18} className="text-forest-700" /> Total de personas por actividad
               </CardTitle>
               <p className="text-xs text-gray-500 mt-0.5">
-                Personas únicas programadas en cada actividad para la fecha seleccionada.
+                Personas únicas por actividad; el personal reubicado se consolida en una sola categoría.
               </p>
             </div>
             <span className="w-fit px-2.5 py-1 rounded-lg text-xs font-bold bg-forest-50 text-forest-800 border border-forest-200">
