@@ -1,7 +1,7 @@
 import type { User } from '../types';
 
 const PRODUCTIVITY_EXCLUDED_USERNAMES = new Set(['jcarlos']);
-const ALDO_ALLOWED_ROUTES = new Set(['/', '/programming/all']);
+const ALDO_ALLOWED_ROUTES = new Set(['/', '/cycles', '/productivity', '/programming/all']);
 
 export function canAccessPage(user: Pick<User, 'role' | 'username'> | null | undefined, path: string) {
   if (!user) return false;

@@ -2,14 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { canAccessPage, canAccessProductivity } from './access';
 
-test('Aldo solo puede abrir Dashboard y Programación General', () => {
+test('Aldo puede abrir sus secciones directivas autorizadas', () => {
   const aldo = { role: 'DIRECTIVO' as const, username: 'aldo' };
-  assert.equal(canAccessPage(aldo, '/'), true);
-  assert.equal(canAccessPage(aldo, '/programming/all'), true);
-  for (const path of ['/cycles', '/productivity', '/absences', '/machinery', '/novedades']) {
+  for (const path of ['/', '/cycles', '/productivity', '/programming/all']) {
+    assert.equal(canAccessPage(aldo, path), true);
+  }
+  for (const path of ['/absences', '/machinery', '/novedades']) {
     assert.equal(canAccessPage(aldo, path), false);
   }
-  assert.equal(canAccessProductivity(aldo), false);
+  assert.equal(canAccessProductivity(aldo), true);
 });
 
 test('Las restricciones existentes de otros directivos permanecen', () => {
