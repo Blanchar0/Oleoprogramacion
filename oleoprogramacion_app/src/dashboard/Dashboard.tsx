@@ -50,6 +50,45 @@ const CustomPieTooltip = ({ active, payload, unit = 'pers.' }: any) => {
   return null;
 };
 
+// En las barras apiladas solo se muestran las actividades con personas en la
+// zona señalada; las demás series no aportan información útil al detalle.
+const ActivityZoneTooltip = ({ active, label, payload }: any) => {
+  const visibleItems = (payload || []).filter((item: any) => Number(item.value) > 0);
+  if (!active || visibleItems.length === 0) return null;
+
+  const total = visibleItems.reduce((sum: number, item: any) => sum + Number(item.value), 0);
+  return (
+    <div className="min-w-56 max-w-80 rounded-xl border border-forest-700 bg-forest-950 px-3.5 py-3 text-xs text-white shadow-xl pointer-events-none">
+      <p className="mb-2 border-b border-white/15 pb-2 font-extrabold text-white">Zona: {label}</p>
+      <div className="space-y-1.5">
+        {visibleItems.map((item: any) => (
+          <div key={item.dataKey} className="flex items-start justify-between gap-4">
+            <span className="flex min-w-0 items-start gap-2 text-forest-100">
+              <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: item.color || item.fill }} />
+              <span className="leading-tight">{item.name}</span>
+            </span>
+            <strong className="shrink-0 font-mono text-white">{item.value}</strong>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 border-t border-white/15 pt-2 text-right font-bold text-lime-300">Total: {total} personas</p>
+    </div>
+  );
+};
+
+const ActivityTotalTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null;
+  const item = payload[0];
+  const activity = item.payload?.name || 'Actividad';
+  const value = Number(item.value || 0);
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs shadow-xl pointer-events-none">
+      <p className="font-extrabold text-gray-900">{activity}</p>
+      <p className="mt-1 text-gray-600">Total: <strong className="font-mono text-forest-950">{value} persona{value === 1 ? '' : 's'}</strong></p>
+    </div>
+  );
+};
+
 // Componente para gráficos de torta / donut con leyenda organizada en lista vertical limpia
 interface DonutWithLegendListProps {
   data: Array<{ name: string; value: number; fill: string; payload?: any }>;
@@ -776,6 +815,7 @@ export default function Dashboard() {
       // Cada persona se cuenta una sola vez dentro de una zona, incluso si por
       // error aparece en más de un registro confirmado para ese mismo día.
       const zoneActivityAssignments = new Map<string, Map<string, { activityName: string; personnel: Set<string> }>>();
+      const activityPersonnel = new Map<string, { activityName: string; personnel: Set<string> }>();
       filteredProgrammings.forEach(programming => {
         const zone = getProgrammingZone(programming);
         const activity = (catalogs.activities || []).find((item: any) => item.id === programming.activityId);
@@ -786,10 +826,14 @@ export default function Dashboard() {
         if (!zoneActivityAssignments.has(zone)) zoneActivityAssignments.set(zone, new Map());
         const byActivity = zoneActivityAssignments.get(zone)!;
         if (!byActivity.has(activityKey)) byActivity.set(activityKey, { activityName, personnel: new Set() });
+        if (!activityPersonnel.has(activityKey)) activityPersonnel.set(activityKey, { activityName, personnel: new Set() });
 
         (programming.personnelIds || []).forEach((rawId: string) => {
           const person = activeProgrammableList.find((item: any) => matchPerson(item, rawId));
           const personKey = String(person?.documento || person?.id || rawId);
+          // El total por actividad es único aunque la persona esté programada
+          // en más de una zona para esa misma actividad.
+          activityPersonnel.get(activityKey)?.personnel.add(personKey);
           const alreadyAssigned = [...byActivity.values()].some(entry => entry.personnel.has(personKey));
           if (!alreadyAssigned) byActivity.get(activityKey)?.personnel.add(personKey);
         });
@@ -802,6 +846,7 @@ export default function Dashboard() {
         });
       });
       const zoneActivitySeries = [...activityTotals.entries()]
+        .filter(([, total]) => total > 0)
         .sort(([firstKey, firstTotal], [secondKey, secondTotal]) => secondTotal - firstTotal || firstKey.localeCompare(secondKey, 'es'))
         .map(([activityKey], index) => {
           const sample = [...zoneActivityAssignments.values()].map(byActivity => byActivity.get(activityKey)).find(Boolean);
@@ -824,6 +869,14 @@ export default function Dashboard() {
         })
         .filter(row => Number(row.total) > 0)
         .sort((a, b) => Number(b.total) - Number(a.total));
+      const chartActivity = zoneActivitySeries
+        .map(series => ({
+          name: series.name,
+          value: activityPersonnel.get(series.activityKey)?.personnel.size || 0,
+          fill: series.fill
+        }))
+        .filter(item => item.value > 0)
+        .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, 'es'));
 
       // 2. Chart: Despliegue por Supervisor
       const bySupMap = new Map<string, Set<string>>();
@@ -939,6 +992,7 @@ export default function Dashboard() {
         zoneLaborSeries,
         chartZoneActivity,
         zoneActivitySeries,
+        chartActivity,
         chartAbsences,
         chartMachinery,
         chartBySup,
@@ -1228,21 +1282,75 @@ export default function Dashboard() {
                 No hay personal confirmado por actividad para esta fecha.
               </div>
             ) : (
+              <>
               <div className="w-full" style={{ height: Math.max(300, stats.chartZoneActivity.length * 52 + 95) }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.chartZoneActivity} layout="vertical" margin={{ top: 8, right: 24, left: 24, bottom: 26 }}>
+                  <BarChart data={stats.chartZoneActivity} layout="vertical" margin={{ top: 8, right: 24, left: 24, bottom: 16 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
                     <XAxis type="number" allowDecimals={false} />
                     <YAxis dataKey="zone" type="category" width={120} tick={{ fontSize: 11 }} />
                     <Tooltip
-                      contentStyle={{ backgroundColor: '#123C2E', color: '#fff', borderRadius: '8px', border: 'none' }}
-                      formatter={(value: any, name: any) => [`${value} persona${Number(value) === 1 ? '' : 's'}`, name]}
-                      labelFormatter={(zone: string) => `Zona: ${zone}`}
+                      content={<ActivityZoneTooltip />}
+                      wrapperStyle={{ zIndex: 50, outline: 'none' }}
                     />
-                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
                     {stats.zoneActivitySeries.map((series: any) => (
                       <Bar key={series.key} dataKey={series.key} name={series.name} stackId="activity" fill={series.fill} radius={[0, 0, 0, 0]} />
                     ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50/80 p-3">
+                <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-gray-600">Convenciones</p>
+                <div className="grid max-h-36 grid-cols-1 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+                  {stats.chartActivity.map((activity: any) => (
+                    <div key={activity.name} className="flex min-w-0 items-center justify-between gap-2 rounded-lg bg-white px-2 py-1.5 text-xs shadow-2xs">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: activity.fill }} />
+                        <span className="truncate font-medium text-gray-700" title={activity.name}>{activity.name}</span>
+                      </span>
+                      <strong className="shrink-0 font-mono text-forest-950">{activity.value}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Total único de personas por actividad */}
+        <Card className="border-forest-900/10 shadow-xs">
+          <CardHeader className="pb-2 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+            <div>
+              <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
+                <Users size={18} className="text-forest-700" /> Total de personas por actividad
+              </CardTitle>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Personas únicas programadas en cada actividad para la fecha seleccionada.
+              </p>
+            </div>
+            <span className="w-fit px-2.5 py-1 rounded-lg text-xs font-bold bg-forest-50 text-forest-800 border border-forest-200">
+              {stats.chartActivity.length} actividad{stats.chartActivity.length === 1 ? '' : 'es'}
+            </span>
+          </CardHeader>
+          <CardContent className="pt-2">
+            {stats.chartActivity.length === 0 ? (
+              <div className="h-[280px] flex items-center justify-center text-sm text-gray-400">
+                No hay personal confirmado por actividad para esta fecha.
+              </div>
+            ) : (
+              <div className="w-full" style={{ height: Math.max(300, stats.chartActivity.length * 42 + 56) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.chartActivity} layout="vertical" margin={{ top: 8, right: 42, left: 24, bottom: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis dataKey="name" type="category" width={210} tick={{ fontSize: 11 }} />
+                    <Tooltip content={<ActivityTotalTooltip />} wrapperStyle={{ zIndex: 50, outline: 'none' }} />
+                    <Bar dataKey="value" name="Personas" radius={[0, 5, 5, 0]} label={{ position: 'right', fill: '#123C2E', fontSize: 11, fontWeight: 700 }}>
+                      {stats.chartActivity.map((activity: any) => (
+                        <Cell key={activity.name} fill={activity.fill} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
