@@ -6,7 +6,7 @@ import SupervisorAlertBanner from './SupervisorAlertBanner';
 import { TeamStreakIndicator } from './TeamStreakIndicator';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../auth/AuthContext';
-import { canAccessProductivity } from '../../auth/access';
+import { canAccessPage, canAccessProductivity } from '../../auth/access';
 import { Navigate, Outlet, Link, useLocation } from 'react-router-dom';
 import { 
   Menu, X, Home, CalendarPlus, CheckSquare, 
@@ -173,7 +173,7 @@ export default function MainLayout() {
     },
   ];
 
-  const filteredNav = navigation.filter(item => item.roles.includes(user.role) && (item.href !== '/productivity' || canAccessProductivity(user)));
+  const filteredNav = navigation.filter(item => item.roles.includes(user.role) && canAccessPage(user, item.href) && (item.href !== '/productivity' || canAccessProductivity(user)));
   const homePath = user.role === 'SUPERVISOR' || user.role === 'REVISOR' ? '/programming/all' : '/';
 
   return (

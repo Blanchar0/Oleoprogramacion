@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import Login from './auth/Login';
 import MainLayout from './shared/components/MainLayout';
@@ -13,7 +13,7 @@ import Catalogs from './admin/Catalogs';
 import Novedades from './admin/Novedades';
 import Cycles from './cycles/Cycles';
 import Productivity from './productivity/Productivity';
-import { canAccessProductivity } from './auth/access';
+import { canAccessPage, canAccessProductivity } from './auth/access';
 import { Leaf } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'motion/react';
@@ -22,7 +22,8 @@ import { Loader2 } from 'lucide-react';
 // Simple role guard
 function RoleGuard({ children, roles }: { children: React.ReactNode, roles: string[] }) {
   const { user } = useAuth();
-  if (!user || !roles.includes(user.role)) {
+  const location = useLocation();
+  if (!user || !roles.includes(user.role) || !canAccessPage(user, location.pathname)) {
     if (user?.role === 'SUPERVISOR' || user?.role === 'REVISOR') {
       return <Navigate to="/programming/all" replace />;
     }
