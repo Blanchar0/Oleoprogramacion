@@ -771,6 +771,60 @@ export default function Dashboard() {
         .filter(row => Number(row.total) > 0)
         .sort((a, b) => Number(b.total) - Number(a.total));
 
+      // El mismo resumen operativo se desglosa por actividad para que se pueda
+      // identificar rápidamente qué está haciendo el personal en cada zona.
+      // Cada persona se cuenta una sola vez dentro de una zona, incluso si por
+      // error aparece en más de un registro confirmado para ese mismo día.
+      const zoneActivityAssignments = new Map<string, Map<string, { activityName: string; personnel: Set<string> }>>();
+      filteredProgrammings.forEach(programming => {
+        const zone = getProgrammingZone(programming);
+        const activity = (catalogs.activities || []).find((item: any) => item.id === programming.activityId);
+        const rawActivityName = String(activity?.name || '').trim();
+        const activityName = rawActivityName || 'Sin actividad registrada';
+        const activityKey = rawActivityName ? rawActivityName.toLocaleUpperCase('es-CO') : 'SIN_ACTIVIDAD_REGISTRADA';
+
+        if (!zoneActivityAssignments.has(zone)) zoneActivityAssignments.set(zone, new Map());
+        const byActivity = zoneActivityAssignments.get(zone)!;
+        if (!byActivity.has(activityKey)) byActivity.set(activityKey, { activityName, personnel: new Set() });
+
+        (programming.personnelIds || []).forEach((rawId: string) => {
+          const person = activeProgrammableList.find((item: any) => matchPerson(item, rawId));
+          const personKey = String(person?.documento || person?.id || rawId);
+          const alreadyAssigned = [...byActivity.values()].some(entry => entry.personnel.has(personKey));
+          if (!alreadyAssigned) byActivity.get(activityKey)?.personnel.add(personKey);
+        });
+      });
+
+      const activityTotals = new Map<string, number>();
+      zoneActivityAssignments.forEach(byActivity => {
+        byActivity.forEach((entry, activityKey) => {
+          activityTotals.set(activityKey, (activityTotals.get(activityKey) || 0) + entry.personnel.size);
+        });
+      });
+      const zoneActivitySeries = [...activityTotals.entries()]
+        .sort(([firstKey, firstTotal], [secondKey, secondTotal]) => secondTotal - firstTotal || firstKey.localeCompare(secondKey, 'es'))
+        .map(([activityKey], index) => {
+          const sample = [...zoneActivityAssignments.values()].map(byActivity => byActivity.get(activityKey)).find(Boolean);
+          return {
+            key: `activity_${index}`,
+            activityKey,
+            name: sample?.activityName || 'Sin actividad registrada',
+            fill: activityKey === 'SIN_ACTIVIDAD_REGISTRADA' ? '#64748B' : palette[index % palette.length]
+          };
+        });
+      const chartZoneActivity = [...zoneActivityAssignments.entries()]
+        .map(([zone, byActivity]) => {
+          const row: Record<string, string | number> = { zone, total: 0 };
+          zoneActivitySeries.forEach(series => {
+            const count = byActivity.get(series.activityKey)?.personnel.size || 0;
+            row[series.key] = count;
+            row.total = Number(row.total) + count;
+          });
+          return row;
+        })
+        .filter(row => Number(row.total) > 0)
+        .sort((a, b) => Number(b.total) - Number(a.total));
+
       // 2. Chart: Despliegue por Supervisor
       const bySupMap = new Map<string, Set<string>>();
       filteredProgrammings.forEach(p => {
@@ -883,6 +937,8 @@ export default function Dashboard() {
         chartLabor,
         chartZoneLabor,
         zoneLaborSeries,
+        chartZoneActivity,
+        zoneActivitySeries,
         chartAbsences,
         chartMachinery,
         chartBySup,
@@ -1143,6 +1199,49 @@ export default function Dashboard() {
                     <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
                     {stats.zoneLaborSeries.map((series: any) => (
                       <Bar key={series.key} dataKey={series.key} name={series.name} stackId="labor" fill={series.fill} radius={[0, 0, 0, 0]} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Distribución consolidada por zona y actividad */}
+        <Card className="border-forest-900/10 shadow-xs">
+          <CardHeader className="pb-2 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+            <div>
+              <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
+                <ListFilter size={18} className="text-forest-700" /> Personal programado por zona y actividad
+              </CardTitle>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Cada fila es una zona; el color muestra la actividad y el largo de la barra, las personas programadas.
+              </p>
+            </div>
+            <span className="w-fit px-2.5 py-1 rounded-lg text-xs font-bold bg-forest-50 text-forest-800 border border-forest-200">
+              {stats.zoneActivitySeries.length} actividad{stats.zoneActivitySeries.length === 1 ? '' : 'es'}
+            </span>
+          </CardHeader>
+          <CardContent className="pt-2">
+            {stats.chartZoneActivity.length === 0 ? (
+              <div className="h-[280px] flex items-center justify-center text-sm text-gray-400">
+                No hay personal confirmado por actividad para esta fecha.
+              </div>
+            ) : (
+              <div className="w-full" style={{ height: Math.max(300, stats.chartZoneActivity.length * 52 + 95) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.chartZoneActivity} layout="vertical" margin={{ top: 8, right: 24, left: 24, bottom: 26 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis dataKey="zone" type="category" width={120} tick={{ fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#123C2E', color: '#fff', borderRadius: '8px', border: 'none' }}
+                      formatter={(value: any, name: any) => [`${value} persona${Number(value) === 1 ? '' : 's'}`, name]}
+                      labelFormatter={(zone: string) => `Zona: ${zone}`}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
+                    {stats.zoneActivitySeries.map((series: any) => (
+                      <Bar key={series.key} dataKey={series.key} name={series.name} stackId="activity" fill={series.fill} radius={[0, 0, 0, 0]} />
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
