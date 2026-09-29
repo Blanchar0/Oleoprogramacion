@@ -64,7 +64,7 @@ async function readRows(file: File, preferredSheet?: string) {
 
 export async function parseCycleFile(file: File) {
   const sourceRows = await readRows(file, 'Ciclos');
-  const rows: Array<{ executionDate: string; loteCode: string; laborCode: string; personnelCount: number }> = [];
+  const rows: Array<{ executionDate: string; loteCode: string; laborCode: string; personnelCount: number | null }> = [];
   const errors: string[] = [];
   const keys = new Set<string>();
 
@@ -74,8 +74,8 @@ export async function parseCycleFile(file: File) {
     const loteCode = normalizeLotCode(valueFrom(source, ['UBICACION TECNICA', 'LOTE']));
     const laborCode = normalizeCycleLabor(valueFrom(source, ['LABOR']));
     const personnelCount = numeric(valueFrom(source, ['RECUENTO DE PERSONAS', 'NUMERO DE PERSONAS', 'NÚMERO DE PERSONAS', 'PERSONAS']));
-    if (!executionDate || !loteCode || !laborCode || personnelCount === null || personnelCount < 0) {
-      errors.push(`Fila ${rowNumber}: faltan Fecha, Lote, Labor válida o Recuento de personas.`);
+    if (!executionDate || !loteCode || !laborCode || (personnelCount !== null && personnelCount < 0)) {
+      errors.push(`Fila ${rowNumber}: faltan Fecha, Lote o Labor válida; el recuento, si existe, no puede ser negativo.`);
       return;
     }
     const key = `${executionDate}:${loteCode}:${laborCode}`;

@@ -120,7 +120,7 @@ export interface CycleExecution {
   executionDate: string;
   loteCode: string;
   laborCode: string;
-  personnelCount: number;
+  personnelCount: number | null;
   importId?: string | null;
   createdAt?: string;
   updatedAt?: string;

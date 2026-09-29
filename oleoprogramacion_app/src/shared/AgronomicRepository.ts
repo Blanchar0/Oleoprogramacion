@@ -920,7 +920,9 @@ class SupabaseRepository implements AgronomicRepository {
           executionDate: row.execution_date,
           loteCode: row.lote_code,
           laborCode: row.labor_code,
-          personnelCount: Number(row.personnel_count),
+          personnelCount: row.personnel_count === null || row.personnel_count === undefined
+            ? null
+            : Number(row.personnel_count),
           importId: row.import_id,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
@@ -986,7 +988,9 @@ class SupabaseRepository implements AgronomicRepository {
           execution_date: row.executionDate,
           lote_code: row.loteCode,
           labor_code: row.laborCode,
-          personnel_count: row.personnelCount,
+          // Un valor vacío reemplaza el valor anterior: queda como "sin dato",
+          // no como cero. Así una importación corregida prevalece por completo.
+          personnel_count: row.personnelCount ?? null,
           import_id: importId,
           updated_at: now,
         }));
