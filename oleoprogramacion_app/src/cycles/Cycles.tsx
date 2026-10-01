@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileSpreadsheet, LayoutDashboard, ListFilter, Loader2, Upload, X, History, KanbanSquare } from 'lucide-react';
+import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileSpreadsheet, LayoutDashboard, Loader2, Upload, X, History, KanbanSquare } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/src/components/ui';
 import { useAuth } from '../auth/AuthContext';
 import { repository } from '../shared/AgronomicRepository';
@@ -10,6 +10,7 @@ import { buildCycleCards, cycleAgeValue, cycleStateLabel, DEFAULT_CYCLE_RULES, d
 import type { CycleExecution, CycleImport, CycleLaborRule, CycleStatus } from '../types';
 
 type View = 'resumen' | 'kanban' | 'cronograma' | 'historial';
+type OperationalCycleStatus = Exclude<CycleStatus, 'SIN_DATOS'>;
 
 const STATUS_META: Record<CycleStatus, { label: string; chip: string; card: string; dot: string }> = {
   AL_DIA: { label: 'Al día', chip: 'bg-emerald-100 text-emerald-800 border-emerald-200', card: 'border-emerald-200 bg-emerald-50/40', dot: 'bg-emerald-500' },
@@ -19,6 +20,7 @@ const STATUS_META: Record<CycleStatus, { label: string; chip: string; card: stri
 };
 
 const numberFormatter = new Intl.NumberFormat('es-CO');
+const hectareFormatter = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 });
 
 function stateClass(state: CycleStatus) {
   return STATUS_META[state].chip;
@@ -80,6 +82,23 @@ export default function Cycles() {
     CRITICO: filteredCards.filter((card) => card.state === 'CRITICO').length,
     SIN_DATOS: filteredCards.filter((card) => card.state === 'SIN_DATOS').length,
   }), [filteredCards]);
+  const hectaresByLabor = useMemo(() => {
+    const hectaresByLot = new Map(
+      (catalogs.locations || [])
+        .filter((location: any) => location.active !== false && location.name)
+        .map((location: any) => [normalizeLotCode(location.name), Math.max(0, Number(location.ha) || 0)]),
+    );
+
+    return rules
+      .filter((rule) => rule.active)
+      .map((rule) => {
+        const cardsForLabor = filteredCards.filter((card) => card.labor.id === rule.id);
+        const totalFor = (state: OperationalCycleStatus) => cardsForLabor
+          .filter((card) => card.state === state)
+          .reduce((total, card) => total + (hectaresByLot.get(card.loteCode) || 0), 0);
+        return { labor: rule.name, alDia: totalFor('AL_DIA'), alerta: totalFor('ALERTA'), critico: totalFor('CRITICO') };
+      });
+  }, [catalogs.locations, filteredCards, rules]);
 
   const chartData = useMemo(() => rules.map((rule) => {
     const cardsForLabor = filteredCards.filter((card) => card.labor.id === rule.id);
@@ -88,7 +107,6 @@ export default function Cycles() {
       'Al día': cardsForLabor.filter((card) => card.state === 'AL_DIA').length,
       Alerta: cardsForLabor.filter((card) => card.state === 'ALERTA').length,
       Crítico: cardsForLabor.filter((card) => card.state === 'CRITICO').length,
-      'Sin datos': cardsForLabor.filter((card) => card.state === 'SIN_DATOS').length,
     };
   }), [rules, filteredCards]);
 
@@ -168,7 +186,7 @@ export default function Cycles() {
         {tabs.map((tab) => <button key={tab.id} onClick={() => setView(tab.id)} className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold whitespace-nowrap border-b-2 transition-colors ${view === tab.id ? 'border-forest-800 text-forest-950' : 'border-transparent text-gray-500 hover:text-forest-800'}`}><tab.icon size={16} />{tab.label}</button>)}
       </div>
 
-      {view === 'resumen' && <Summary statusCounts={statusCounts} chartData={chartData} total={filteredCards.length} />}
+      {view === 'resumen' && <Summary statusCounts={statusCounts} hectaresByLabor={hectaresByLabor} chartData={chartData} total={filteredCards.filter((card) => card.state !== 'SIN_DATOS').length} />}
       {view === 'kanban' && <Kanban cards={filteredCards} rules={rules} />}
       {view === 'cronograma' && <Timeline cards={selectedCards} executions={data.executions} rule={selectedRule} asOf={fromIsoDate(asOf)} onLaborChange={setLaborCode} rules={rules} />}
       {view === 'historial' && <HistoryTable executions={data.executions} rules={rules} zonesByLot={new Map((catalogs.locations || []).map((item: any) => [item.name?.replace(/\s+/g, '').toUpperCase(), item.zone || 'Sin zona']))} />}
@@ -176,14 +194,75 @@ export default function Cycles() {
   );
 }
 
-function Summary({ statusCounts, chartData, total }: { statusCounts: Record<CycleStatus, number>; chartData: any[]; total: number }) {
+function Summary({ statusCounts, hectaresByLabor, chartData, total }: { statusCounts: Record<CycleStatus, number>; hectaresByLabor: Array<{ labor: string; alDia: number; alerta: number; critico: number }>; chartData: any[]; total: number }) {
   const cards = [
     { key: 'AL_DIA' as const, icon: CheckCircle2 },
     { key: 'ALERTA' as const, icon: Clock3 },
     { key: 'CRITICO' as const, icon: AlertTriangle },
-    { key: 'SIN_DATOS' as const, icon: ListFilter },
   ];
-  return <div className="space-y-5"><div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{cards.map(({ key, icon: Icon }) => <Card key={key} className={`${STATUS_META[key].card} shadow-sm`}><CardContent className="p-4"><Icon size={19} className={key === 'CRITICO' ? 'text-red-600' : key === 'ALERTA' ? 'text-amber-600' : 'text-forest-700'} /><p className="mt-2 text-2xl font-black text-forest-950">{statusCounts[key]}</p><p className="text-xs font-bold uppercase tracking-wide text-gray-600">{STATUS_META[key].label}</p></CardContent></Card>)}</div><Card><CardHeader className="pb-2"><CardTitle className="text-base text-forest-950">Estado de ciclos por labor</CardTitle><p className="text-xs text-gray-500">{total} combinaciones lote–labor para la fecha de corte.</p></CardHeader><CardContent><div className="h-[320px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="labor" tick={{ fontSize: 11 }} /><YAxis allowDecimals={false} /><Tooltip /><Legend wrapperStyle={{ fontSize: 12 }} /><Bar dataKey="Al día" stackId="state" fill="#22c55e" radius={[0, 0, 3, 3]} /><Bar dataKey="Alerta" stackId="state" fill="#f59e0b" /><Bar dataKey="Crítico" stackId="state" fill="#dc2626" /><Bar dataKey="Sin datos" stackId="state" fill="#94a3b8" radius={[3, 3, 0, 0]} /></BarChart></ResponsiveContainer></div></CardContent></Card></div>;
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {cards.map(({ key, icon: Icon }) => (
+          <Card key={key} className={`${STATUS_META[key].card} shadow-sm`}>
+            <CardContent className="p-4">
+              <Icon size={19} className={key === 'CRITICO' ? 'text-red-600' : key === 'ALERTA' ? 'text-amber-600' : 'text-forest-700'} />
+              <p className="mt-2 text-2xl font-black text-forest-950">{statusCounts[key]}</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-600">{STATUS_META[key].label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <section aria-labelledby="hectares-summary">
+        <div className="mb-3">
+          <h3 id="hectares-summary" className="text-base font-bold text-forest-950">Hectáreas por labor y estado</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Suma las ha netas de Catálogos. Solo se muestran lotes con estado operativo para cada labor.</p>
+        </div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+          {hectaresByLabor.map((item) => (
+            <Card key={item.labor} className="border-forest-100 shadow-sm">
+              <CardContent className="p-4">
+                <h4 className="font-bold text-sm text-forest-950">{item.labor}</h4>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <HectareStat label="Dentro del ciclo" value={item.alDia} icon={CheckCircle2} className="text-emerald-700" />
+                  <HectareStat label="En alerta" value={item.alerta} icon={Clock3} className="text-amber-700" />
+                  <HectareStat label="Fuera de ciclo" value={item.critico} icon={AlertTriangle} className="text-red-700" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base text-forest-950">Estado de ciclos por labor</CardTitle>
+          <p className="text-xs text-gray-500">{total} combinaciones lote–labor con estado operativo para la fecha de corte.</p>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[320px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="labor" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="Al día" stackId="state" fill="#22c55e" radius={[0, 0, 3, 3]} />
+                <Bar dataKey="Alerta" stackId="state" fill="#f59e0b" />
+                <Bar dataKey="Crítico" stackId="state" fill="#dc2626" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function HectareStat({ label, value, icon: Icon, className }: { label: string; value: number; icon: React.ElementType; className: string }) {
+  return <div className="min-w-0 rounded-lg bg-gray-50 p-2.5"><Icon size={15} className={className} /><p className="mt-1 text-lg font-black text-forest-950 truncate" title={`${hectareFormatter.format(value)} ha`}>{hectareFormatter.format(value)} <span className="text-[10px]">ha</span></p><p className="text-[10px] leading-tight font-bold text-gray-600">{label}</p></div>;
 }
 
 function Kanban({ cards, rules }: { cards: CycleCard[]; rules: CycleLaborRule[] }) {
