@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { repository } from '../shared/AgronomicRepository';
 import { useCatalogs } from '../shared/useCatalogs';
 import { parseCycleFile } from '../shared/spreadsheetImport';
-import { buildCycleCards, cycleAgeValue, cycleStateLabel, DEFAULT_CYCLE_RULES, differenceInDays, fromIsoDate, getCycleProgress, getCycleState, normalizeLotCode, toIsoDate, type CycleCard } from './cycleLogic';
+import { buildCycleCards, cycleAgeValue, cycleStateLabel, DEFAULT_CYCLE_RULES, differenceInDays, displayZoneName, fromIsoDate, getCycleProgress, getCycleState, normalizeLotCode, normalizeZoneName, toIsoDate, type CycleCard } from './cycleLogic';
 import type { CycleExecution, CycleImport, CycleLaborRule, CycleStatus } from '../types';
 
 type View = 'resumen' | 'kanban' | 'cronograma' | 'historial';
@@ -99,6 +99,23 @@ export default function Cycles() {
         return { labor: rule.name, alDia: totalFor('AL_DIA'), alerta: totalFor('ALERTA'), critico: totalFor('CRITICO') };
       });
   }, [catalogs.locations, filteredCards, rules]);
+  const hectaresByZone = useMemo(() => {
+    const totals = new Map<string, { zone: string; lots: number; hectares: number; lotsWithoutHectares: number }>();
+    (catalogs.locations || [])
+      .filter((location: any) => location.active !== false && location.name)
+      .forEach((location: any) => {
+        const zoneKey = normalizeZoneName(location.zone || 'SIN ZONA');
+        const current = totals.get(zoneKey) || {
+          zone: displayZoneName(zoneKey), lots: 0, hectares: 0, lotsWithoutHectares: 0,
+        };
+        const hectares = Number(location.ha);
+        current.lots += 1;
+        if (Number.isFinite(hectares) && hectares > 0) current.hectares += hectares;
+        else current.lotsWithoutHectares += 1;
+        totals.set(zoneKey, current);
+      });
+    return [...totals.values()].sort((a, b) => a.zone.localeCompare(b.zone, 'es'));
+  }, [catalogs.locations]);
 
   const chartData = useMemo(() => rules.map((rule) => {
     const cardsForLabor = filteredCards.filter((card) => card.labor.id === rule.id);
@@ -186,7 +203,7 @@ export default function Cycles() {
         {tabs.map((tab) => <button key={tab.id} onClick={() => setView(tab.id)} className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold whitespace-nowrap border-b-2 transition-colors ${view === tab.id ? 'border-forest-800 text-forest-950' : 'border-transparent text-gray-500 hover:text-forest-800'}`}><tab.icon size={16} />{tab.label}</button>)}
       </div>
 
-      {view === 'resumen' && <Summary statusCounts={statusCounts} hectaresByLabor={hectaresByLabor} chartData={chartData} total={filteredCards.filter((card) => card.state !== 'SIN_DATOS').length} />}
+      {view === 'resumen' && <Summary statusCounts={statusCounts} hectaresByLabor={hectaresByLabor} hectaresByZone={hectaresByZone} chartData={chartData} total={filteredCards.filter((card) => card.state !== 'SIN_DATOS').length} />}
       {view === 'kanban' && <Kanban cards={filteredCards} rules={rules} />}
       {view === 'cronograma' && <Timeline cards={selectedCards} executions={data.executions} rule={selectedRule} asOf={fromIsoDate(asOf)} onLaborChange={setLaborCode} rules={rules} />}
       {view === 'historial' && <HistoryTable executions={data.executions} rules={rules} zonesByLot={new Map((catalogs.locations || []).map((item: any) => [item.name?.replace(/\s+/g, '').toUpperCase(), item.zone || 'Sin zona']))} />}
@@ -194,7 +211,7 @@ export default function Cycles() {
   );
 }
 
-function Summary({ statusCounts, hectaresByLabor, chartData, total }: { statusCounts: Record<CycleStatus, number>; hectaresByLabor: Array<{ labor: string; alDia: number; alerta: number; critico: number }>; chartData: any[]; total: number }) {
+function Summary({ statusCounts, hectaresByLabor, hectaresByZone, chartData, total }: { statusCounts: Record<CycleStatus, number>; hectaresByLabor: Array<{ labor: string; alDia: number; alerta: number; critico: number }>; hectaresByZone: Array<{ zone: string; lots: number; hectares: number; lotsWithoutHectares: number }>; chartData: any[]; total: number }) {
   const cards = [
     { key: 'AL_DIA' as const, icon: CheckCircle2 },
     { key: 'ALERTA' as const, icon: Clock3 },
@@ -234,6 +251,39 @@ function Summary({ statusCounts, hectaresByLabor, chartData, total }: { statusCo
           ))}
         </div>
       </section>
+
+      <Card className="border-sky-200">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base text-forest-950">Hectáreas registradas por zona</CardTitle>
+          <p className="text-xs text-gray-500">Control directo del catálogo de ubicaciones activas. Los lotes sin ha no se suman y quedan visibles para su revisión.</p>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-xl border border-gray-100">
+            <table className="min-w-full text-sm">
+              <thead className="bg-sky-50 text-xs uppercase tracking-wide text-sky-900">
+                <tr>
+                  <th className="px-4 py-3 text-left">Zona</th>
+                  <th className="px-4 py-3 text-right">Lotes activos</th>
+                  <th className="px-4 py-3 text-right">Ha registradas</th>
+                  <th className="px-4 py-3 text-right">Lotes sin ha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hectaresByZone.map((item) => (
+                  <tr key={item.zone} className="border-t border-gray-100">
+                    <td className="px-4 py-3 font-bold text-forest-950">{item.zone}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">{numberFormatter.format(item.lots)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-bold text-forest-950">{hectareFormatter.format(item.hectares)} ha</td>
+                    <td className={`px-4 py-3 text-right tabular-nums font-bold ${item.lotsWithoutHectares ? 'text-amber-700' : 'text-emerald-700'}`}>{numberFormatter.format(item.lotsWithoutHectares)}</td>
+                  </tr>
+                ))}
+                {!hectaresByZone.length && <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">No hay ubicaciones activas registradas en Catálogos.</td></tr>}
+              </tbody>
+              {hectaresByZone.length > 0 && <tfoot className="border-t-2 border-sky-200 bg-sky-50/70 font-black text-forest-950"><tr><td className="px-4 py-3">Total</td><td className="px-4 py-3 text-right tabular-nums">{numberFormatter.format(hectaresByZone.reduce((sum, item) => sum + item.lots, 0))}</td><td className="px-4 py-3 text-right tabular-nums">{hectareFormatter.format(hectaresByZone.reduce((sum, item) => sum + item.hectares, 0))} ha</td><td className="px-4 py-3 text-right tabular-nums">{numberFormatter.format(hectaresByZone.reduce((sum, item) => sum + item.lotsWithoutHectares, 0))}</td></tr></tfoot>}
+            </table>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2">
