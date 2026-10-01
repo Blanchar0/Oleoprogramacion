@@ -13,7 +13,7 @@ import {
   Award, TrendingUp, AlertTriangle, UserX, Stethoscope, 
   CheckCircle2, Layers, Calendar, ChevronRight, Search,
   ExternalLink, Check, Eye, ListFilter, UserMinus, ArrowRightLeft,
-  Clock, ShieldAlert, Send, BellRing
+  Clock, ShieldAlert, Send, BellRing, X
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
@@ -202,6 +202,109 @@ const DonutWithLegendList = ({
   );
 };
 
+function PrimaryDashboardCharts({
+  stats,
+  selectedLaborId,
+  onLaborSelect,
+  onCloseLaborDetail,
+  onAbsenceSelect,
+}: {
+  stats: any;
+  selectedLaborId: string | null;
+  onLaborSelect: (laborId: string) => void;
+  onCloseLaborDetail: () => void;
+  onAbsenceSelect: (item: any) => void;
+}) {
+  const selectedLabor = stats.laborActivityDetails?.find((item: any) => item.laborId === selectedLaborId);
+
+  return (
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="border-forest-900/10 shadow-xs">
+          <CardHeader className="pb-0 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
+                <Layers size={18} className="text-forest-700" /> Distribución de Personas por Labor
+              </CardTitle>
+              <p className="text-xs text-gray-500 mt-0.5">Selecciona una labor para ver sus actividades registradas.</p>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <DonutWithLegendList
+              data={stats.chartLabor}
+              unit="pers."
+              totalLabel="operarios"
+              emptyMessage="No hay programaciones registradas para esta fecha."
+              onItemClick={(item) => {
+                const laborId = item?.laborId || item?.payload?.laborId;
+                if (laborId) onLaborSelect(laborId);
+              }}
+              actionHint="Ver actividades"
+            />
+            {selectedLaborId && (
+              <div className="mt-3 rounded-xl border border-forest-200 bg-forest-50/60 p-3">
+                <div className="flex items-start justify-between gap-3 border-b border-forest-100 pb-2">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wide text-forest-700">Actividades registradas</p>
+                    <p className="font-bold text-forest-950">{selectedLabor?.laborName || 'Labor seleccionada'}</p>
+                  </div>
+                  <button type="button" onClick={onCloseLaborDetail} className="rounded-md p-1 text-gray-500 hover:bg-white hover:text-forest-900" aria-label="Cerrar detalle de actividades"><X size={16} /></button>
+                </div>
+                {selectedLabor?.activities?.length ? (
+                  <div className="mt-2 space-y-1.5">
+                    {selectedLabor.activities.map((activity: any) => (
+                      <div key={activity.name} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-sm shadow-2xs">
+                        <span className="font-medium text-gray-800">{activity.name}</span>
+                        <span className="shrink-0 rounded-full bg-forest-100 px-2 py-0.5 text-xs font-black text-forest-900">{activity.value} {activity.value === 1 ? 'persona' : 'personas'}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="py-4 text-center text-xs text-gray-500">No hay actividades confirmadas para esta labor en la fecha seleccionada.</p>}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-forest-900/10 shadow-xs">
+          <CardHeader className="pb-0 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
+                <CalendarX size={18} className="text-red-600" /> Resumen y Motivos de Novedad / Ausentismo
+              </CardTitle>
+              <p className="text-xs text-gray-500 mt-0.5">Clasificación de inasistencias, incapacidades y permisos</p>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <DonutWithLegendList data={stats.chartAbsences} unit="pers." totalLabel="ausencias" emptyMessage="No hay inasistencias ni novedades reportadas en esta fecha." onItemClick={onAbsenceSelect} actionHint="Ver personas" />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="border-forest-900/10 shadow-xs">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2"><Tractor size={18} className="text-blue-600" /> Distribución de Maquinaria por Actividad</CardTitle>
+              <p className="text-xs text-gray-500 mt-0.5">Equipos mecanizados asignados por tipo de labor agrícola</p>
+            </div>
+            <div className="px-3 py-1 bg-blue-50 text-blue-800 rounded-lg text-xs font-bold border border-blue-200">{stats.activeMachineryCount} Equipos Activos</div>
+          </CardHeader>
+          <CardContent className="pt-2"><DonutWithLegendList data={stats.chartMachinery} unit="eq." totalLabel="equipos" emptyMessage="No hay maquinaria activa programada hoy." /></CardContent>
+        </Card>
+
+        <Card className="border-forest-900/10 shadow-xs">
+          <CardHeader className="pb-2"><CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2"><Users size={18} className="text-lime-600" /> Despliegue de Personal por Supervisor</CardTitle><p className="text-xs text-gray-500 mt-0.5">Operarios asignados por cada supervisor de zona</p></CardHeader>
+          <CardContent className="pt-2">
+            {stats.chartBySup.length === 0 ? <div className="h-[280px] flex items-center justify-center text-sm text-gray-400">No hay supervisores con personal programado hoy.</div> : (
+              <div className="h-[280px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={stats.chartBySup} layout="vertical" margin={{ left: 20, right: 20 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} /><XAxis type="number" allowDecimals={false} /><YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 11 }} /><Tooltip contentStyle={{ backgroundColor: '#123C2E', color: '#fff', borderRadius: '8px', border: 'none' }} formatter={(val: any) => [`${val} Operario(s)`, 'Programados']} /><Bar dataKey="personas" fill="#7FA33D" radius={[0, 6, 6, 0]} /></BarChart></ResponsiveContainer></div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </>
+  );
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const { catalogs, loading } = useCatalogs();
@@ -313,6 +416,7 @@ export default function Dashboard() {
     const [selectedDetailModal, setSelectedDetailModal] = useState<'inasistencias' | 'incapacidades' | 'permisos' | 'reubicados' | null>(null);
     const [detailSearch, setDetailSearch] = useState('');
     const [permisosFilterTab, setPermisosFilterTab] = useState<'all' | 'vacaciones' | 'permisos'>('all');
+    const [selectedLaborId, setSelectedLaborId] = useState<string | null>(null);
 
     const supervisorsReportingList = useMemo(() => {
       return getSupervisorsReportingStatus(catalogs.supervisors || [], programmings || []);
@@ -708,11 +812,13 @@ export default function Dashboard() {
 
       let programmedOperativesSet = new Set<string>();
       const laborPersonnelCountMap = new Map<string, Set<string>>();
+      const laborIdsByName = new Map<string, string>();
 
       // 1. Personal en programaciones confirmadas (Operativos y Reubicados programables)
       filteredProgrammings.forEach(p => {
         const laborObj = catalogs.labors.find((l:any) => l.id === p.laborId);
         const laborName = laborObj ? laborObj.name : 'Otra Labor';
+        if (p.laborId) laborIdsByName.set(laborName, String(p.laborId));
         if (!laborPersonnelCountMap.has(laborName)) laborPersonnelCountMap.set(laborName, new Set());
 
         (p.personnelIds || []).forEach((id: string) => {
@@ -738,6 +844,7 @@ export default function Dashboard() {
 
         const laborObj = catalogs.labors.find((l:any) => l.id === (m.laborId || m.labor_id));
         const laborName = laborObj ? laborObj.name : 'Maquinaria';
+        if (m.laborId || m.labor_id) laborIdsByName.set(laborName, String(m.laborId || m.labor_id));
         if (!laborPersonnelCountMap.has(laborName)) laborPersonnelCountMap.set(laborName, new Set());
         laborPersonnelCountMap.get(laborName)?.add(doc);
       });
@@ -752,10 +859,65 @@ export default function Dashboard() {
         .map(([name, set], idx) => ({
           name,
           value: set.size,
-          fill: palette[idx % palette.length]
+          fill: palette[idx % palette.length],
+          laborId: laborIdsByName.get(name) || null,
         }))
         .filter(item => item.value > 0)
         .sort((a, b) => b.value - a.value);
+
+      // Detalle que se abre al seleccionar una labor: cada persona se cuenta
+      // una vez dentro de la labor, bajo su actividad válida en el catálogo.
+      const laborActivityMap = new Map<string, { laborId: string; laborName: string; activities: Map<string, { name: string; personnel: Set<string> }> }>();
+      filteredProgrammings.forEach(programming => {
+        const laborId = String(programming.laborId || '');
+        const labor = (catalogs.labors || []).find((item: any) => item.id === laborId);
+        if (!laborId || !labor) return;
+        if (!laborActivityMap.has(laborId)) {
+          laborActivityMap.set(laborId, { laborId, laborName: labor.name, activities: new Map() });
+        }
+        const detail = laborActivityMap.get(laborId)!;
+        const activity = (catalogs.activities || []).find((item: any) => item.id === programming.activityId && item.laborId === laborId);
+        (programming.personnelIds || []).forEach((rawId: string) => {
+          const person = activeProgrammableList.find((item: any) => matchPerson(item, rawId));
+          const personKey = String(person?.documento || person?.id || rawId);
+          const alreadyAssigned = [...detail.activities.values()].some(entry => entry.personnel.has(personKey));
+          if (alreadyAssigned) return;
+          const isRelocated = person && isReubicado(person);
+          const activityKey = isRelocated ? 'REUBICADOS' : String(activity?.id || 'SIN_ACTIVIDAD_REGISTRADA');
+          const activityName = isRelocated ? 'Reubicados' : (activity?.name || 'Sin actividad registrada');
+          if (!detail.activities.has(activityKey)) detail.activities.set(activityKey, { name: activityName, personnel: new Set() });
+          detail.activities.get(activityKey)?.personnel.add(personKey);
+        });
+      });
+      filteredMachineries.filter(machine => machine.status !== 'CANCELADA').forEach(machine => {
+        const laborId = String(machine.laborId || machine.labor_id || '');
+        const labor = (catalogs.labors || []).find((item: any) => item.id === laborId);
+        if (!labor) return;
+        if (!laborActivityMap.has(laborId)) {
+          laborActivityMap.set(laborId, { laborId, laborName: labor.name, activities: new Map() });
+        }
+        const detail = laborActivityMap.get(laborId)!;
+        const activity = (catalogs.activities || []).find((item: any) => item.id === (machine.activityId || machine.activity_id) && item.laborId === laborId);
+        const operatorId = machine.operatorId || machine.operator_id || machine.operatorName || machine.operator_name;
+        if (!operatorId) return;
+        const person = activeProgrammableList.find((item: any) => matchPerson(item, operatorId));
+        const personKey = String(person?.documento || person?.id || operatorId);
+        if ([...detail.activities.values()].some(entry => entry.personnel.has(personKey))) return;
+        const isRelocated = person && isReubicado(person);
+        const activityKey = isRelocated ? 'REUBICADOS' : String(activity?.id || 'SIN_ACTIVIDAD_REGISTRADA');
+        const activityName = isRelocated ? 'Reubicados' : (activity?.name || 'Sin actividad registrada');
+        if (!detail.activities.has(activityKey)) detail.activities.set(activityKey, { name: activityName, personnel: new Set() });
+        detail.activities.get(activityKey)?.personnel.add(personKey);
+      });
+      const laborActivityDetails = [...laborActivityMap.values()]
+        .map(detail => ({
+          laborId: detail.laborId,
+          laborName: detail.laborName,
+          activities: [...detail.activities.values()]
+            .map(activity => ({ name: activity.name, value: activity.personnel.size }))
+            .filter(activity => activity.value > 0)
+            .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, 'es')),
+        }));
 
       // Un único gráfico apilado: cada zona conserva el total de personas y el
       // color de cada tramo revela cómo se distribuyen por labor. Una persona se
@@ -996,6 +1158,7 @@ export default function Dashboard() {
         programmedCount,
         utilRate: Number(utilRate.toFixed(1)),
         chartLabor,
+        laborActivityDetails,
         chartZoneLabor,
         zoneLaborSeries,
         chartZoneActivity,
@@ -1012,6 +1175,20 @@ export default function Dashboard() {
         permisosVacacionesList
       };
     }, [catalogs, date, absencesRange, filteredProgrammings, filteredMachineries, filteredAbsences]);
+
+    const handleAbsenceChartSelect = (item: any) => {
+      const lower = String(item?.name || '').toLowerCase();
+      if (lower.includes('incapacidad')) {
+        setSelectedDetailModal('incapacidades');
+      } else if (lower.includes('inasistencia')) {
+        setSelectedDetailModal('inasistencias');
+      } else if (lower.includes('permiso') || lower.includes('vacacion')) {
+        setSelectedDetailModal('permisos');
+        if (lower.includes('vacacion')) setPermisosFilterTab('vacaciones');
+        else if (lower.includes('permiso')) setPermisosFilterTab('permisos');
+      }
+      setDetailSearch('');
+    };
 
     return (
       <div className="space-y-6 max-w-7xl mx-auto">
@@ -1225,6 +1402,14 @@ export default function Dashboard() {
           </Card>
         </div>
 
+        <PrimaryDashboardCharts
+          stats={stats}
+          selectedLaborId={selectedLaborId}
+          onLaborSelect={(laborId) => setSelectedLaborId((current) => current === laborId ? null : laborId)}
+          onCloseLaborDetail={() => setSelectedLaborId(null)}
+          onAbsenceSelect={handleAbsenceChartSelect}
+        />
+
         {/* Active Novelties Banner */}
         <NovedadesPanel />
 
@@ -1365,121 +1550,6 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
-
-        {/* Charts Row 1: Personas por Labor & Resumen de Ausentismo */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Chart 1: Personas por Labor (Donut con lista vertical estructurada) */}
-          <Card className="border-forest-900/10 shadow-xs">
-            <CardHeader className="pb-0 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
-                  <Layers size={18} className="text-forest-700" /> Distribución de Personas por Labor
-                </CardTitle>
-                <p className="text-xs text-gray-500 mt-0.5">Operarios asignados a tareas agrónomas en el día</p>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-2">
-              <DonutWithLegendList
-                data={stats.chartLabor}
-                unit="pers."
-                totalLabel="operarios"
-                emptyMessage="No hay programaciones registradas para esta fecha."
-              />
-            </CardContent>
-          </Card>
-
-          {/* Chart 2: Resumen y Motivos de Ausentismo (Donut con lista vertical interactiva) */}
-          <Card className="border-forest-900/10 shadow-xs">
-            <CardHeader className="pb-0 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
-                  <CalendarX size={18} className="text-red-600" /> Resumen y Motivos de Novedad / Ausentismo
-                </CardTitle>
-                <p className="text-xs text-gray-500 mt-0.5">Clasificación de inasistencias, incapacidades y permisos</p>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-2">
-              <DonutWithLegendList
-                data={stats.chartAbsences}
-                unit="pers."
-                totalLabel="ausencias"
-                emptyMessage="No hay inasistencias ni novedades reportadas en esta fecha."
-                onItemClick={(item) => {
-                  const lower = (item.name || '').toLowerCase();
-                  if (lower.includes('incapacidad')) {
-                    setSelectedDetailModal('incapacidades');
-                  } else if (lower.includes('inasistencia')) {
-                    setSelectedDetailModal('inasistencias');
-                  } else if (lower.includes('permiso') || lower.includes('vacacion')) {
-                    setSelectedDetailModal('permisos');
-                    if (lower.includes('vacacion')) setPermisosFilterTab('vacaciones');
-                    else if (lower.includes('permiso')) setPermisosFilterTab('permisos');
-                  }
-                  setDetailSearch('');
-                }}
-                actionHint="Ver personas"
-              />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Charts Row 2: Resumen de Maquinaria & Despliegue por Supervisor */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Chart 3: Distribución de Maquinaria por Actividad (Donut con lista vertical) */}
-          <Card className="border-forest-900/10 shadow-xs">
-            <CardHeader className="pb-2 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
-                  <Tractor size={18} className="text-blue-600" /> Distribución de Maquinaria por Actividad
-                </CardTitle>
-                <p className="text-xs text-gray-500 mt-0.5">Equipos mecanizados asignados por tipo de labor agrícola</p>
-              </div>
-              <div className="px-3 py-1 bg-blue-50 text-blue-800 rounded-lg text-xs font-bold border border-blue-200">
-                {stats.activeMachineryCount} Equipos Activos
-              </div>
-            </CardHeader>
-            <CardContent className="pt-2">
-              <DonutWithLegendList
-                data={stats.chartMachinery}
-                unit="eq."
-                totalLabel="equipos"
-                emptyMessage="No hay maquinaria activa programada hoy."
-              />
-            </CardContent>
-          </Card>
-
-          {/* Chart 4: Personal Programado por Supervisor */}
-          <Card className="border-forest-900/10 shadow-xs">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-bold text-forest-950 flex items-center gap-2">
-                <Users size={18} className="text-lime-600" /> Despliegue de Personal por Supervisor
-              </CardTitle>
-              <p className="text-xs text-gray-500 mt-0.5">Operarios asignados por cada supervisor de zona</p>
-            </CardHeader>
-            <CardContent className="pt-2">
-              {stats.chartBySup.length === 0 ? (
-                <div className="h-[280px] flex items-center justify-center text-sm text-gray-400">
-                  No hay supervisores con personal programado hoy.
-                </div>
-              ) : (
-                <div className="h-[280px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={stats.chartBySup} layout="vertical" margin={{ left: 20, right: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
-                      <XAxis type="number" allowDecimals={false} />
-                      <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 11 }} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#123C2E', color: '#fff', borderRadius: '8px', border: 'none' }}
-                        formatter={(val: any) => [`${val} Operario(s)`, 'Programados']}
-                      />
-                      <Bar dataKey="personas" fill="#7FA33D" radius={[0, 6, 6, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
 
         {/* Section 3: Leaderboard / Top de Inasistencias Injustificadas */}
         <Card className="border-forest-900/10 shadow-xs">
