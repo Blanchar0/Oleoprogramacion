@@ -207,12 +207,14 @@ function PrimaryDashboardCharts({
   selectedLaborId,
   onLaborSelect,
   onCloseLaborDetail,
+  onActivitySelect,
   onAbsenceSelect,
 }: {
   stats: any;
   selectedLaborId: string | null;
   onLaborSelect: (laborId: string) => void;
   onCloseLaborDetail: () => void;
+  onActivitySelect: (activity: { laborId: string; activityId: string; activityName: string }) => void;
   onAbsenceSelect: (item: any) => void;
 }) {
   const selectedLabor = stats.laborActivityDetails?.find((item: any) => item.laborId === selectedLaborId);
@@ -253,10 +255,10 @@ function PrimaryDashboardCharts({
                 {selectedLabor?.activities?.length ? (
                   <div className="mt-2 space-y-1.5">
                     {selectedLabor.activities.map((activity: any) => (
-                      <div key={activity.name} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-sm shadow-2xs">
+                      <button key={activity.activityId} type="button" onClick={() => onActivitySelect({ laborId: selectedLabor.laborId, activityId: activity.activityId, activityName: activity.name })} className="flex w-full items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-left text-sm shadow-2xs transition-colors hover:bg-forest-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-600">
                         <span className="font-medium text-gray-800">{activity.name}</span>
-                        <span className="shrink-0 rounded-full bg-forest-100 px-2 py-0.5 text-xs font-black text-forest-900">{activity.value} {activity.value === 1 ? 'persona' : 'personas'}</span>
-                      </div>
+                        <span className="flex shrink-0 items-center gap-1 rounded-full bg-forest-100 px-2 py-0.5 text-xs font-black text-forest-900">{activity.value} {activity.value === 1 ? 'persona' : 'personas'} <ChevronRight size={13} /></span>
+                      </button>
                     ))}
                   </div>
                 ) : <p className="py-4 text-center text-xs text-gray-500">No hay actividades confirmadas para esta labor en la fecha seleccionada.</p>}
@@ -417,6 +419,7 @@ export default function Dashboard() {
     const [detailSearch, setDetailSearch] = useState('');
     const [permisosFilterTab, setPermisosFilterTab] = useState<'all' | 'vacaciones' | 'permisos'>('all');
     const [selectedLaborId, setSelectedLaborId] = useState<string | null>(null);
+    const [selectedActivityDetail, setSelectedActivityDetail] = useState<{ laborId: string; activityId: string; activityName: string } | null>(null);
 
     const supervisorsReportingList = useMemo(() => {
       return getSupervisorsReportingStatus(catalogs.supervisors || [], programmings || []);
@@ -925,11 +928,76 @@ export default function Dashboard() {
         .map(detail => ({
           laborId: detail.laborId,
           laborName: detail.laborName,
-          activities: [...detail.activities.values()]
-            .map(activity => ({ name: activity.name, value: activity.personnel.size }))
+          activities: [...detail.activities.entries()]
+            .map(([activityId, activity]) => ({ activityId, name: activity.name, value: activity.personnel.size }))
             .filter(activity => activity.value > 0)
             .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, 'es')),
         }));
+
+      const activityLocationMap = new Map<string, {
+        laborId: string;
+        activityId: string;
+        activityName: string;
+        unit: string;
+        locations: Map<string, { name: string; personnel: Set<string>; expectedTotal: number; hasExpected: boolean }>;
+      }>();
+      const resolveProgrammingLocation = (programming: any) => {
+        const locationIds = Array.isArray(programming.locationIds) && programming.locationIds.length
+          ? programming.locationIds
+          : String(programming.locationId || '').split(',').map((value: string) => value.trim()).filter(Boolean);
+        const names = locationIds
+          .map((locationId: string) => (catalogs.locations || []).find((location: any) => location.id === locationId)?.name || locationId)
+          .filter(Boolean);
+        if (names.length) return names.join(' · ');
+        return String(programming.loteSnapshot || programming.zoneSnapshot || 'Sin ubicación técnica').trim();
+      };
+      filteredProgrammings.forEach(programming => {
+        const sourceLaborId = String(programming.laborId || '');
+        const sourceLabor = (catalogs.labors || []).find((item: any) => item.id === sourceLaborId);
+        const activity = (catalogs.activities || []).find((item: any) => item.id === programming.activityId && item.laborId === sourceLaborId);
+        const groups = new Map<string, { laborId: string; activityId: string; activityName: string; unit: string; personnel: Set<string> }>();
+
+        (programming.personnelIds || []).forEach((rawId: string) => {
+          const person = activeProgrammableList.find((item: any) => matchPerson(item, rawId));
+          const personKey = String(person?.documento || person?.id || rawId);
+          const isRelocated = person && isReubicado(person);
+          const laborId = isRelocated ? RELOCATED_LABOR_ID : sourceLaborId;
+          const activityId = isRelocated ? 'REUBICADOS' : String(activity?.id || 'SIN_ACTIVIDAD_REGISTRADA');
+          const activityName = isRelocated ? 'Reubicados' : (activity?.name || 'Sin actividad registrada');
+          if (!laborId || (!isRelocated && !sourceLabor)) return;
+          const groupKey = `${laborId}:${activityId}`;
+          if (!groups.has(groupKey)) groups.set(groupKey, { laborId, activityId, activityName, unit: activity?.unit || '—', personnel: new Set() });
+          groups.get(groupKey)?.personnel.add(personKey);
+        });
+
+        const participantCount = [...groups.values()].reduce((total, group) => total + group.personnel.size, 0);
+        const rawExpected = Number(programming.expectedTotalQuantity);
+        const hasExpected = programming.expectedTotalQuantity !== null && programming.expectedTotalQuantity !== undefined && programming.expectedTotalQuantity !== '' && Number.isFinite(rawExpected);
+        const locationName = resolveProgrammingLocation(programming);
+        groups.forEach(group => {
+          const detailKey = `${group.laborId}:${group.activityId}`;
+          if (!activityLocationMap.has(detailKey)) {
+            activityLocationMap.set(detailKey, { ...group, locations: new Map() });
+          }
+          const detail = activityLocationMap.get(detailKey)!;
+          if (!detail.locations.has(locationName)) detail.locations.set(locationName, { name: locationName, personnel: new Set(), expectedTotal: 0, hasExpected: false });
+          const row = detail.locations.get(locationName)!;
+          group.personnel.forEach(personKey => row.personnel.add(personKey));
+          if (hasExpected && participantCount > 0) {
+            row.expectedTotal += rawExpected * (group.personnel.size / participantCount);
+            row.hasExpected = true;
+          }
+        });
+      });
+      const activityLocationDetails = [...activityLocationMap.values()].map(detail => ({
+        laborId: detail.laborId,
+        activityId: detail.activityId,
+        activityName: detail.activityName,
+        unit: detail.unit,
+        locations: [...detail.locations.values()]
+          .map(location => ({ name: location.name, personnel: location.personnel.size, expectedTotal: location.hasExpected ? location.expectedTotal : null }))
+          .sort((a, b) => b.personnel - a.personnel || a.name.localeCompare(b.name, 'es')),
+      }));
 
       // Un único gráfico apilado: cada zona conserva el total de personas y el
       // color de cada tramo revela cómo se distribuyen por labor. Una persona se
@@ -1174,6 +1242,7 @@ export default function Dashboard() {
         utilRate: Number(utilRate.toFixed(1)),
         chartLabor,
         laborActivityDetails,
+        activityLocationDetails,
         chartZoneLabor,
         zoneLaborSeries,
         chartZoneActivity,
@@ -1422,6 +1491,7 @@ export default function Dashboard() {
           selectedLaborId={selectedLaborId}
           onLaborSelect={(laborId) => setSelectedLaborId((current) => current === laborId ? null : laborId)}
           onCloseLaborDetail={() => setSelectedLaborId(null)}
+          onActivitySelect={setSelectedActivityDetail}
           onAbsenceSelect={handleAbsenceChartSelect}
         />
 
@@ -1889,6 +1959,39 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Ventana de distribución de una actividad por ubicación técnica */}
+        {selectedActivityDetail && (
+          <Dialog open={!!selectedActivityDetail} onOpenChange={(open) => { if (!open) setSelectedActivityDetail(null); }}>
+            <DialogContent className="max-w-3xl w-[95vw] p-0 overflow-hidden rounded-2xl bg-white border border-gray-200 shadow-2xl">
+              {(() => {
+                const detail = stats.activityLocationDetails.find((item: any) => item.laborId === selectedActivityDetail.laborId && item.activityId === selectedActivityDetail.activityId);
+                const locations = detail?.locations || [];
+                const unit = detail?.unit && detail.unit !== '—' ? detail.unit : '';
+                return <>
+                  <div className="border-b border-forest-800 bg-gradient-to-r from-forest-900 to-forest-950 p-5 text-white">
+                    <DialogTitle className="text-lg font-black">Resumen de actividad</DialogTitle>
+                    <DialogDescription className="mt-1 text-sm text-white/80">{selectedActivityDetail.activityName} · Programación confirmada del {date}</DialogDescription>
+                  </div>
+                  <div className="p-5">
+                    <p className="mb-3 text-xs text-gray-500">Cada fila conserva el rendimiento total esperado registrado en la programación. Las programaciones con varias ubicaciones se muestran agrupadas para evitar duplicar el valor.</p>
+                    <div className="overflow-x-auto rounded-xl border border-gray-200">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-50 text-xs font-black uppercase tracking-wide text-gray-600">
+                          <tr><th className="px-4 py-3 text-left">Ubicación técnica</th><th className="px-4 py-3 text-right">Cantidad de personas</th><th className="px-4 py-3 text-right">Rendimiento total esperado</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {locations.map((location: any) => <tr key={location.name} className="hover:bg-forest-50/40"><td className="px-4 py-3 font-bold text-forest-950">{location.name}</td><td className="px-4 py-3 text-right font-mono font-bold text-gray-800">{location.personnel}</td><td className="px-4 py-3 text-right font-mono font-bold text-forest-800">{location.expectedTotal === null ? 'Sin dato' : `${Number(location.expectedTotal).toLocaleString('es-CO', { maximumFractionDigits: 2 })}${unit ? ` ${unit}` : ''}`}</td></tr>)}
+                          {!locations.length && <tr><td colSpan={3} className="px-4 py-10 text-center text-sm text-gray-500">No hay ubicaciones técnicas confirmadas para esta actividad.</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>;
+              })()}
+            </DialogContent>
+          </Dialog>
         )}
 
         {/* Modal de Detalle / Tabla Resumen para Inasistencias, Incapacidades y Permisos/Vacaciones */}
