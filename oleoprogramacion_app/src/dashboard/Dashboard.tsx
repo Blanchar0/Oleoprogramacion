@@ -813,22 +813,27 @@ export default function Dashboard() {
       let programmedOperativesSet = new Set<string>();
       const laborPersonnelCountMap = new Map<string, Set<string>>();
       const laborIdsByName = new Map<string, string>();
+      const RELOCATED_LABOR_ID = 'OTROS_REUBICADOS';
+      const RELOCATED_LABOR_NAME = 'Otros';
 
       // 1. Personal en programaciones confirmadas (Operativos y Reubicados programables)
       filteredProgrammings.forEach(p => {
         const laborObj = catalogs.labors.find((l:any) => l.id === p.laborId);
         const laborName = laborObj ? laborObj.name : 'Otra Labor';
-        if (p.laborId) laborIdsByName.set(laborName, String(p.laborId));
-        if (!laborPersonnelCountMap.has(laborName)) laborPersonnelCountMap.set(laborName, new Set());
 
         (p.personnelIds || []).forEach((id: string) => {
           const per = activeProgrammableList.find((x: any) => matchPerson(x, id));
+          const isRelocated = per && isReubicado(per);
+          const distributionLaborName = isRelocated ? RELOCATED_LABOR_NAME : laborName;
+          const distributionLaborId = isRelocated ? RELOCATED_LABOR_ID : String(p.laborId || '');
+          laborIdsByName.set(distributionLaborName, distributionLaborId);
+          if (!laborPersonnelCountMap.has(distributionLaborName)) laborPersonnelCountMap.set(distributionLaborName, new Set());
           if (per) {
             programmedOperativesSet.add(per.documento || per.id);
-            laborPersonnelCountMap.get(laborName)?.add(per.documento || per.id);
+            laborPersonnelCountMap.get(distributionLaborName)?.add(per.documento || per.id);
           } else {
             programmedOperativesSet.add(id);
-            laborPersonnelCountMap.get(laborName)?.add(id);
+            laborPersonnelCountMap.get(distributionLaborName)?.add(id);
           }
         });
       });
@@ -844,9 +849,12 @@ export default function Dashboard() {
 
         const laborObj = catalogs.labors.find((l:any) => l.id === (m.laborId || m.labor_id));
         const laborName = laborObj ? laborObj.name : 'Maquinaria';
-        if (m.laborId || m.labor_id) laborIdsByName.set(laborName, String(m.laborId || m.labor_id));
-        if (!laborPersonnelCountMap.has(laborName)) laborPersonnelCountMap.set(laborName, new Set());
-        laborPersonnelCountMap.get(laborName)?.add(doc);
+        const isRelocated = per && isReubicado(per);
+        const distributionLaborName = isRelocated ? RELOCATED_LABOR_NAME : laborName;
+        const distributionLaborId = isRelocated ? RELOCATED_LABOR_ID : String(m.laborId || m.labor_id || '');
+        laborIdsByName.set(distributionLaborName, distributionLaborId);
+        if (!laborPersonnelCountMap.has(distributionLaborName)) laborPersonnelCountMap.set(distributionLaborName, new Set());
+        laborPersonnelCountMap.get(distributionLaborName)?.add(doc);
       });
 
       const programmedCount = programmedOperativesSet.size;
@@ -869,20 +877,22 @@ export default function Dashboard() {
       // una vez dentro de la labor, bajo su actividad válida en el catálogo.
       const laborActivityMap = new Map<string, { laborId: string; laborName: string; activities: Map<string, { name: string; personnel: Set<string> }> }>();
       filteredProgrammings.forEach(programming => {
-        const laborId = String(programming.laborId || '');
-        const labor = (catalogs.labors || []).find((item: any) => item.id === laborId);
-        if (!laborId || !labor) return;
-        if (!laborActivityMap.has(laborId)) {
-          laborActivityMap.set(laborId, { laborId, laborName: labor.name, activities: new Map() });
-        }
-        const detail = laborActivityMap.get(laborId)!;
-        const activity = (catalogs.activities || []).find((item: any) => item.id === programming.activityId && item.laborId === laborId);
+        const sourceLaborId = String(programming.laborId || '');
+        const sourceLabor = (catalogs.labors || []).find((item: any) => item.id === sourceLaborId);
         (programming.personnelIds || []).forEach((rawId: string) => {
           const person = activeProgrammableList.find((item: any) => matchPerson(item, rawId));
           const personKey = String(person?.documento || person?.id || rawId);
+          const isRelocated = person && isReubicado(person);
+          const laborId = isRelocated ? RELOCATED_LABOR_ID : sourceLaborId;
+          const laborName = isRelocated ? RELOCATED_LABOR_NAME : sourceLabor?.name;
+          if (!laborId || !laborName) return;
+          if (!laborActivityMap.has(laborId)) {
+            laborActivityMap.set(laborId, { laborId, laborName, activities: new Map() });
+          }
+          const detail = laborActivityMap.get(laborId)!;
           const alreadyAssigned = [...detail.activities.values()].some(entry => entry.personnel.has(personKey));
           if (alreadyAssigned) return;
-          const isRelocated = person && isReubicado(person);
+          const activity = (catalogs.activities || []).find((item: any) => item.id === programming.activityId && item.laborId === sourceLaborId);
           const activityKey = isRelocated ? 'REUBICADOS' : String(activity?.id || 'SIN_ACTIVIDAD_REGISTRADA');
           const activityName = isRelocated ? 'Reubicados' : (activity?.name || 'Sin actividad registrada');
           if (!detail.activities.has(activityKey)) detail.activities.set(activityKey, { name: activityName, personnel: new Set() });
@@ -890,20 +900,22 @@ export default function Dashboard() {
         });
       });
       filteredMachineries.filter(machine => machine.status !== 'CANCELADA').forEach(machine => {
-        const laborId = String(machine.laborId || machine.labor_id || '');
-        const labor = (catalogs.labors || []).find((item: any) => item.id === laborId);
-        if (!labor) return;
-        if (!laborActivityMap.has(laborId)) {
-          laborActivityMap.set(laborId, { laborId, laborName: labor.name, activities: new Map() });
-        }
-        const detail = laborActivityMap.get(laborId)!;
-        const activity = (catalogs.activities || []).find((item: any) => item.id === (machine.activityId || machine.activity_id) && item.laborId === laborId);
+        const sourceLaborId = String(machine.laborId || machine.labor_id || '');
+        const sourceLabor = (catalogs.labors || []).find((item: any) => item.id === sourceLaborId);
         const operatorId = machine.operatorId || machine.operator_id || machine.operatorName || machine.operator_name;
         if (!operatorId) return;
         const person = activeProgrammableList.find((item: any) => matchPerson(item, operatorId));
         const personKey = String(person?.documento || person?.id || operatorId);
-        if ([...detail.activities.values()].some(entry => entry.personnel.has(personKey))) return;
         const isRelocated = person && isReubicado(person);
+        const laborId = isRelocated ? RELOCATED_LABOR_ID : sourceLaborId;
+        const laborName = isRelocated ? RELOCATED_LABOR_NAME : sourceLabor?.name;
+        if (!laborId || !laborName) return;
+        if (!laborActivityMap.has(laborId)) {
+          laborActivityMap.set(laborId, { laborId, laborName, activities: new Map() });
+        }
+        const detail = laborActivityMap.get(laborId)!;
+        if ([...detail.activities.values()].some(entry => entry.personnel.has(personKey))) return;
+        const activity = (catalogs.activities || []).find((item: any) => item.id === (machine.activityId || machine.activity_id) && item.laborId === sourceLaborId);
         const activityKey = isRelocated ? 'REUBICADOS' : String(activity?.id || 'SIN_ACTIVIDAD_REGISTRADA');
         const activityName = isRelocated ? 'Reubicados' : (activity?.name || 'Sin actividad registrada');
         if (!detail.activities.has(activityKey)) detail.activities.set(activityKey, { name: activityName, personnel: new Set() });
@@ -936,15 +948,18 @@ export default function Dashboard() {
       filteredProgrammings.forEach(programming => {
         const zone = getProgrammingZone(programming);
         const labor = (catalogs.labors || []).find((item: any) => item.id === programming.laborId);
-        const laborId = String(programming.laborId || 'SIN_LABOR');
-        const laborName = labor?.name || 'Otra labor';
+        const sourceLaborId = String(programming.laborId || 'SIN_LABOR');
+        const sourceLaborName = labor?.name || 'Otra labor';
         if (!zoneAssignments.has(zone)) zoneAssignments.set(zone, new Map());
         const byLabor = zoneAssignments.get(zone)!;
-        if (!byLabor.has(laborId)) byLabor.set(laborId, { laborName, personnel: new Map() });
 
         (programming.personnelIds || []).forEach((rawId: string) => {
           const person = activeProgrammableList.find((item: any) => matchPerson(item, rawId));
           const personKey = String(person?.documento || person?.id || rawId);
+          const isRelocated = person && isReubicado(person);
+          const laborId = isRelocated ? RELOCATED_LABOR_ID : sourceLaborId;
+          const laborName = isRelocated ? RELOCATED_LABOR_NAME : sourceLaborName;
+          if (!byLabor.has(laborId)) byLabor.set(laborId, { laborName, personnel: new Map() });
           // El primer registro confirmado asigna la labor para evitar duplicar
           // una persona dentro de la misma zona.
           const alreadyAssigned = [...byLabor.values()].some(entry => entry.personnel.has(personKey));
